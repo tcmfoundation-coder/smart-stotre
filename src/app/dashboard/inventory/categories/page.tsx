@@ -1,16 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Plus, Edit, Trash2, Package, X } from 'lucide-react';
-import { getCategories, createCategory, deleteCategory } from '@/lib/actions/inventory';
+import { getCategories, createCategory, updateCategory, deleteCategory } from '@/lib/actions/inventory';
+
+interface Category {
+  _id: string;
+  name: string;
+  productCount?: number;
+}
 
 export default function CategoriesPage() {
-  const router = useRouter();
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
 
   useEffect(() => {
@@ -28,15 +33,32 @@ export default function CategoriesPage() {
 
     setLoading(true);
     try {
-      await createCategory({ name: newCategoryName });
+      if (editingCategory) {
+        await updateCategory(editingCategory._id, { name: newCategoryName });
+      } else {
+        await createCategory({ name: newCategoryName });
+      }
       setNewCategoryName('');
+      setEditingCategory(null);
       setShowAddModal(false);
       fetchCategories();
     } catch (error) {
-      console.error('Error creating category:', error);
+      console.error('Error saving category:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setNewCategoryName(category.name);
+    setShowAddModal(true);
+  };
+
+  const closeModal = () => {
+    setShowAddModal(false);
+    setEditingCategory(null);
+    setNewCategoryName('');
   };
 
   const handleDeleteCategory = async (id: string) => {
@@ -90,7 +112,7 @@ export default function CategoriesPage() {
                   </div>
                   <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={() => router.push(`/dashboard/inventory/categories/${category._id}/edit`)}
+                      onClick={() => handleEditCategory(category)}
                       className="p-2 hover:bg-secondary rounded-lg transition-colors"
                     >
                       <Edit className="h-4 w-4 text-muted-foreground" />
@@ -126,14 +148,16 @@ export default function CategoriesPage() {
         </div>
       </main>
 
-      {/* Add Category Modal */}
+      {/* Add/Edit Category Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-3xl shadow-2xl border border-border max-w-md w-full p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-foreground uppercase">Add New Category</h3>
+              <h3 className="text-xl font-black text-foreground uppercase">
+                {editingCategory ? 'Edit Category' : 'Add New Category'}
+              </h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={closeModal}
                 className="p-2 hover:bg-secondary rounded-lg transition-colors"
               >
                 <X className="h-5 w-5 text-muted-foreground" />
@@ -156,7 +180,7 @@ export default function CategoriesPage() {
               <div className="flex space-x-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={closeModal}
                   className="flex-1 px-6 py-4 bg-card border border-border text-muted-foreground font-bold rounded-xl hover:bg-secondary transition-colors"
                 >
                   Cancel
@@ -166,7 +190,7 @@ export default function CategoriesPage() {
                   disabled={loading}
                   className="flex-1 px-6 py-4 bg-primary text-primary-foreground font-black rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  {loading ? 'Adding...' : 'Add Category'}
+                  {loading ? 'Saving...' : editingCategory ? 'Save Changes' : 'Add Category'}
                 </button>
               </div>
             </form>

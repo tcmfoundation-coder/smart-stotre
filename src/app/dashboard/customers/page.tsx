@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { Plus, Search, Edit, Trash2, Award, Phone, Mail } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Award, Phone, Mail, BarChart3 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useCustomers, useDeleteCustomer, type Customer } from '@/hooks/useCustomers';
@@ -97,10 +97,16 @@ export default function CustomersPage() {
             />
           </div>
 
-          <Link href="/dashboard/customers/new" className="w-full xl:w-auto flex items-center justify-center space-x-2 px-8 py-4 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5 transition-all active:scale-95">
-            <Plus className="h-6 w-6" />
-            <span>ADD CUSTOMER</span>
-          </Link>
+          <div className="flex items-center gap-3 w-full xl:w-auto">
+            <Link href="/dashboard/customers/analytics" className="flex-1 xl:flex-none flex items-center justify-center space-x-2 px-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">
+              <BarChart3 className="h-5 w-5" />
+              <span>ANALYTICS</span>
+            </Link>
+            <Link href="/dashboard/customers/new" className="flex-1 xl:flex-none flex items-center justify-center space-x-2 px-8 py-4 bg-primary text-primary-foreground rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5 transition-all active:scale-95">
+              <Plus className="h-6 w-6" />
+              <span>ADD CUSTOMER</span>
+            </Link>
+          </div>
         </div>
 
         {/* Customers Table */}

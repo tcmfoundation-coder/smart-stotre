@@ -168,14 +168,24 @@ no seeded database in this sandbox)
   anywhere in the repo.
 
 **Orphaned (unreachable from any nav or link):**
-- [ ] `dashboard/customers/analytics` — zero references anywhere in the codebase.
-- [ ] `dashboard/receipts` — real and working, but only reachable via the dashboard's
-  Quick Actions button and the post-checkout redirect, not the sidebar.
+- [x] `dashboard/customers/analytics` — was: zero references anywhere in the
+  codebase, despite being a real, working, server-rendered page pulling genuine
+  data from `getCustomerAnalytics()`. **Fixed** — added an "Analytics" button next
+  to "Add Customer" on the customers list page.
+- [x] `dashboard/receipts` — was: real and working, but only reachable via the
+  dashboard's Quick Actions button and the post-checkout redirect, not the
+  sidebar; meanwhile the cashier sidebar's "Receipt History" link pointed at
+  `dashboard/receipt-history`, a fully hardcoded duplicate (see §3's "Fully
+  hardcoded" list). **Fixed** — repointed the cashier "Receipt History" nav item
+  at the real `dashboard/receipts` page instead, so cashiers now land on real
+  data through the sidebar, not a fake duplicate.
 
 **Duplicate/competing implementations:**
 - [ ] `dashboard/categories` (sidebar-linked) vs. `dashboard/inventory/categories`
   (reachable only via a button inside Inventory) — two separately-coded category CRUD
-  UIs for the same `Category` model.
+  UIs for the same `Category` model. Not merged (needs a product decision on which
+  one to keep) — but `inventory/categories`' own Edit button was separately broken
+  (see §4) and has been fixed to at least work correctly within its own page.
 
 ---
 
@@ -234,13 +244,22 @@ no seeded database in this sandbox)
   `sonner` (inconsistent with sibling `employees/new`, `suppliers/new`). Fixed.
 
 **Broken navigation links (target route doesn't exist):**
-- [ ] Cashier nav "New Sale" → `/dashboard/pos/new` — no page (`config/navigation.ts`).
-- [ ] `dashboard/customers` list — Edit link → `/dashboard/customers/[id]/edit` — no page.
+- [x] Cashier nav "New Sale" → was `/dashboard/pos/new` (no such page). **Fixed** —
+  repointed at the real `/dashboard/pos` page (same target as the "POS Terminal"
+  nav item right above it).
+- [x] `dashboard/customers` list — Edit link → `/dashboard/customers/[id]/edit` — no
+  page. **Fixed in an earlier batch** — now points at the real
+  `/dashboard/customers/[id]` detail page, which has its own inline edit mode.
 - [x] `dashboard/promotions` — was: "Create"/"Edit" → `/dashboard/promotions/new`
   and `/dashboard/promotions/[id]`, neither page existed; `promotion-form.tsx`
   was a 0-byte file. **Fixed** — both pages now exist, built on a real shared
   `promotion-form.tsx`.
-- [ ] `dashboard/inventory/categories` — Edit → `/dashboard/inventory/categories/[id]/edit` — no page.
+- [x] `dashboard/inventory/categories` — was: Edit button called
+  `router.push('/dashboard/inventory/categories/[id]/edit')`, a route that doesn't
+  exist. **Fixed** — reused the page's own existing add-category modal for edit
+  too (tracks an `editingCategory` state, calls the already-existing
+  `updateCategory` action), matching the pattern the sibling `dashboard/categories`
+  page already uses successfully, instead of building yet another new route.
 
 **Looks wired, but the API it calls doesn't exist (404 at runtime despite complete-looking frontend code) — see §6 for the full list:** Promotions pause/resume, Purchase Order approve, Stock Adjustment approve/reject.
 
