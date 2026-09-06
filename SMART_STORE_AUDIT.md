@@ -134,14 +134,34 @@ no seeded database in this sandbox)
 
 ## 4. Broken buttons (no handler, or handler is a no-op)
 
-- [ ] `dashboard/branches` — Edit/Delete/"Deploy New Node"/"Configure Node"/
-  "Initialize First Node": server component, zero client interactivity, no onClick at all.
-- [ ] `dashboard/customers/[id]` — header Edit/Delete: no onClick.
-- [ ] `dashboard/employees` (list) — Delete: only runs `console.log('Delete employee:', id)`
-  after the confirm dialog; the real `deleteEmployee` action already exists and is
-  correctly used by the employee detail page — this list button was simply never wired to it.
-- [ ] `dashboard/expenses` — "ADD EXPENSE" and per-row Edit/Delete: no onClick at all,
-  despite the list itself loading real data.
+- [x] `dashboard/branches` — was: Edit/Delete/"Deploy New Node"/"Configure Node"/
+  "Initialize First Node", server component, zero client interactivity. **Fixed** —
+  converted to a client component with a real `BranchForm` create/edit dialog and
+  wired delete; also added the missing `requireAdmin()` check to
+  `createBranch`/`updateBranch`/`deleteBranch` (previously totally unguarded —
+  harmless only because nothing called them).
+- [x] `dashboard/customers/[id]` — was: header Edit/Delete, no onClick. **Fixed** —
+  added the same inline edit-mode pattern already used by `suppliers/[id]` (Edit
+  toggles editable fields, Save/Cancel, Delete with confirm), wired to the real
+  `updateCustomer`/`deleteCustomer` actions. Also fixed the customers list page's
+  Edit link, which pointed at a non-existent `/edit` sub-route — it now points at
+  this same detail page.
+- [x] `dashboard/employees` (list) — was: Delete only ran
+  `console.log('Delete employee:', id)` after the confirm dialog. **Fixed** —
+  wired to the real `deleteEmployee` action (already used correctly by the
+  employee detail page; this list button was simply never connected to it).
+- [x] `dashboard/expenses` — was: "ADD EXPENSE" and per-row Edit/Delete had no
+  onClick at all, and the category filter dropdown had no onChange (inert).
+  **Fixed** — real `ExpenseForm` create/edit dialog, wired delete, and a working
+  category filter. Also fixed a real bug found while building this: the page's
+  category list (`rent, salary, inventory, marketing, maintenance, other`) didn't
+  match the `Expense` model's actual enum (`rent, electricity, transport, salary,
+  supplier_payment, maintenance, other`) — `inventory`/`marketing` would never
+  match anything and `electricity`/`transport`/`supplier_payment` were reachable
+  in the database but unselectable in the UI. Also added the missing
+  `requireAdmin()` check to `createExpense`/`updateExpense`/`deleteExpense`
+  (same "reachable via a direct action call, not just the guarded API route"
+  gap as branches/categories/products).
 - [ ] `dashboard/inventory` — "Filter": no onClick.
 - [ ] `dashboard/online-orders`, `dashboard/whatsapp-orders` — "Status" filter and
   per-row "⋮" menu: no onClick.
@@ -152,8 +172,8 @@ no seeded database in this sandbox)
 - [ ] `dashboard/activity-logs` — "Export": calls `/api/activity-logs/export`, which
   doesn't exist (always 404s), and reports the result via raw `alert()` instead of
   the app's own `sonner` toast system.
-- [ ] `dashboard/customers/new` — error path uses raw `alert()` instead of `sonner`
-  (inconsistent with sibling `employees/new`, `suppliers/new`).
+- [x] `dashboard/customers/new` — was: error path used raw `alert()` instead of
+  `sonner` (inconsistent with sibling `employees/new`, `suppliers/new`). Fixed.
 
 **Broken navigation links (target route doesn't exist):**
 - [ ] Cashier nav "New Sale" → `/dashboard/pos/new` — no page (`config/navigation.ts`).

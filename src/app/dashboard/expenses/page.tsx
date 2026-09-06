@@ -1,35 +1,36 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getExpenses } from '@/lib/actions/expenses';
-import { Plus, Search, Wallet, PieChart, TrendingDown, Edit, Trash2, Calendar, Tag, X } from 'lucide-react';
+import { getExpenses, deleteExpense } from '@/lib/actions/expenses';
+import { Plus, Search, Wallet, PieChart, TrendingDown, Edit, Trash2, Calendar, X } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { toast } from 'sonner';
+import { ExpenseForm, EXPENSE_CATEGORY_LABELS, type ExpenseRecord } from '@/components/dialogs/ExpenseForm';
+
+const categoryLabels = EXPENSE_CATEGORY_LABELS;
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState<any[]>([]);
+  const { data: session } = useSession();
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [loading, setLoading] = useState(true);
-
-  const categoryLabels = {
-    rent: 'Rent & Utilities',
-    salary: 'Staff Salaries',
-    inventory: 'Inventory Purchase',
-    marketing: 'Marketing',
-    maintenance: 'Maintenance',
-    other: 'Other Expenses',
-  };
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+  const [editingExpense, setEditingExpense] = useState<ExpenseRecord | undefined>(undefined);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const categories = Object.keys(categoryLabels);
 
-  useEffect(() => {
-    loadExpenses();
-  }, []);
-
-  const loadExpenses = async (search?: string) => {
+  const loadExpenses = async (search?: string, category?: string) => {
     try {
       setLoading(true);
-      const data = await getExpenses(search ? { search } : undefined);
+      const data = await getExpenses({
+        search: search || undefined,
+        category: category || undefined,
+      });
       setExpenses(data);
     } catch (error) {
       console.error('Error loading expenses:', error);
@@ -39,18 +40,48 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
+    (async () => {
+      await loadExpenses();
+    })();
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery.length > 0) {
-        loadExpenses(searchQuery);
-      } else if (searchQuery.length === 0) {
-        loadExpenses();
-      }
+      loadExpenses(searchQuery || undefined, categoryFilter || undefined);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, categoryFilter]);
 
-  const totalExpenses = expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+  const handleCreate = () => {
+    setFormMode('create');
+    setEditingExpense(undefined);
+    setFormOpen(true);
+  };
+
+  const handleEdit = (expense: ExpenseRecord) => {
+    setFormMode('edit');
+    setEditingExpense(expense);
+    setFormOpen(true);
+  };
+
+  const handleDelete = async (expense: ExpenseRecord) => {
+    if (!confirm(`Delete expense "${expense.title}"? This cannot be undone.`)) {
+      return;
+    }
+    setDeletingId(expense._id);
+    try {
+      await deleteExpense(expense._id);
+      toast.success('Expense deleted successfully');
+      await loadExpenses(searchQuery || undefined, categoryFilter || undefined);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete expense');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const totalExpenses = expenses.reduce((sum: number, e) => sum + e.amount, 0);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
@@ -120,7 +151,11 @@ export default function ExpensesPage() {
                 </button>
               )}
             </div>
-            <select className="px-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm outline-none focus:ring-2 focus:ring-blue-600/10 appearance-none">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm outline-none focus:ring-2 focus:ring-blue-600/10 appearance-none"
+            >
               <option value="">All Categories</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>{categoryLabels[cat as keyof typeof categoryLabels]}</option>
@@ -128,7 +163,10 @@ export default function ExpensesPage() {
             </select>
           </div>
 
-          <button className="w-full xl:w-auto flex items-center justify-center space-x-2 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95">
+          <button
+            onClick={handleCreate}
+            className="w-full xl:w-auto flex items-center justify-center space-x-2 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95"
+          >
             <Plus className="h-6 w-6" />
             <span>ADD EXPENSE</span>
           </button>
@@ -163,7 +201,7 @@ export default function ExpensesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {expenses.map((expense: any) => (
+                  {expenses.map((expense) => (
                   <tr key={expense._id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="py-6 px-8">
                       <div>
@@ -192,10 +230,17 @@ export default function ExpensesPage() {
                     </td>
                     <td className="py-6 px-8 text-right">
                       <div className="flex items-center justify-end space-x-2">
-                        <button className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl text-blue-600 transition-colors">
+                        <button
+                          onClick={() => handleEdit(expense)}
+                          className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl text-blue-600 transition-colors"
+                        >
                           <Edit className="h-5 w-5" />
                         </button>
-                        <button className="p-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl text-rose-500 transition-colors">
+                        <button
+                          onClick={() => handleDelete(expense)}
+                          disabled={deletingId === expense._id}
+                          className="p-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl text-rose-500 transition-colors disabled:opacity-50"
+                        >
                           <Trash2 className="h-5 w-5" />
                         </button>
                       </div>
@@ -208,6 +253,15 @@ export default function ExpensesPage() {
           )}
         </div>
       </main>
+
+      <ExpenseForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        mode={formMode}
+        expense={editingExpense}
+        createdById={session?.user?.id}
+        onSuccess={() => loadExpenses(searchQuery || undefined, categoryFilter || undefined)}
+      />
     </div>
   );
 }

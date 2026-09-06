@@ -1,18 +1,20 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getEmployees } from '@/lib/actions/employees';
+import { getEmployees, deleteEmployee } from '@/lib/actions/employees';
 import { getDashboardRoleConfig } from '@/lib/dashboard-role';
 import { Plus, Search, DollarSign, Users, Briefcase, Calendar, Edit, Trash2, Mail, Phone, X, Lock } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { data: session } = useSession();
   const role = (session?.user?.role as string | undefined) || 'cashier';
   const roleConfig = getDashboardRoleConfig(role);
@@ -45,6 +47,22 @@ export default function EmployeesPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const handleDelete = async (employeeId: string) => {
+    if (!confirm('Are you sure you want to delete this employee?')) {
+      return;
+    }
+    setDeletingId(employeeId);
+    try {
+      await deleteEmployee(employeeId);
+      toast.success('Employee deleted successfully');
+      await loadEmployees(searchQuery || undefined);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete employee');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
@@ -194,14 +212,10 @@ export default function EmployeesPage() {
                           <Link href={`/dashboard/employees/${employee._id}`} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl text-blue-600 transition-colors">
                             <Edit className="h-5 w-5" />
                           </Link>
-                          <button 
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this employee?')) {
-                                // Add delete functionality here
-                                console.log('Delete employee:', employee._id);
-                              }
-                            }}
-                            className="p-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl text-rose-500 transition-colors"
+                          <button
+                            onClick={() => handleDelete(employee._id)}
+                            disabled={deletingId === employee._id}
+                            className="p-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl text-rose-500 transition-colors disabled:opacity-50"
                           >
                             <Trash2 className="h-5 w-5" />
                           </button>

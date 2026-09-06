@@ -189,8 +189,8 @@ export default function CustomersPage() {
                         >
                           <span>View</span>
                         </Link>
-                        <Link 
-                          href={`/dashboard/customers/${customer._id}/edit`}
+                        <Link
+                          href={`/dashboard/customers/${customer._id}`}
                           className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl text-blue-600 transition-colors"
                         >
                           <Edit className="h-5 w-5" />
