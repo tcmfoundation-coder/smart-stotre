@@ -105,22 +105,35 @@ export default function SettingsPage() {
     try {
       let response;
       if (activeTab === 'security') {
-        // Simulate password update validation
+        if (!security.currentPassword && !security.newPassword && !security.confirmPassword) {
+          throw new Error('Enter your current and new password to update it');
+        }
         if (security.newPassword !== security.confirmPassword) {
           throw new Error('New passwords do not match');
         }
         if (security.newPassword && security.newPassword.length < 6) {
           throw new Error('New password must be at least 6 characters');
         }
-        // Simulated API call for password / security settings
-        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        response = await fetch('/api/settings/security', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            currentPassword: security.currentPassword,
+            newPassword: security.newPassword,
+          }),
+        });
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to update password');
+        }
         setSecurity((prev) => ({
           ...prev,
           currentPassword: '',
           newPassword: '',
           confirmPassword: '',
         }));
-        setFeedback({ type: 'success', message: 'Security parameters updated successfully!' });
+        setFeedback({ type: 'success', message: 'Password updated successfully!' });
       } else {
         // Standard settings API call
         response = await fetch('/api/settings', {
@@ -449,20 +462,21 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800 opacity-60">
                     <div>
                       <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Two-Factor Authentication</h4>
-                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Require Google Authenticator code on dashboard logins.</p>
+                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Not available yet — coming in a future update.</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
+                    <label className="relative inline-flex items-center cursor-not-allowed" title="Two-factor authentication is not available yet">
                       <input
                         type="checkbox"
                         name="tfaEnabled"
-                        checked={security.tfaEnabled}
-                        onChange={handleSecurityChange}
+                        checked={false}
+                        disabled
+                        readOnly
                         className="sr-only peer"
                       />
-                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 rounded-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5"></div>
                     </label>
                   </div>
                 </div>

@@ -248,12 +248,20 @@ no seeded database in this sandbox)
 
 ## 5. Broken forms
 
-- [ ] **Settings → Security tab** (`dashboard/settings/page.tsx`) — password
-  change and 2FA toggle run an `await new Promise(setTimeout(...))` explicitly
-  commented as simulated, then show a fake success toast. No API call is made; no
-  password is ever changed; 2FA state is never persisted. This sits right next to the
-  General/Notifications/Payments/Online tabs on the same page, which **do** correctly
-  save to the real `/api/settings` route — so the fake tab is easy to mistake for working.
+- [x] **Settings → Security tab** (`dashboard/settings/page.tsx`) — password change
+  and the 2FA toggle both ran an `await new Promise(setTimeout(...))` explicitly
+  commented as simulated, then showed a fake success toast — no API call was made,
+  no password was ever changed, and the 2FA toggle could be switched "on" with
+  nothing behind it. **Fixed the password half for real**: added
+  `POST /api/settings/security` (auth required, rate-limited 5/15min per user,
+  verifies `currentPassword` via the User model's existing `comparePassword`, then
+  sets and saves the new one so the schema's own pre-save bcrypt hook hashes it),
+  and wired the page to call it instead of faking success. **Did not fake the 2FA
+  half further**: real TOTP-based 2FA needs a product/architecture decision this
+  pass didn't have a mandate to make (secret storage, recovery codes, whether it
+  gates login) — instead of building or faking it, the toggle is now disabled and
+  honestly labeled "Not available yet" rather than accepting a click that does
+  nothing.
 - [ ] **`UserForm` dialog** (create/edit User from the Users page) has no password
   field at all, unlike `employees/new`, which does collect one. A user created via
   this dialog has no way to get a usable password through that flow.
@@ -558,6 +566,12 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   tests passing with a clean exit (no `--forceExit`) — all for the first time this
   session.
 
+- Settings → Security tab password change is now real (`POST /api/settings/security`,
+  rate-limited, verified against the User model's real bcrypt hash), with 5 new
+  passing tests covering the wrong-password, short-password, missing-field,
+  success, and rate-limit-exceeded cases. The 2FA toggle no longer fakes success —
+  it's disabled with an honest "not available yet" label pending a real design
+  decision on how 2FA should work in this app.
 - Runtime/logic bugs R-2, R-3, R-4, R-5, R-6, R-7 (see §2): customer lookup's
   impossible `isActive` filter, dashboard's wrong `totalCustomers` source, hardcoded
   30% profit margin and copied `profitChange`/zeroed `avgChange` in sales analytics,
