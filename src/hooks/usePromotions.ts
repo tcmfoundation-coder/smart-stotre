@@ -9,15 +9,20 @@ export interface Promotion {
   description?: string;
   type: 'percentage' | 'fixed' | 'buy-one-get-one';
   value: number;
-  startDate?: string;
+  startDate: string;
   endDate?: string;
-  products?: string[];
+  categoryIds?: string[];
+  productIds?: string[];
+  // Resolved display names for categoryIds/productIds, filled in by the API.
   categories?: string[];
-  status?: 'active' | 'inactive' | 'scheduled';
+  products?: string[];
+  status: 'active' | 'paused' | 'scheduled';
+  // status with an expired endDate taken into account - what the UI should show.
+  effectiveStatus: 'active' | 'paused' | 'scheduled' | 'expired';
   minPurchase?: number;
   maxDiscount?: number;
   usageLimit?: number;
-  usedCount?: number;
+  usageCount?: number;
   createdAt?: string;
 }
 

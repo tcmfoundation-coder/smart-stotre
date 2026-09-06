@@ -158,9 +158,10 @@ no seeded database in this sandbox)
 **Broken navigation links (target route doesn't exist):**
 - [ ] Cashier nav "New Sale" → `/dashboard/pos/new` — no page (`config/navigation.ts`).
 - [ ] `dashboard/customers` list — Edit link → `/dashboard/customers/[id]/edit` — no page.
-- [ ] `dashboard/promotions` — "Create"/"Edit" → `/dashboard/promotions/new` and
-  `/dashboard/promotions/[id]` — **neither page exists**; the app does have a
-  `promotion-form.tsx` file but it's completely empty (0 bytes).
+- [x] `dashboard/promotions` — was: "Create"/"Edit" → `/dashboard/promotions/new`
+  and `/dashboard/promotions/[id]`, neither page existed; `promotion-form.tsx`
+  was a 0-byte file. **Fixed** — both pages now exist, built on a real shared
+  `promotion-form.tsx`.
 - [ ] `dashboard/inventory/categories` — Edit → `/dashboard/inventory/categories/[id]/edit` — no page.
 
 **Looks wired, but the API it calls doesn't exist (404 at runtime despite complete-looking frontend code) — see §6 for the full list:** Promotions pause/resume, Purchase Order approve, Stock Adjustment approve/reject.
@@ -189,16 +190,26 @@ no seeded database in this sandbox)
   `VIEW_ACTIVITY_LOGS` being a defined permission in `lib/rbac.ts`.
 - [ ] `api/backup` — GET returns a hardcoded list; "create" and "restore" actions
   build/return objects but do nothing real. No `Backup` model exists.
-- [ ] `api/promotions` — GET returns one hardcoded promotion; POST builds and returns
-  an object but never saves it. No `Promotion` model exists, **despite the frontend
-  (`dashboard/promotions`, `usePromotions.ts`) being fully built out expecting real
-  CRUD** — this is the single largest gap between "looks finished" and "is finished"
-  in the app.
+- [x] `api/promotions` — was: GET returns one hardcoded promotion; POST builds and
+  returns an object but never saves it, no model existed at all despite the
+  frontend being fully built out expecting real CRUD. **Fixed** — real `Promotion`
+  model + full CRUD API (`/api/promotions`, `/api/promotions/[id]`,
+  `/api/promotions/[id]/pause`, `/api/promotions/[id]/resume`) + working
+  create/edit pages (`promotions/new`, `promotions/[id]`, shared
+  `promotion-form.tsx`, previously an empty file). Also fixed field-shape
+  mismatches that existed between the mock data, the hook's TS interface, and
+  the page's actual rendering code (`applicableProducts`/`usageCount`/
+  `buy_x_get_y` never matched anything real) — see §6/§4 for detail. Not wired
+  into POS checkout (no promotion is ever applied to a sale) — that's a
+  separate, larger feature nobody asked for yet; noting it so it isn't
+  mistaken for done.
 
 **Frontend hooks call routes that were never implemented (404 at runtime):**
-- [ ] `usePromotions.ts` → `/api/promotions/[id]`, `/api/promotions/stats`,
-  `/api/promotions/[id]/pause`, `/api/promotions/[id]/resume` — none exist. Pause/Resume
-  are live-wired buttons on the Promotions page, so clicking them fails today.
+- [x] `usePromotions.ts` → `/api/promotions/[id]`, `/api/promotions/[id]/pause`,
+  `/api/promotions/[id]/resume` — fixed, all now exist and are permission-gated
+  (`manage_promotions`: admin+manager). `/api/promotions/stats` is still not
+  implemented — `usePromotionsStats()` is dead code, confirmed unused by any
+  page, so left alone rather than building an endpoint nothing calls.
 - [ ] `usePurchaseOrders.ts` → `/api/purchase-orders/[id]`,
   `/api/purchase-orders/[id]/approve` — don't exist. The live "Approve" button on the
   Purchase Orders page fails today. Separately, there's also no way to ever reach
@@ -340,7 +351,7 @@ the unmodified code; this batch introduces no test regressions.
 | `dashboard/receipt-history` | E | Duplicates the real `receipts` page. |
 | `api/backup` (list/create/restore) | E/F | No model; writes discarded. |
 | `api/activity-logs` (list/create) | E/F | No model; writes discarded. |
-| `api/promotions` (list/create) | E/F | No model; writes discarded; frontend expects full real CRUD. |
+| ~~`api/promotions` (list/create)~~ | E/F | **Fixed** — real model + full CRUD now backs the frontend's existing expectations. |
 | `dashboard/reports` "View" button | E | Labeled placeholder (`toast.info`), at least honestly stated. |
 | `dashboard/backup` stat tiles + schedule panel | E | Hardcoded; no cron/schedule exists anywhere. |
 | `dashboard/financial-reports`, `inventory-reports` | E | Fully hardcoded metrics presented as live. |
@@ -452,8 +463,15 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   ownership scoping, unescaped-regex hardening across 5 routes, plus two
   incidentally-fixed build blockers (R-1 field-name bug, `UserActivity` static typings)
 
-**Still open, in priority order per the working plan:** stale-JWT privilege window
-(needs a quick design decision), the mock/fake feature list in §9, the dead-button
-list in §4, the broken-link list in §3/§4, and the remaining pre-existing build
-errors in §1 (customers page `Customer` type conflict, `User.lastLogin`, Lazy
-component default exports, `UserForm` generic mismatch, test-file type errors).
+- Promotions module: real `Promotion` model, full CRUD API
+  (list/create/get/update/delete/pause/resume, all permission-gated), working
+  create/edit pages built on a previously-empty shared form component, and the
+  field-shape mismatches between mock data / hook types / page rendering that
+  would have broken it even with a real backend
+
+**Still open, in priority order per the working plan:** the remaining mock/fake
+features in §9 (Backup, Activity Logs, Financial/Inventory Reports, Returns, Shift
+Summary, Payments, Email/SMS), the dead-button list in §4, the broken-link list in
+§3/§4, and the remaining pre-existing build errors in §1 (customers page `Customer`
+type conflict, `User.lastLogin`, Lazy component default exports, `UserForm`
+generic mismatch, test-file type errors).
