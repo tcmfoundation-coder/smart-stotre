@@ -281,9 +281,14 @@ no seeded database in this sandbox)
   gates login) — instead of building or faking it, the toggle is now disabled and
   honestly labeled "Not available yet" rather than accepting a click that does
   nothing.
-- [ ] **`UserForm` dialog** (create/edit User from the Users page) has no password
-  field at all, unlike `employees/new`, which does collect one. A user created via
-  this dialog has no way to get a usable password through that flow.
+- [x] **`UserForm` dialog** (create/edit User from the Users page) — was: no
+  password field at all, unlike `employees/new`, which does collect one. Since
+  the `User` schema requires `password`, this meant `POST /api/users` always threw
+  a Mongoose validation error — **creating a user through the admin UI never
+  worked, at all**, for any role. **Fixed** — added a required password field
+  (min 6 characters, same rule as the schema) shown only in create mode, matching
+  the pattern already used by `employees/new`; edit mode never sends a password
+  field, leaving existing passwords untouched.
 
 ---
 

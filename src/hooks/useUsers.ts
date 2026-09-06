@@ -18,6 +18,10 @@ export interface User {
   updatedAt?: string;
 }
 
+export interface CreateUserInput extends Omit<Partial<User>, '_id'> {
+  password: string;
+}
+
 export interface UsersParams {
   search?: string;
   role?: string;
@@ -63,7 +67,7 @@ export function useCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<User>) =>
+    mutationFn: (data: CreateUserInput) =>
       apiPost<User>('/api/users', data),
 
     onSuccess: () => {

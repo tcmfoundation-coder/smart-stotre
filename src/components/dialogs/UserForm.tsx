@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormDialog } from './FormDialog';
-import { useCreateUser, useUpdateUser, type User } from '@/hooks/useUsers';
+import { useCreateUser, useUpdateUser, type User, type CreateUserInput } from '@/hooks/useUsers';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -16,6 +16,7 @@ const userSchema = z.object({
   role: z.enum(['admin', 'manager', 'cashier']),
   status: z.enum(['active', 'inactive']),
   branch: z.string().optional(),
+  password: z.string().optional(),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -47,6 +48,7 @@ export function UserForm({ open, onOpenChange, mode, user, onSuccess }: UserForm
       role: 'cashier',
       status: 'active',
       branch: '',
+      password: '',
     },
   });
 
@@ -55,9 +57,15 @@ export function UserForm({ open, onOpenChange, mode, user, onSuccess }: UserForm
 
   const onSubmit = async (data: UserFormData) => {
     if (isCreate) {
-      await createUser.mutateAsync(data);
+      if (!data.password || data.password.length < 6) {
+        form.setError('password', { message: 'Password must be at least 6 characters' });
+        return;
+      }
+      await createUser.mutateAsync(data as CreateUserInput);
     } else if (isEdit && user?._id) {
-      await updateUser.mutateAsync({ id: user._id, data });
+      const updateData = { ...data };
+      delete updateData.password;
+      await updateUser.mutateAsync({ id: user._id, data: updateData });
     }
     onSuccess?.();
     onOpenChange(false);
@@ -101,6 +109,21 @@ export function UserForm({ open, onOpenChange, mode, user, onSuccess }: UserForm
             <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
           )}
         </div>
+
+        {isCreate && (
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              {...form.register('password')}
+              placeholder="Enter a password (min. 6 characters)"
+            />
+            {form.formState.errors.password && (
+              <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="role">Role</Label>
