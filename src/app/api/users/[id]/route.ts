@@ -5,12 +5,13 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   return withAuth(async (req, user) => {
     try {
       await connectDB();
-      
-      const userDoc = await User.findById(params.id).select('-password');
+
+      const userDoc = await User.findById(id).select('-password');
       
       if (!userDoc) {
         return NextResponse.json(
@@ -33,18 +34,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   })(request);
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   return withAuth(async (req, user) => {
     try {
       await connectDB();
-      
+
       const data = await request.json();
-      
+
       // Don't allow password update through this endpoint
       delete data.password;
-      
+
       const userDoc = await User.findByIdAndUpdate(
-        params.id,
+        id,
         { ...data, updatedAt: new Date() },
         { new: true, runValidators: true }
       ).select('-password');
@@ -70,7 +72,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })(request);
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   return withAuth(async (req, user) => {
     try {
       await connectDB();
