@@ -7,7 +7,9 @@ describe('Button', () => {
     const markup = renderToStaticMarkup(
       React.createElement(
         Button,
-        { type: 'submit', 'aria-label': 'Complete sale', 'data-testid': 'complete-sale' },
+        // data-* attributes are forwarded at runtime (verified below) but
+        // aren't part of ButtonProps' declared type.
+        { type: 'submit', 'aria-label': 'Complete sale', 'data-testid': 'complete-sale' } as React.ComponentProps<typeof Button>,
         'Complete sale'
       )
     );

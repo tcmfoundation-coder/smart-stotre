@@ -10,6 +10,7 @@ export interface IUser extends Document {
   avatar?: string;
   branchId?: mongoose.Types.ObjectId;
   isActive: boolean;
+  lastLogin?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -53,6 +54,9 @@ const UserSchema = new Schema<IUser>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    lastLogin: {
+      type: Date,
     },
   },
   {

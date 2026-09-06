@@ -5,24 +5,9 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { Plus, Search, Edit, Trash2, Award, Phone, Mail } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
-import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers';
+import { useCustomers, useDeleteCustomer, type Customer } from '@/hooks/useCustomers';
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
-import { toast } from 'sonner';
-
-interface Customer {
-  _id: string;
-  name: string;
-  email: string;
-  phone: string;
-  totalSpent: number;
-  loyaltyPoints: number;
-  visits: number;
-  lastVisit: string;
-  customerType?: string;
-  purchaseCount?: number;
-  updatedAt: string;
-}
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');

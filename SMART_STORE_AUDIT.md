@@ -34,10 +34,14 @@ in detail but barely enforced server-side.
   file, rejected by TS as "not a module." Replaced with an honest 501 stub (same
   commit) rather than deleted (file deletion is blocked by this session's safety
   classifier).
-- [ ] `src/__tests__/components/button.test.ts:10` — `data-testid` not in `ButtonProps`
-  type (test predates a prop addition or the prop was never added to the type).
-- [ ] `src/__tests__/lib/error-handler.test.ts:40,60,70,79,86` — tests assign directly
-  to `process.env.NODE_ENV`, which TS's `ProcessEnv` type now marks read-only.
+- [x] `src/__tests__/components/button.test.ts:10` — `data-testid` not in `ButtonProps`
+  type. Fixed by casting the test's props object `as React.ComponentProps<typeof Button>`
+  with a comment explaining `data-*` attributes are forwarded at runtime (verified by
+  the test's own assertions) but aren't part of the framer-motion-derived prop type.
+- [x] `src/__tests__/lib/error-handler.test.ts:40,60,70,79,86` — tests assigned directly
+  to `process.env.NODE_ENV`, which `@types/node` now marks read-only. Fixed by routing
+  all 5 assignments through a local `setNodeEnv()` helper that casts around the
+  read-only type.
 - [x] `src/app/api/reports/generate/route.ts:113` — `sale.totalAmount` doesn't exist on
   `ISale` (real field is `total`). Same root cause as finding R-1 below. Fixed
   (rename only — the deeper financial-report correctness issues in R-6 remain open).
@@ -45,20 +49,57 @@ in detail but barely enforced server-side.
   but the static wasn't declared in the model's TS interface (it existed at runtime
   per `UserActivity.ts`'s `statics`, this was a typing gap, not a missing feature).
   Fixed by adding an `IUserActivityModel` interface declaring both statics.
-- [ ] `src/app/dashboard/customers/page.tsx:77,91,137` — two different `Customer` types
-  are in scope (likely one from `src/types` and a narrower inline one), causing
-  `.reduce()`/`.map()` overload failures.
-- [ ] `src/app/dashboard/users/page.tsx:181-182` — references `User.lastLogin`, which
-  isn't on the `User` type.
-- [ ] `src/components/dashboard/LazyAlertCard.tsx:7`, `LazyExecutiveHero.tsx:7` — lazy
-  `import()` expects a `default` export that the target component files don't have.
-- [ ] `src/components/dialogs/UserForm.tsx:38,73` — react-hook-form generic/status-enum
-  mismatch (`"suspended"` not in the resolver's inferred type).
+- [x] `src/app/dashboard/customers/page.tsx:77,91,137` — the page declared its own local
+  `Customer` interface (with phantom `visits`/`lastVisit` fields that were never
+  actually rendered) that conflicted with `useCustomers.ts`'s `Customer` export. Fixed
+  by deleting the local interface and importing the hook's `Customer` type, which was
+  rewritten to match the real `ICustomer` Mongoose schema field-for-field. While tracing
+  this, found the customers list page's Delete button (`useDeleteCustomer`) had always
+  been calling a route that didn't exist — `src/app/api/customers/[id]/route.ts` was
+  never created, so it 404'd on every attempt. Added the missing route
+  (GET/PUT/DELETE, `withAuth` + the actions' own `requireManagerOrAdmin` checks).
+- [x] `src/app/dashboard/users/page.tsx:181-182` — references `User.lastLogin`, which
+  wasn't tracked anywhere. Fixed for real, not just typed around: added a `lastLogin`
+  field to the `User` model/schema, set it (best-effort, non-blocking) in
+  `auth.ts`'s `authorize()` on every successful login, and added the field to the
+  `useUsers.ts` hook type. While in this code, also found and fixed a real, previously
+  undocumented bug: the Users list/edit UI's "Status" control was reading/writing a
+  `status: 'active'|'inactive'` field that the API never produced or accepted — the
+  real schema field is `isActive: boolean`, so the Status dropdown always displayed
+  "Active" regardless of the DB and silently no-op'd when changed. Fixed
+  `GET`/`POST /api/users` and `GET`/`PUT /api/users/[id]` to map `status` ↔ `isActive`
+  in both directions.
+- [x] `src/components/dashboard/LazyAlertCard.tsx:7`, `LazyExecutiveHero.tsx:7` — lazy
+  `import()` expected a `default` export but the target components (`AlertCard`,
+  `ExecutiveHero`) use named exports. Fixed the `.then()` mappers. Confirmed via grep
+  neither Lazy wrapper is actually imported anywhere (dashboard/page.tsx uses the real
+  components directly) — fixed the bug anyway since it's real and deletion isn't
+  available in this sandbox.
+- [x] `src/components/dialogs/UserForm.tsx:38,73` — react-hook-form generic/status-enum
+  mismatch (`"suspended"` not in the resolver's inferred type). Fixed at the source:
+  `useUsers.ts`'s `User.status` type was narrowed from an invented 3-value
+  `'active'|'inactive'|'suspended'` (the backend never supported `'suspended'`) to the
+  real 2-value `'active'|'inactive'`, matching `UserForm`'s zod schema exactly.
+- [x] `src/__tests__/lib/auth-rate-limit.test.ts` — not a type error, but this suite was
+  failing outright: it mocked `fs` and tested file-based rate-limiting, but
+  `lib/auth-rate-limit.ts` was refactored to in-memory `Map` storage at some point and
+  the test was never updated. Rewritten to drive the real in-memory implementation
+  directly. Also added `.unref()` to that module's cleanup `setInterval` so it doesn't
+  keep the process (or a test run) alive.
+- [x] `src/lib/actions/ai.ts` — not a `tsc` error, but a `next build` failure: the
+  `OpenAI` client was constructed at module load with `process.env.NVIDIA_API_KEY`,
+  which crashes build-time page-data-collection when the key is absent (as in this
+  sandbox). Fixed by constructing the client lazily inside a `getOpenAIClient()`
+  function, called only when an AI request actually runs.
 
-**Note:** `npm run build` stops at the *first* type error, so the list above is the
-full `tsc --noEmit` picture, not necessarily the exact order `next build` will hit
-them in. `npm run lint` separately reports 271 pre-existing errors / 231 warnings,
-almost all `@typescript-eslint/no-explicit-any` — not itemized here individually.
+**Verification of this batch:** `npx tsc --noEmit` → exit 0 (zero errors, previously
+had 8+ pre-existing errors). `npm run build` → all 82 static pages + every API route
+compile successfully (previously failed at the first type error). `npx jest`
+(no `--forceExit` needed) → 9/9 suites, 114/114 tests pass, clean exit.
+
+**Note:** `npm run lint` separately reports 472 pre-existing problems, almost all
+`@typescript-eslint/no-explicit-any` — judged out of scope for this pass (a mass,
+low-value, regression-risky refactor); not itemized here individually.
 
 ---
 
@@ -499,10 +540,23 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   create/edit pages built on a previously-empty shared form component, and the
   field-shape mismatches between mock data / hook types / page rendering that
   would have broken it even with a real backend
+- Dead-buttons pass across Branches/Customers/Employees/Expenses/Inventory/
+  Online Orders/WhatsApp Orders/Purchase Orders (see §4 history)
+- All remaining pre-existing build/type/test errors from §1: the `Customer` type
+  conflict (plus the missing `/api/customers/[id]` route found along the way), the
+  `User.lastLogin`/Status↔isActive mapping bugs, the two Lazy-component default-export
+  bugs, the `UserForm` status-enum mismatch, the two test-file type errors, the stale
+  `auth-rate-limit.test.ts` file-based test testing a since-refactored in-memory
+  implementation, and the AI client's eager-init build crash. Result: `tsc --noEmit`
+  exit 0, `npm run build` fully green (82/82 pages), `npx jest` 9/9 suites / 114/114
+  tests passing with a clean exit (no `--forceExit`) — all for the first time this
+  session.
 
 **Still open, in priority order per the working plan:** the remaining mock/fake
 features in §9 (Backup, Activity Logs, Financial/Inventory Reports, Returns, Shift
-Summary, Payments, Email/SMS), the dead-button list in §4, the broken-link list in
-§3/§4, and the remaining pre-existing build errors in §1 (customers page `Customer`
-type conflict, `User.lastLogin`, Lazy component default exports, `UserForm`
-generic mismatch, test-file type errors).
+Summary, Payments, Email/SMS), the remaining dead-button/broken-link items in §3/§4,
+the still-open runtime bugs in §2 (R-2 through R-9), the `user.branch` display gap
+(schema only has `branchId`, never populated to a name anywhere — noted, not fixed,
+since it's not a build error and needs no product decision beyond "should this be
+populated," which hasn't been asked yet), and the 472 pre-existing lint warnings
+(mostly `no-explicit-any`) intentionally left alone as out of scope for a mass pass.

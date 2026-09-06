@@ -1,5 +1,11 @@
 import { AppError, handleApiError } from '@/lib/error-handler';
 
+// @types/node marks NODE_ENV as read-only; these tests need to flip it
+// between cases, so route every write through this helper.
+function setNodeEnv(value: string | undefined) {
+  (process.env as { NODE_ENV?: string }).NODE_ENV = value;
+}
+
 describe('AppError', () => {
   it('creates an error with default values', () => {
     const err = new AppError('Something went wrong');
@@ -37,7 +43,7 @@ describe('handleApiError', () => {
   const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    setNodeEnv(originalEnv);
     consoleSpy.mockClear();
   });
 
@@ -57,7 +63,7 @@ describe('handleApiError', () => {
   });
 
   it('returns generic message for non-operational errors in production', () => {
-    process.env.NODE_ENV = 'production';
+    setNodeEnv('production');
     const err = new Error('DB connection failed');
     const result = handleApiError(err);
     expect(result.success).toBe(false);
@@ -67,7 +73,7 @@ describe('handleApiError', () => {
   });
 
   it('returns actual error message in development for non-AppError', () => {
-    process.env.NODE_ENV = 'development';
+    setNodeEnv('development');
     const err = new Error('Debug info');
     const result = handleApiError(err);
     expect(result.error).toBe('Debug info');
@@ -76,14 +82,14 @@ describe('handleApiError', () => {
   });
 
   it('handles non-Error unknown values in development', () => {
-    process.env.NODE_ENV = 'development';
+    setNodeEnv('development');
     const result = handleApiError('string error');
     expect(result.error).toBe('An unexpected error occurred');
     expect(result.statusCode).toBe(500);
   });
 
   it('returns generic message for non-operational AppError in production', () => {
-    process.env.NODE_ENV = 'production';
+    setNodeEnv('production');
     const err = new AppError('Internal leak', 500, false);
     const result = handleApiError(err);
     expect(result.error).toBe('An unexpected error occurred. Please try again later.');

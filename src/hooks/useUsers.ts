@@ -9,10 +9,11 @@ export interface User {
   name: string;
   email: string;
   role: 'admin' | 'manager' | 'cashier';
-  status: 'active' | 'inactive' | 'suspended';
+  status: 'active' | 'inactive';
   branch?: string;
   phone?: string;
   avatar?: string;
+  lastLogin?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -37,11 +37,17 @@ export async function GET(request: NextRequest) {
       
       const users = await User.find(query)
         .select('-password')
-        .sort({ createdAt: -1 });
-      
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const data = users.map((u) => ({
+        ...u,
+        status: u.isActive ? 'active' : 'inactive',
+      }));
+
       return NextResponse.json({
         success: true,
-        data: users
+        data
       });
     } catch (error) {
       const errorResponse = handleApiError(error);
@@ -59,7 +65,7 @@ export async function POST(request: NextRequest) {
       await connectDB();
       
       const data = await request.json();
-      
+
       // Check if email already exists
       const existingUser = await User.findOne({ email: data.email });
       if (existingUser) {
@@ -68,19 +74,21 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      
+
+      const { status, ...rest } = data;
+
       const newUser = await User.create({
-        ...data,
-        createdBy: user.id
+        ...rest,
+        isActive: status ? status === 'active' : true,
       });
-      
+
       // Remove password from response
       const userResponse = newUser.toObject();
       delete (userResponse as any).password;
-      
+
       return NextResponse.json({
         success: true,
-        data: userResponse
+        data: { ...userResponse, status: userResponse.isActive ? 'active' : 'inactive' }
       });
     } catch (error) {
       const errorResponse = handleApiError(error);

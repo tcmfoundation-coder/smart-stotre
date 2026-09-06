@@ -12,10 +12,19 @@ type NvidiaChatCompletionParams = ChatCompletionCreateParamsNonStreaming & {
 };
 
 const aiModel = process.env.NVIDIA_AI_MODEL || 'deepseek-ai/deepseek-v4-pro';
-const openai = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY,
-  baseURL: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
-});
+
+// Constructed lazily (not at module load) so a missing NVIDIA_API_KEY only
+// fails the specific AI request that needs it, rather than the build itself
+// or every route that happens to import this file.
+function getOpenAIClient(): OpenAI {
+  if (!process.env.NVIDIA_API_KEY) {
+    throw new Error('AI features are not configured: NVIDIA_API_KEY is not set.');
+  }
+  return new OpenAI({
+    apiKey: process.env.NVIDIA_API_KEY,
+    baseURL: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+  });
+}
 
 export async function getBusinessInsights(query: string, userId: string) {
   const db = await connectDB();
@@ -302,7 +311,7 @@ export async function getBusinessInsights(query: string, userId: string) {
       stream: false,
     };
 
-    const completion = await openai.chat.completions.create(completionParams);
+    const completion = await getOpenAIClient().chat.completions.create(completionParams);
     const response = completion.choices[0]?.message?.content || '';
 
     console.log('[NVIDIA AI] Response received successfully');

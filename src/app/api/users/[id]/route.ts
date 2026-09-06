@@ -10,18 +10,18 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     try {
       await connectDB();
 
-      const userDoc = await User.findById(id).select('-password');
-      
+      const userDoc = await User.findById(id).select('-password').lean();
+
       if (!userDoc) {
         return NextResponse.json(
           { success: false, error: 'User not found' },
           { status: 404 }
         );
       }
-      
+
       return NextResponse.json({
         success: true,
-        data: userDoc
+        data: { ...userDoc, status: userDoc.isActive ? 'active' : 'inactive' }
       });
     } catch (error) {
       const errorResponse = handleApiError(error);
@@ -44,22 +44,29 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       // Don't allow password update through this endpoint
       delete data.password;
 
+      // The frontend deals in a 'status' string; the schema stores isActive.
+      const { status, ...rest } = data;
+      const update: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+      if (status === 'active' || status === 'inactive') {
+        update.isActive = status === 'active';
+      }
+
       const userDoc = await User.findByIdAndUpdate(
         id,
-        { ...data, updatedAt: new Date() },
+        update,
         { new: true, runValidators: true }
-      ).select('-password');
-      
+      ).select('-password').lean();
+
       if (!userDoc) {
         return NextResponse.json(
           { success: false, error: 'User not found' },
           { status: 404 }
         );
       }
-      
+
       return NextResponse.json({
         success: true,
-        data: userDoc
+        data: { ...userDoc, status: userDoc.isActive ? 'active' : 'inactive' }
       });
     } catch (error) {
       const errorResponse = handleApiError(error);

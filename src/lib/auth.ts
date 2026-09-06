@@ -48,6 +48,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Reset rate limit on successful login
           resetRateLimit(email)
 
+          // Record last login (best-effort - don't fail the login over it)
+          User.findByIdAndUpdate(user._id, { lastLogin: new Date() }).catch((err) => {
+            console.error('Failed to record lastLogin:', err)
+          })
+
           return {
             id: user._id.toString(),
             email: user.email,
