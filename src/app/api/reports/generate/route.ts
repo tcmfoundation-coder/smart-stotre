@@ -4,7 +4,7 @@ import { withAuth } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import { handleApiError } from '@/lib/error-handler';
 import { Report } from '@/models';
-import { Sale, Product, Customer } from '@/models';
+import { Sale, Product, Customer, Expense } from '@/models';
 
 export async function POST(request: NextRequest) {
   return withAuth(async (req, user) => {
@@ -99,23 +99,34 @@ export async function POST(request: NextRequest) {
           const customers = await Customer.find({
             createdAt: { $gte: start, $lte: end }
           }).lean();
+          const customerSales = await Sale.find({
+            createdAt: { $gte: start, $lte: end },
+            status: 'completed',
+            customerId: { $exists: true, $ne: null },
+          }).lean();
+          const customerSalesTotal = customerSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
           reportData = {
             totalCustomers: customers.length,
             newCustomers: customers.length,
-            averagePurchaseValue: 0,
+            averagePurchaseValue: customerSales.length > 0 ? customerSalesTotal / customerSales.length : 0,
           };
           break;
-          
+
         case 'financial':
           const financialSales = await Sale.find({
             createdAt: { $gte: start, $lte: end }
           }).lean();
           const revenue = financialSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+          const financialExpenses = await Expense.find({
+            date: { $gte: start, $lte: end }
+          }).lean();
+          const expenses = financialExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+          const profit = revenue - expenses;
           reportData = {
             revenue,
-            expenses: 0,
-            profit: revenue,
-            profitMargin: revenue > 0 ? 100 : 0,
+            expenses,
+            profit,
+            profitMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
           };
           break;
       }

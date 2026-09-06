@@ -110,30 +110,36 @@ no seeded database in this sandbox)
   `sale.totalAmount`; the `Sale` schema's real field is `total`. Fixed the field
   name — revenue now computes correctly. (The `expenses: 0` and bad `profitMargin`
   formula in the same block are R-6, still open.)
-- [ ] **R-2**: `api/customers/lookup/route.ts` queries
+- [x] **R-2**: `api/customers/lookup/route.ts` queried
   `Customer.findOne({ phone, isActive: true })` / `{ email, isActive: true }`, but
-  `Customer` has no `isActive` field at all. This lookup can **never** match a real
-  document — customer lookup during POS checkout always reports "not found," which
-  likely causes duplicate customer records instead of reuse (contrast with
-  `customers/auto-create` and `pos.ts::createSale`, which dedupe correctly by phone
-  with no `isActive` filter).
-- [ ] **R-3**: `api/dashboard/stats/route.ts:70` — `totalCustomers` is computed as
-  `User.countDocuments({})` — it counts staff accounts (admin/manager/cashier), not
-  the `Customer` collection. The dashboard's "Total Customers" KPI is wrong data, not
-  fake data — an easy, well-defined fix.
-- [ ] **R-4**: `api/sales/analytics/route.ts` hardcodes profit as `total * 0.3`
-  (flat 30%) instead of computing from `buyingPrice`/`sellingPrice`, which the
-  codebase already does correctly elsewhere (`lib/actions/ai.ts:41`). `profitChange`
-  is also just a copy of `revenueChange`, not a real calculation.
-- [ ] **R-5**: `lib/actions/ai.ts::predictSales` assumes a flat **$10** average unit
-  price for revenue prediction regardless of actual product prices.
-- [ ] **R-6**: `api/reports/generate/route.ts` — customer report's
-  `averagePurchaseValue` is hardcoded `0`; financial report's `expenses` is hardcoded
-  `0` (ignores the real `Expense` model); `profitMargin` formula is
-  `revenue > 0 ? 100 : 0` (not `(revenue-expenses)/revenue`).
-- [ ] **R-7**: `Employee.ts` declares a text index on `name`/`email`/`phone`, but
-  those fields live on the linked `User` document, not `Employee` — the index is a
-  dead no-op.
+  `Customer` has no `isActive` field at all, so this lookup could never match a real
+  document. **Fixed** — dropped the `isActive` filter from both queries.
+- [x] **R-3**: `api/dashboard/stats/route.ts:70` — `totalCustomers` was computed as
+  `User.countDocuments({})`, counting staff accounts (admin/manager/cashier), not
+  the `Customer` collection. **Fixed** — now `Customer.countDocuments({})`.
+- [x] **R-4**: `api/sales/analytics/route.ts` hardcoded profit as `total * 0.3`
+  (flat 30%) and `profitChange` as a copy of `revenueChange`. **Fixed** — profit is
+  now computed per-sale from `total - Σ(item.buyingPrice * item.quantity)`, matching
+  the pattern already used correctly in `lib/actions/ai.ts`, with `profitChange` and
+  `avgChange` computed as genuine period-over-period deltas instead of copies/zeros.
+- [x] **R-5**: `lib/actions/ai.ts::predictSales` assumed a flat **$10** average unit
+  price for revenue prediction regardless of actual product prices. **Fixed** —
+  derives the average unit price from the product's own historical revenue/quantity
+  (data already being fetched in the same function), falling back to the product's
+  current `sellingPrice` only when there's no sales history yet.
+- [x] **R-6**: `api/reports/generate/route.ts` — customer report's
+  `averagePurchaseValue` was hardcoded `0`; financial report's `expenses` was
+  hardcoded `0` (ignored the real `Expense` model); `profitMargin` formula was
+  `revenue > 0 ? 100 : 0`. **Fixed** — customer report now averages completed sales
+  attributed to a `customerId` within the date range; financial report now sums real
+  `Expense` records in-range and computes `profitMargin` as `(revenue-expenses)/revenue`.
+- [x] **R-7**: `Employee.ts` declared a text index on `name`/`email`/`phone`, but
+  those fields live on the linked `User` document, not `Employee` — dead no-op index.
+  Worse: the employees page's search box is labeled "Search employees by name, role,
+  or ID..." but the backing query only ever matched `position`/`department` — name
+  and ID search silently never worked. **Fixed for real** — removed the dead index
+  and rewrote `getEmployees`' search to also resolve matching `User` ids
+  (name/email/phone) and match `employeeId`, so the search box now does what it says.
 - [ ] **R-8**: `Loyalty.rewards[].rewardId` references a `Reward` model that doesn't
   exist anywhere in `src/models`.
 - [ ] **R-9**: `AIReport` is write-only — `getBusinessInsights` creates records but
@@ -320,10 +326,10 @@ no seeded database in this sandbox)
 
 ## 7. Database issues
 
-- [ ] `Customer` schema has no `isActive` field, but is queried with one in
-  `api/customers/lookup` (see R-2).
-- [ ] `Sale.total` vs. code expecting `Sale.totalAmount` (see R-1).
-- [ ] `Employee` text index on non-existent fields (see R-7).
+- [x] `Customer` schema has no `isActive` field, but was queried with one in
+  `api/customers/lookup` (see R-2, fixed).
+- [x] `Sale.total` vs. code expecting `Sale.totalAmount` (see R-1, fixed).
+- [x] `Employee` text index on non-existent fields (see R-7, fixed).
 - [ ] `Loyalty.rewards[].rewardId` → missing `Reward` model (see R-8).
 - [ ] **Two parallel, disconnected permission systems**: the DB-backed `Role` model
   (edited via `/api/roles`, `withAdmin`-gated, looks fully functional in the UI) and
@@ -552,11 +558,21 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   tests passing with a clean exit (no `--forceExit`) — all for the first time this
   session.
 
+- Runtime/logic bugs R-2, R-3, R-4, R-5, R-6, R-7 (see §2): customer lookup's
+  impossible `isActive` filter, dashboard's wrong `totalCustomers` source, hardcoded
+  30% profit margin and copied `profitChange`/zeroed `avgChange` in sales analytics,
+  flat $10 unit price in AI sales prediction, hardcoded `averagePurchaseValue`/
+  `expenses`/`profitMargin` in the customer & financial reports, and the dead
+  `Employee` text index plus the employee search box that never actually searched
+  by name or ID despite its own placeholder text. All computed from real data now;
+  `tsc`/`build`/`jest` re-verified green after this batch too.
+
 **Still open, in priority order per the working plan:** the remaining mock/fake
-features in §9 (Backup, Activity Logs, Financial/Inventory Reports, Returns, Shift
-Summary, Payments, Email/SMS), the remaining dead-button/broken-link items in §3/§4,
-the still-open runtime bugs in §2 (R-2 through R-9), the `user.branch` display gap
-(schema only has `branchId`, never populated to a name anywhere — noted, not fixed,
-since it's not a build error and needs no product decision beyond "should this be
-populated," which hasn't been asked yet), and the 472 pre-existing lint warnings
-(mostly `no-explicit-any`) intentionally left alone as out of scope for a mass pass.
+features in §9 (Backup, Activity Logs, Financial/Inventory Reports pages themselves,
+Returns, Shift Summary, Payments, Email/SMS), the remaining dead-button/broken-link
+items in §3/§4, the still-open runtime bugs R-8/R-9 in §2, the `user.branch` display
+gap (schema only has `branchId`, never populated to a name anywhere — noted, not
+fixed, since it's not a build error and needs no product decision beyond "should
+this be populated," which hasn't been asked yet), and the 472 pre-existing lint
+warnings (mostly `no-explicit-any`) intentionally left alone as out of scope for a
+mass pass.

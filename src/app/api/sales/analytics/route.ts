@@ -72,13 +72,24 @@ export async function GET(request: Request) {
       status: 'completed'
     });
 
+    const saleProfit = (sale: (typeof currentSales)[number]) =>
+      sale.total - sale.items.reduce((sum, item) => sum + item.buyingPrice * item.quantity, 0);
+
     const currentRevenue = currentSales.reduce((sum, s) => sum + s.total, 0);
     const lastRevenue = lastSales.reduce((sum, s) => sum + s.total, 0);
     const revenueChange = lastRevenue > 0 ? ((currentRevenue - lastRevenue) / lastRevenue) * 100 : 0;
 
+    const currentProfit = currentSales.reduce((sum, s) => sum + saleProfit(s), 0);
+    const lastProfit = lastSales.reduce((sum, s) => sum + saleProfit(s), 0);
+    const profitChange = lastProfit > 0 ? ((currentProfit - lastProfit) / lastProfit) * 100 : 0;
+
     const currentCount = currentSales.length;
     const lastCount = lastSales.length;
     const salesChange = lastCount > 0 ? ((currentCount - lastCount) / lastCount) * 100 : 0;
+
+    const currentAvg = currentCount > 0 ? currentRevenue / currentCount : 0;
+    const lastAvg = lastCount > 0 ? lastRevenue / lastCount : 0;
+    const avgChange = lastAvg > 0 ? ((currentAvg - lastAvg) / lastAvg) * 100 : 0;
 
     // Grouping for chart
     const groupedData = currentSales.reduce((acc: Record<string, { name: string; revenue: number; sales: number; profit: number }>, sale) => {
@@ -91,8 +102,7 @@ export async function GET(request: Request) {
       if (!acc[key]) acc[key] = { name: key, revenue: 0, sales: 0, profit: 0 };
       acc[key].revenue += sale.total;
       acc[key].sales += 1;
-      // Approximate profit as 30% for now
-      acc[key].profit += sale.total * 0.3;
+      acc[key].profit += saleProfit(sale);
       return acc;
     }, {});
 
@@ -104,12 +114,12 @@ export async function GET(request: Request) {
         stats: {
           totalRevenue: currentRevenue,
           totalSales: currentCount,
-          totalProfit: currentRevenue * 0.3,
-          avgTransaction: currentCount > 0 ? currentRevenue / currentCount : 0,
+          totalProfit: currentProfit,
+          avgTransaction: currentAvg,
           revenueChange,
           salesChange,
-          profitChange: revenueChange, // simplified
-          avgChange: 0
+          profitChange,
+          avgChange
         },
         chartData
       }

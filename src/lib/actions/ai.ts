@@ -402,12 +402,21 @@ export async function predictSales(productId: string, days: number = 30) {
   ]);
 
   // Simple prediction based on average
-  const avgDailySales = historicalSales.length > 0
-    ? historicalSales.reduce((sum, s) => sum + s.totalSold, 0) / historicalSales.length
-    : 0;
+  const totalHistoricalSold = historicalSales.reduce((sum, s) => sum + s.totalSold, 0);
+  const totalHistoricalRevenue = historicalSales.reduce((sum, s) => sum + s.revenue, 0);
+  const avgDailySales = historicalSales.length > 0 ? totalHistoricalSold / historicalSales.length : 0;
+
+  // Derive the average unit price from this product's own sales history rather
+  // than assuming a flat price; fall back to its current selling price when
+  // there's no sales history yet to derive one from.
+  let avgUnitPrice = totalHistoricalSold > 0 ? totalHistoricalRevenue / totalHistoricalSold : 0;
+  if (avgUnitPrice === 0) {
+    const product = await Product.findById(productId).select('sellingPrice');
+    avgUnitPrice = product?.sellingPrice || 0;
+  }
 
   const predictedSales = Math.round(avgDailySales * days);
-  const predictedRevenue = predictedSales * 10; // Assuming avg price of $10
+  const predictedRevenue = predictedSales * avgUnitPrice;
 
   return {
     productId,

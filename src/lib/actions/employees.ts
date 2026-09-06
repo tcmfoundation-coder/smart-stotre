@@ -20,9 +20,18 @@ export async function getEmployees(filters?: {
 
   if (filters?.search) {
     const safeSearch = escapeRegex(filters.search);
+    const regex = { $regex: safeSearch, $options: 'i' };
+    // name/email/phone live on the linked User document, not Employee, so
+    // resolve matching users first and OR their ids into the Employee query.
+    const matchingUsers = await User.find({
+      $or: [{ name: regex }, { email: regex }, { phone: regex }],
+    }).select('_id');
+
     query.$or = [
-      { position: { $regex: safeSearch, $options: 'i' } },
-      { department: { $regex: safeSearch, $options: 'i' } },
+      { position: regex },
+      { department: regex },
+      { employeeId: regex },
+      { userId: { $in: matchingUsers.map((u) => u._id) } },
     ];
   }
 
