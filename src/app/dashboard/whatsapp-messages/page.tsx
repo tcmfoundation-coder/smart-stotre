@@ -5,22 +5,25 @@ import { getWhatsAppMessages, getWhatsAppMessageStats } from '@/lib/whatsapp';
 import { MessageSquare, CheckCircle, XCircle, Clock, Search, Filter, Download, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+
+type StatusFilter = '' | 'sent' | 'failed' | 'pending';
 
 export default function WhatsAppMessagesPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({ total: 0, sent: 0, failed: 0, successRate: 0 });
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async (search?: string) => {
+  const loadData = async (search?: string, status?: StatusFilter) => {
     try {
       setLoading(true);
       const [messagesData, statsData] = await Promise.all([
-        getWhatsAppMessages(search ? { search } : undefined),
+        getWhatsAppMessages({
+          search: search || undefined,
+          status: status || undefined,
+        }),
         getWhatsAppMessageStats()
       ]);
       setMessages(messagesData);
@@ -33,16 +36,44 @@ export default function WhatsAppMessagesPage() {
   };
 
   useEffect(() => {
+    (async () => {
+      await loadData();
+    })();
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery.length > 0) {
-        loadData(searchQuery);
-      } else if (searchQuery.length === 0) {
-        loadData();
-      }
+      loadData(searchQuery || undefined, statusFilter);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, statusFilter]);
+
+  const handleExport = () => {
+    if (messages.length === 0) {
+      toast.info('No messages to export');
+      return;
+    }
+
+    const headers = ['Customer', 'Phone', 'Message', 'Amount', 'Date', 'Status'];
+    const rows = messages.map((m) => [
+      m.customerName,
+      m.customerPhone,
+      `"${(m.message || '').replace(/"/g, '""')}"`,
+      m.amount || '',
+      new Date(m.createdAt).toLocaleString(),
+      m.status,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `whatsapp-messages-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Messages exported successfully');
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
@@ -122,11 +153,23 @@ export default function WhatsAppMessagesPage() {
           </div>
 
           <div className="flex gap-4">
-            <button className="flex items-center space-x-2 px-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-              <Filter className="h-5 w-5" />
-              <span>Filter</span>
-            </button>
-            <button className="flex items-center space-x-2 px-6 py-4 bg-primary text-primary-foreground rounded-2xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5 transition-all active:scale-95">
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="appearance-none flex items-center space-x-2 pl-12 pr-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all outline-none"
+              >
+                <option value="">All Status</option>
+                <option value="sent">Sent</option>
+                <option value="failed">Failed</option>
+                <option value="pending">Pending</option>
+              </select>
+              <Filter className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+            </div>
+            <button
+              onClick={handleExport}
+              className="flex items-center space-x-2 px-6 py-4 bg-primary text-primary-foreground rounded-2xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5 transition-all active:scale-95"
+            >
               <Download className="h-5 w-5" />
               <span>Export</span>
             </button>

@@ -2,21 +2,22 @@
 
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { ShoppingCart, Search, Plus, Filter, Calendar, Truck, CheckCircle, Clock, Package } from 'lucide-react';
+import { ShoppingCart, Search, Plus, Truck, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
-import { usePurchaseOrders, useApprovePurchaseOrder } from '@/hooks/usePurchaseOrders';
+import { usePurchaseOrders, useApprovePurchaseOrder, type PurchaseOrder } from '@/hooks/usePurchaseOrders';
 import { PurchaseOrderForm } from '@/components/dialogs/PurchaseOrderForm';
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
-import { toast } from 'sonner';
 
 export default function PurchaseOrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [viewingOrder, setViewingOrder] = useState<PurchaseOrder | null>(null);
 
   const { data: purchaseOrders, isLoading, error, refetch } = usePurchaseOrders({
     search: searchQuery,
@@ -98,9 +99,9 @@ export default function PurchaseOrdersPage() {
             </div>
           ) : (
           <div className="space-y-4">
-            {purchaseOrders?.map((order: any, index: number) => (
+            {purchaseOrders?.map((order, index: number) => (
             <motion.div
-              key={order._id || order.id || index}
+              key={order._id || index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -111,7 +112,7 @@ export default function PurchaseOrdersPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <ShoppingCart className="h-4 w-4 text-primary" />
-                        <span className="font-bold text-foreground">{order.orderNumber || order.id}</span>
+                        <span className="font-bold text-foreground">{order.orderNumber}</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>
                           {order.status.toUpperCase()}
                         </span>
@@ -141,15 +142,15 @@ export default function PurchaseOrdersPage() {
 
                   <div className="flex items-center justify-between">
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => setViewingOrder(order)}>
                         View Details
                       </Button>
                       {order.status === 'pending' && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="text-green-600 hover:text-green-700"
-                          onClick={() => handleApprove(order._id || order.id)}
+                          onClick={() => handleApprove(order._id)}
                           disabled={approveOrder.isPending}
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
@@ -184,6 +185,76 @@ export default function PurchaseOrdersPage() {
           onOpenChange={setIsFormOpen}
           onSuccess={() => refetch()}
         />
+
+        <Dialog open={!!viewingOrder} onOpenChange={(open) => !open && setViewingOrder(null)}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Purchase Order {viewingOrder?.orderNumber}</DialogTitle>
+            </DialogHeader>
+            {viewingOrder && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(viewingOrder.status)}`}>
+                    {viewingOrder.status.toUpperCase()}
+                  </span>
+                  <span className="text-sm text-muted-foreground">{viewingOrder.supplierName}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Order Date</p>
+                    <p className="font-medium">{viewingOrder.orderDate ? new Date(viewingOrder.orderDate).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Expected Delivery</p>
+                    <p className="font-medium">{viewingOrder.expectedDelivery ? new Date(viewingOrder.expectedDelivery).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Created By</p>
+                    <p className="font-medium">{viewingOrder.createdBy || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Total Amount</p>
+                    <p className="font-bold">{formatCurrency(viewingOrder.totalAmount)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide font-bold">Items</p>
+                  <div className="border border-border rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-secondary/50 text-left">
+                          <th className="px-4 py-2 font-semibold">Product</th>
+                          <th className="px-4 py-2 font-semibold text-right">Qty</th>
+                          <th className="px-4 py-2 font-semibold text-right">Unit Price</th>
+                          <th className="px-4 py-2 font-semibold text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {viewingOrder.items?.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="px-4 py-2">{item.productName}</td>
+                            <td className="px-4 py-2 text-right">{item.quantity}</td>
+                            <td className="px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
+                            <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {viewingOrder.notes && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-bold">Notes</p>
+                    <p className="text-sm">{viewingOrder.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

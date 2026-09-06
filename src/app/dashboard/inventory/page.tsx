@@ -15,12 +15,13 @@ import { toast } from 'sonner';
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const { data: session } = useSession();
   const role = (session?.user?.role as string | undefined) || 'cashier';
   const roleConfig = getDashboardRoleConfig(role);
   const canManageInventory = roleConfig.canManageInventory;
 
-  const { data: products, isLoading, error, refetch } = useProducts({ search: searchQuery });
+  const { data: products, isLoading, error, refetch } = useProducts({ search: searchQuery, category: categoryFilter || undefined });
   const { data: categories } = useCategories();
   const deleteProduct = useDeleteProduct();
 
@@ -114,10 +115,19 @@ export default function InventoryPage() {
                 </button>
               )}
             </div>
-            <button className="flex items-center space-x-2 px-6 py-4 bg-card border border-border rounded-2xl text-muted-foreground font-bold hover:bg-secondary transition-all shadow-sm">
-              <Filter className="h-5 w-5" />
-              <span>Filter</span>
-            </button>
+            <div className="relative">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="appearance-none flex items-center space-x-2 pl-12 pr-6 py-4 bg-card border border-border rounded-2xl text-muted-foreground font-bold hover:bg-secondary transition-all shadow-sm outline-none focus:ring-2 focus:ring-ring/10"
+              >
+                <option value="">All Categories</option>
+                {categories?.map((cat) => (
+                  <option key={cat._id} value={cat._id}>{cat.name}</option>
+                ))}
+              </select>
+              <Filter className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
 
           <div className="flex items-center space-x-4 w-full xl:w-auto">

@@ -162,11 +162,22 @@ no seeded database in this sandbox)
   `requireAdmin()` check to `createExpense`/`updateExpense`/`deleteExpense`
   (same "reachable via a direct action call, not just the guarded API route"
   gap as branches/categories/products).
-- [ ] `dashboard/inventory` — "Filter": no onClick.
-- [ ] `dashboard/online-orders`, `dashboard/whatsapp-orders` — "Status" filter and
-  per-row "⋮" menu: no onClick.
-- [ ] `dashboard/whatsapp-messages` — "Filter"/"Export": no onClick.
-- [ ] `dashboard/purchase-orders` — "View Details": no onClick.
+- [x] `dashboard/inventory` — was: "Filter" had no onClick, even though
+  `useCategories()` was already being fetched and never used. **Fixed** — it's now
+  a working category filter, wired to `useProducts`' existing `category` param.
+- [x] `dashboard/online-orders`, `dashboard/whatsapp-orders` — was: "Status" filter
+  and per-row "⋮" menu had no onClick. **Fixed** — Status is now a real filter
+  (client-side, both pages already load the full order list), and the "⋮" menu
+  opens a real status-change menu wired to the existing `updateOrderStatus`
+  action. Added the missing `requireManagerOrAdmin()` check to
+  `updateOrderStatus`/`updatePaymentStatus` (previously callable by anyone with a
+  session — harmless only because nothing called them).
+- [x] `dashboard/whatsapp-messages` — was: "Filter"/"Export" had no onClick.
+  **Fixed** — Filter is a real status filter (server-side, `getWhatsAppMessages`
+  already supported it), Export generates a real CSV from the loaded messages.
+- [x] `dashboard/purchase-orders` — was: "View Details" had no onClick. **Fixed** —
+  opens a dialog with the order's line items, dates, and notes (already present
+  in the list query's response, no new endpoint needed).
 - [ ] `dashboard/backup` — Download and file-upload Restore: `toast.info('...coming soon')`.
 - [ ] `dashboard/reports` — "View": `toast.info('Report viewer coming soon')`.
 - [ ] `dashboard/activity-logs` — "Export": calls `/api/activity-logs/export`, which
