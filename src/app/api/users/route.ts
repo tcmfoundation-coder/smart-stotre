@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withAdmin } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
+import { escapeRegex } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withAdmin(async (req, user) => {
     try {
       await connectDB();
       
@@ -28,9 +28,10 @@ export async function GET(request: NextRequest) {
       }
       
       if (search) {
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } }
+          { name: { $regex: safeSearch, $options: 'i' } },
+          { email: { $regex: safeSearch, $options: 'i' } }
         ];
       }
       
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withAdmin(async (req, user) => {
     try {
       await connectDB();
       

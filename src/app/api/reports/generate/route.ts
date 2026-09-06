@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
           const financialSales = await Sale.find({
             createdAt: { $gte: start, $lte: end }
           }).lean();
-          const revenue = financialSales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
+          const revenue = financialSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
           reportData = {
             revenue,
             expenses: 0,

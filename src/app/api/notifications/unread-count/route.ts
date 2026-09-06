@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { Notification } from '@/models';
+import User from '@/models/User';
 import { auth } from '@/lib/auth';
+import { getUnreadCount } from '@/lib/actions/notifications';
 
 export async function GET() {
   try {
@@ -14,7 +15,19 @@ export async function GET() {
     }
 
     await connectDB();
-    const count = await Notification.countDocuments({ isRead: false });
+    const user = await User.findById(session.user.id);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    const count = await getUnreadCount({
+      userId: session.user.id,
+      userRole: user.role,
+      branchId: user.branchId,
+    });
     return NextResponse.json({ success: true, count });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });

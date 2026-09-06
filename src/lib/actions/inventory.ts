@@ -65,8 +65,8 @@ export async function getProductById(id: string) {
 }
 
 export async function createProduct(data: any) {
-  // Security check: Only admins can create products
-  await requireAdmin();
+  // Security check: Managers and admins can create products
+  await requireManagerOrAdmin();
 
   const db = await connectDB();
   
@@ -90,8 +90,8 @@ export async function createProduct(data: any) {
 }
 
 export async function updateProduct(id: string, data: any) {
-  // Security check: Only admins can update products
-  await requireAdmin();
+  // Security check: Managers and admins can update products
+  await requireManagerOrAdmin();
 
   const db = await connectDB();
   
@@ -181,8 +181,11 @@ export async function getCategories() {
 }
 
 export async function createCategory(data: any) {
+  // Security check: Managers and admins can manage categories
+  await requireManagerOrAdmin();
+
   const db = await connectDB();
-  
+
   if (!db) {
     throw new Error('Database not connected');
   }
@@ -194,8 +197,11 @@ export async function createCategory(data: any) {
 }
 
 export async function updateCategory(id: string, data: any) {
+  // Security check: Managers and admins can manage categories
+  await requireManagerOrAdmin();
+
   const db = await connectDB();
-  
+
   if (!db) {
     throw new Error('Database not connected');
   }
@@ -211,8 +217,11 @@ export async function updateCategory(id: string, data: any) {
 }
 
 export async function deleteCategory(id: string) {
+  // Security check: Managers and admins can manage categories
+  await requireManagerOrAdmin();
+
   const db = await connectDB();
-  
+
   if (!db) {
     throw new Error('Database not connected');
   }

@@ -3,6 +3,7 @@ import { createExpense, getExpenses } from '@/lib/actions/expenses';
 import { auth } from '@/lib/auth';
 import { rateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { hasPermission, UserRole } from '@/lib/rbac';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,6 +27,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    if (!hasPermission(session.user.role as UserRole, 'view_expenses')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - Insufficient permissions' },
+        { status: 403 }
       );
     }
 
@@ -69,6 +77,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    if (!hasPermission(session.user.role as UserRole, 'manage_expenses')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - Insufficient permissions' },
+        { status: 403 }
       );
     }
 

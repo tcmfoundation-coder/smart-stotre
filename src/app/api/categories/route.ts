@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withAuth, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import Category from '@/models/Category';
 import { handleApiError } from '@/lib/error-handler';
+import { escapeRegex } from '@/lib/utils';
 
 // GET all categories
 export async function GET(request: NextRequest) {
   return withAuth(async (req, user) => {
     try {
       await connectDB();
-      
+
       const searchParams = request.nextUrl.searchParams;
       const search = searchParams.get('search') || '';
-      
+
       const query: any = { isActive: true };
-      
+
       if (search) {
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } }
+          { name: { $regex: safeSearch, $options: 'i' } },
+          { description: { $regex: safeSearch, $options: 'i' } }
         ];
       }
       
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
 
 // POST create category
 export async function POST(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withPermission('manage_categories')(async (req, user) => {
     try {
       await connectDB();
       

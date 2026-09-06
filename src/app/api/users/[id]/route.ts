@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withAdmin } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return withAuth(async (req, user) => {
+  return withAdmin(async (req, user) => {
     try {
       await connectDB();
 
@@ -36,7 +35,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return withAuth(async (req, user) => {
+  return withAdmin(async (req, user) => {
     try {
       await connectDB();
 
@@ -73,12 +72,13 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  return withAuth(async (req, user) => {
+  const { id } = await context.params;
+  return withAdmin(async (req, user) => {
     try {
       await connectDB();
-      
+
       const userDoc = await User.findByIdAndUpdate(
-        user._id,
+        id,
         { isActive: false },
         { new: true }
       ).select('-password');

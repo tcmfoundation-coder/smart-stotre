@@ -38,11 +38,13 @@ in detail but barely enforced server-side.
   type (test predates a prop addition or the prop was never added to the type).
 - [ ] `src/__tests__/lib/error-handler.test.ts:40,60,70,79,86` — tests assign directly
   to `process.env.NODE_ENV`, which TS's `ProcessEnv` type now marks read-only.
-- [ ] `src/app/api/reports/generate/route.ts:113` — `sale.totalAmount` doesn't exist on
-  `ISale` (real field is `total`). Same root cause as finding R-1 below.
-- [ ] `src/app/api/user-activity/active/route.ts:25` — calls `UserActivity.getActiveUsers`,
-  but the static isn't declared in the model's TS interface (it exists at runtime per
-  `UserActivity.ts`'s `statics`, this is a typing gap, not a missing feature).
+- [x] `src/app/api/reports/generate/route.ts:113` — `sale.totalAmount` doesn't exist on
+  `ISale` (real field is `total`). Same root cause as finding R-1 below. Fixed
+  (rename only — the deeper financial-report correctness issues in R-6 remain open).
+- [x] `src/app/api/user-activity/active/route.ts:25` — calls `UserActivity.getActiveUsers`,
+  but the static wasn't declared in the model's TS interface (it existed at runtime
+  per `UserActivity.ts`'s `statics`, this was a typing gap, not a missing feature).
+  Fixed by adding an `IUserActivityModel` interface declaring both statics.
 - [ ] `src/app/dashboard/customers/page.tsx:77,91,137` — two different `Customer` types
   are in scope (likely one from `src/types` and a narrower inline one), causing
   `.reduce()`/`.map()` overload failures.
@@ -63,9 +65,10 @@ almost all `@typescript-eslint/no-explicit-any` — not itemized here individual
 ## 2. Runtime / logic bugs (confirmed by reading the code, not yet reproduced live —
 no seeded database in this sandbox)
 
-- [ ] **R-1**: `api/reports/generate/route.ts` financial report reads
-  `sale.totalAmount`; the `Sale` schema's real field is `total`. Revenue (and
-  therefore profit/margin) is silently `0` for every financial report generated.
+- [x] **R-1**: `api/reports/generate/route.ts` financial report read
+  `sale.totalAmount`; the `Sale` schema's real field is `total`. Fixed the field
+  name — revenue now computes correctly. (The `expenses: 0` and bad `profitMargin`
+  formula in the same block are R-6, still open.)
 - [ ] **R-2**: `api/customers/lookup/route.ts` queries
   `Customer.findOne({ phone, isActive: true })` / `{ email, isActive: true }`, but
   `Customer` has no `isActive` field at all. This lookup can **never** match a real
@@ -257,42 +260,70 @@ no seeded database in this sandbox)
 ## 8. Authentication / RBAC
 
 **Confirmed security bugs (highest priority in this whole audit):**
-- [ ] **Privilege escalation** — `POST /api/users` only requires `withAuth` (any
-  logged-in role). It calls `User.create({...body})` with an admin-settable `role`
-  field taken straight from the request body. A cashier's session can create a new
-  **admin** account by calling this endpoint directly, bypassing the UI entirely.
-  Contrast with `/api/register`, which correctly checks `session.user.role === 'admin'`.
-- [ ] **Wrong-target delete/deactivate** — see §6, `DELETE /api/users/[id]`.
-- [ ] **RBAC permissions are barely enforced server-side.** `lib/middleware.ts`
-  defines `withPermission`, `withRole`, and `withManagerOrAdmin`, but grep confirms
-  they are **never imported by any route**. Only `withAdmin` sees real use, and only
-  on 3 of 44 route files (`roles`, `roles/[id]`, `settings`). Routes for expenses,
-  purchase-orders, stock-adjustments, categories, `/api/products`, promotions,
-  backup, and activity-logs all accept any authenticated role, despite
-  `lib/rbac.ts` defining permissions (`MANAGE_EXPENSES`, `MANAGE_CATEGORIES`,
-  `APPROVE_PURCHASE_ORDERS`, etc.) that imply they should be role-restricted.
+- [x] **Privilege escalation** — `POST /api/users` only required `withAuth` (any
+  logged-in role) and accepted an admin-settable `role` field straight from the
+  request body. Fixed: `GET`/`POST /api/users` and `GET`/`PUT`/`DELETE
+  /api/users/[id]` now require `withAdmin`.
+- [x] **Wrong-target delete/deactivate** — `DELETE /api/users/[id]` deactivated the
+  calling user instead of the target `id`. Fixed to use the route's `id` param, and
+  the endpoint is now admin-only (see above) so a non-admin can no longer reach it
+  at all, let alone target the wrong record.
+- [x] **RBAC permissions were barely enforced server-side.** Wired the existing
+  (already-correct) `withPermission`/`withManagerOrAdmin` helpers into the routes
+  that had none: `categories` (`manage_categories`), `products`
+  (`create_products`/`edit_products`/`delete_products`), `expenses`
+  (`view_expenses`/`manage_expenses`), `purchase-orders`
+  (`withManagerOrAdmin` for GET, `create_purchase_orders` for POST),
+  `stock-adjustments` (`withManagerOrAdmin` for GET, `stock_adjustments` for POST).
+  Also fixed `lib/actions/customers.ts`'s dead `requireAdmin`/`requireManagerOrAdmin`
+  import (now actually calls `requireManagerOrAdmin()` in create/update/delete) and
+  added the same check to `createCategory`/`updateCategory`/`deleteCategory` in
+  `lib/actions/inventory.ts` (previously had zero check). Also aligned
+  `createProduct`/`updateProduct` from `requireAdmin()` to `requireManagerOrAdmin()`
+  to match `rbac.ts`'s actual grant to managers (this was blocking managers from a
+  feature they're supposed to have, on the `inventory/new` and `/api/inventory/products`
+  code paths) — `deleteProduct` correctly stays admin-only. `backup`, `activity-logs`,
+  and `promotions` still need this once they get real models/routes (see §6).
+- [x] **Notification endpoints had no ownership scoping.** Added a shared
+  `buildVisibilityFilter()` (mirroring the role-based visibility rules already used
+  by `getNotifications`) and applied it to `markAsRead`, `deleteNotification`,
+  `markAllAsRead`, and `getUnreadCount` — each now only sees/affects notifications
+  the requesting user is actually allowed to see, based on their role/branch, not
+  every record in the collection.
+- [x] **Inconsistent enforcement across duplicate code paths for products** — see
+  RBAC fix above; `/api/products`, `/api/inventory/products`, and the `createProduct`
+  action now all agree (admin+manager can create/edit, admin-only can delete).
 - [ ] **Stale privilege window** — both `withRole`/`withAdmin` and
   `requireAdmin`/`requireManagerOrAdmin` (`lib/security.ts`) read the role off the
   NextAuth session, populated once at sign-in and cached in a JWT cookie for up to
   30 days. Neither re-queries `User` per request. A demoted or deactivated user
   keeps their old role/access until the session naturally expires or they log out —
-  there's no live revocation.
-- [ ] **Notification endpoints have no ownership scoping** —
-  `PUT/DELETE /api/notifications/[id]` let any authenticated user mark-read/delete
-  *any* notification by id; `PUT /api/notifications/read-all` marks **every user's**
-  notifications read (no `userId` passed to `markAllAsRead`); `GET
-  /api/notifications/unread-count` counts globally rather than per-user.
-- [ ] **Inconsistent enforcement across duplicate code paths for the same entity**:
-  `POST /api/products` (no role check) vs. the `createProduct` server action used by
-  `POST /api/inventory/products` (correctly calls `requireAdmin()`) — two ways to
-  create a product with two different outcomes. `lib/actions/customers.ts` imports
-  `requireAdmin`/`requireManagerOrAdmin` but never calls them (dead import) —
-  `createCustomer`/`updateCustomer`/`deleteCustomer` are unguarded.
+  there's no live revocation. **Not fixed yet** — this is an architectural
+  tradeoff (per-request DB lookup cost vs. staleness window) worth a quick decision
+  before implementing rather than a unilateral call.
 - [ ] **No Next.js edge `middleware.ts`** exists anywhere in the project — there is
   no centralized route-protection layer; every route/page is independently
-  responsible for its own check, which is the direct cause of the inconsistency above.
-- [ ] `Role` model's DB-editable `permissions` array is not consulted anywhere by
-  real authorization code (see §7) — cosmetic UI.
+  responsible for its own check. Not fixed — would be a structural change, not a
+  targeted one, and the per-route checks above now cover every route that had a gap.
+- [ ] `Role` model's DB-editable `permissions` array is still not consulted anywhere
+  by real authorization code (see §7) — still cosmetic UI, not addressed this pass.
+
+**Also fixed in this pass (found while validating the above didn't regress `npm run build`):**
+- [x] Unescaped `$regex` search input in `categories`, `products`, `users`,
+  `purchase-orders`, and `stock-adjustments` routes — now uses the existing
+  `escapeRegex()` helper (NoSQL-injection/ReDoS hardening, §10).
+- [x] R-1 (`sale.totalAmount` → `sale.total` in `reports/generate`) and the
+  `UserActivity.getActiveUsers`/`cleanupOldSessions` missing static-method typings —
+  both were blocking `npm run build`; fixed as minimal, already-diagnosed items
+  from §1/§2 so the build could get further for verification.
+
+**Verification:** `tsc --noEmit` shows the exact same pre-existing error set as
+before this batch (zero new errors). `npm run build` now gets past all the routes
+touched here and fails only on the next pre-existing, unrelated error
+(`dashboard/customers/page.tsx` `Customer` type conflict, already tracked in §1).
+`npm test` — confirmed via `git stash`/baseline comparison that the 2 failing test
+suites (`auth-rate-limit.test.ts`, `settings-route.test.ts`) fail identically on
+the unmodified code; this batch introduces no test regressions.
 
 ---
 
@@ -331,12 +362,12 @@ no seeded database in this sandbox)
 
 Everything in §8 applies here directly. Additional items:
 
-- [ ] **Unescaped regex in search queries** — `api/categories/route.ts` and
-  `api/products/route.ts` build `$or`/`$regex` MongoDB queries directly from the raw
-  `search` query-string parameter without the `escapeRegex()` helper that most
-  `lib/actions/*.ts` files correctly use. This is both a minor NoSQL-injection-style
-  surface and a ReDoS risk (a crafted regex-special search string could cause
-  pathological backtracking).
+- [x] **Unescaped regex in search queries** — `api/categories/route.ts`,
+  `api/products/route.ts`, `api/users/route.ts`, `api/purchase-orders/route.ts`, and
+  `api/stock-adjustments/route.ts` built `$or`/`$regex` MongoDB queries directly
+  from the raw `search` query-string parameter without the `escapeRegex()` helper
+  that most `lib/actions/*.ts` files correctly use. Fixed — all five now escape
+  search input before building the regex.
 - [ ] **Rate limiting is not serverless-safe.** `lib/rate-limit.ts` (used by 10 route
   files) persists counters to a local JSON file via synchronous `fs` calls — this
   does not work correctly across multiple instances or an ephemeral filesystem
@@ -410,7 +441,17 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
 
 ## Status so far
 
-Fixed in this session: Next.js 16 route-param build errors (4 files), the empty
-`reports/[id]/download` stub, and (prior session) removal of committed forged-token
-files. Everything else in this document is **found, not yet fixed** — see the chat
-for the proposed prioritization.
+**Fixed:**
+- Next.js 16 route-param build errors (4 files) and the empty `reports/[id]/download` stub
+- Removal of committed forged-token files (prior session)
+- Security batch: privilege escalation in `POST /api/users`, wrong-target
+  `DELETE /api/users/[id]`, RBAC enforcement gaps on categories/products/expenses/
+  purchase-orders/stock-adjustments (routes + server actions), notification
+  ownership scoping, unescaped-regex hardening across 5 routes, plus two
+  incidentally-fixed build blockers (R-1 field-name bug, `UserActivity` static typings)
+
+**Still open, in priority order per the working plan:** stale-JWT privilege window
+(needs a quick design decision), the mock/fake feature list in §9, the dead-button
+list in §4, the broken-link list in §3/§4, and the remaining pre-existing build
+errors in §1 (customers page `Customer` type conflict, `User.lastLogin`, Lazy
+component default exports, `UserForm` generic mismatch, test-file type errors).

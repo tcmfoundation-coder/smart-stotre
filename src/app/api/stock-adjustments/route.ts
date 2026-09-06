@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withManagerOrAdmin, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import { handleApiError } from '@/lib/error-handler';
 import { StockAdjustment } from '@/models';
 import { Product } from '@/models';
+import { escapeRegex } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withManagerOrAdmin(async (req, user) => {
     try {
       await connectDB();
-      
+
       const { searchParams } = new URL(request.url);
       const search = searchParams.get('search');
       const status = searchParams.get('status');
-      
+
       const query: any = {};
       if (search) {
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { productName: { $regex: search, $options: 'i' } },
-          { reason: { $regex: search, $options: 'i' } },
+          { productName: { $regex: safeSearch, $options: 'i' } },
+          { reason: { $regex: safeSearch, $options: 'i' } },
         ];
       }
       if (status && status !== 'all') {
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withPermission('stock_adjustments')(async (req, user) => {
     try {
       await connectDB();
       

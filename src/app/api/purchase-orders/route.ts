@@ -1,24 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withManagerOrAdmin, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import { handleApiError } from '@/lib/error-handler';
 import { PurchaseOrder } from '@/models';
+import { escapeRegex } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withManagerOrAdmin(async (req, user) => {
     try {
       await connectDB();
-      
+
       const { searchParams } = new URL(request.url);
       const search = searchParams.get('search');
       const status = searchParams.get('status');
-      
+
       const query: any = {};
       if (search) {
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { orderNumber: { $regex: search, $options: 'i' } },
-          { supplierName: { $regex: search, $options: 'i' } },
+          { orderNumber: { $regex: safeSearch, $options: 'i' } },
+          { supplierName: { $regex: safeSearch, $options: 'i' } },
         ];
       }
       if (status && status !== 'all') {
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withPermission('create_purchase_orders')(async (req, user) => {
     try {
       await connectDB();
       

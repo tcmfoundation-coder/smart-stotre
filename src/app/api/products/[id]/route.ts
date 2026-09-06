@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withAuth, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { handleApiError } from '@/lib/error-handler';
@@ -40,7 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 // PUT update product
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return withAuth(async (req, user) => {
+  return withPermission('edit_products')(async (req, user) => {
     try {
       await connectDB();
 
@@ -76,7 +75,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 // DELETE product
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return withAuth(async (req, user) => {
+  return withPermission('delete_products')(async (req, user) => {
     try {
       await connectDB();
 

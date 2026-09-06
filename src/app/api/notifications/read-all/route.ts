@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { markAllAsRead } from '@/lib/actions/notifications';
 import { auth } from '@/lib/auth';
+import connectDB from '@/lib/mongodb';
+import User from '@/models/User';
 
 export async function PUT(_request: NextRequest) {
   try {
@@ -12,7 +14,20 @@ export async function PUT(_request: NextRequest) {
       );
     }
 
-    await markAllAsRead();
+    await connectDB();
+    const user = await User.findById(session.user.id);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    await markAllAsRead({
+      userId: session.user.id,
+      userRole: user.role,
+      branchId: user.branchId,
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
