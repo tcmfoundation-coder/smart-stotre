@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createExpense, getExpenses } from '@/lib/actions/expenses';
-import { auth } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/security';
 import { rateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
-import { hasPermission, UserRole } from '@/lib/rbac';
+import { hasPermission } from '@/lib/rbac';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,15 +22,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const session = await auth();
-    if (!session?.user?.id) {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    if (!hasPermission(session.user.role as UserRole, 'view_expenses')) {
+    if (!hasPermission(currentUser.role, 'view_expenses')) {
       return NextResponse.json(
         { success: false, error: 'Forbidden - Insufficient permissions' },
         { status: 403 }
@@ -72,15 +72,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await auth();
-    if (!session?.user?.id) {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    if (!hasPermission(session.user.role as UserRole, 'manage_expenses')) {
+    if (!hasPermission(currentUser.role, 'manage_expenses')) {
       return NextResponse.json(
         { success: false, error: 'Forbidden - Insufficient permissions' },
         { status: 403 }

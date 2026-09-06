@@ -293,14 +293,16 @@ no seeded database in this sandbox)
 - [x] **Inconsistent enforcement across duplicate code paths for products** — see
   RBAC fix above; `/api/products`, `/api/inventory/products`, and the `createProduct`
   action now all agree (admin+manager can create/edit, admin-only can delete).
-- [ ] **Stale privilege window** — both `withRole`/`withAdmin` and
-  `requireAdmin`/`requireManagerOrAdmin` (`lib/security.ts`) read the role off the
-  NextAuth session, populated once at sign-in and cached in a JWT cookie for up to
-  30 days. Neither re-queries `User` per request. A demoted or deactivated user
-  keeps their old role/access until the session naturally expires or they log out —
-  there's no live revocation. **Not fixed yet** — this is an architectural
-  tradeoff (per-request DB lookup cost vs. staleness window) worth a quick decision
-  before implementing rather than a unilateral call.
+- [x] **Stale privilege window** — fixed. `authenticateRequest` (`middleware.ts`,
+  backs `withAuth`/`withRole`/`withPermission`/`withAdmin`/`withManagerOrAdmin`) and
+  `getCurrentUser` (`security.ts`, backs `requireAdmin`/`requireManagerOrAdmin`/
+  `requireAuth`/`isAdmin`/etc.) now both re-fetch `role`/`isActive`/`branchId` from
+  the database on every call instead of trusting the session's cached JWT claims,
+  and reject immediately if the account is inactive or no longer exists. Also
+  brought the 4 notification routes and `expenses/route.ts` (which used their own
+  ad hoc `auth()` + manual checks instead of the shared helpers) up to the same
+  standard. Chose the "re-check DB every request" option over shortening session
+  lifetime, per explicit direction.
 - [ ] **No Next.js edge `middleware.ts`** exists anywhere in the project — there is
   no centralized route-protection layer; every route/page is independently
   responsible for its own check. Not fixed — would be a structural change, not a

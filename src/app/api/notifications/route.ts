@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
     const user = await User.findById(session.user.id);
-    if (!user) {
+    if (!user || !user.isActive) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
+        { success: false, error: 'User not found or inactive' },
+        { status: 401 }
       );
     }
 
@@ -54,10 +54,10 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
     const user = await User.findById(session.user.id);
-    if (!user) {
+    if (!user || !user.isActive) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
+        { success: false, error: 'User not found or inactive' },
+        { status: 401 }
       );
     }
 
