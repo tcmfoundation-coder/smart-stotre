@@ -38,6 +38,11 @@ yarn-error.log*
 
 # rate limiting data
 .auth-rate-limit.json
+.api-rate-limit.json
+
+# forged token artifacts (do not commit auth PoC material)
+.forged_jwt.txt
+.forged_jwe.txt
 
 # vercel
 .vercel
