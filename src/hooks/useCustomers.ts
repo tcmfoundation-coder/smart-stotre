@@ -6,14 +6,19 @@ import { toast } from 'sonner';
 
 export interface Customer {
   _id: string;
+  customerId?: string;
   name: string;
   email?: string;
-  phone?: string;
+  phone: string;
   address?: string;
-  totalPurchases?: number;
-  totalSpent?: number;
-  lastPurchase?: string;
+  customerType?: 'walk-in' | 'registered' | 'vip' | 'corporate';
+  loyaltyPoints: number;
+  totalSpent: number;
+  purchaseCount: number;
+  lastPurchaseDate?: string;
+  notes?: string;
   createdAt?: string;
+  updatedAt: string;
 }
 
 export interface CustomersParams {

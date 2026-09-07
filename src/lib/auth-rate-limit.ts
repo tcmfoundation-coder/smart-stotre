@@ -25,6 +25,9 @@ function startCleanup() {
       }
     }
   }, 5 * 60 * 1000); // Cleanup every 5 minutes
+
+  // Don't let this background timer keep the process (or a test run) alive.
+  cleanupInterval.unref?.();
 }
 
 // Start cleanup on module load

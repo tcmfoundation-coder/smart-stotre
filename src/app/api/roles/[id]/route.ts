@@ -5,12 +5,13 @@ import Role from '@/models/Role';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   return withAdmin(async (req, user) => {
     try {
       await connectDB();
-      
-      const role = await Role.findById(params.id);
+
+      const role = await Role.findById(id);
       
       if (!role) {
         return NextResponse.json(
@@ -38,12 +39,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   })(request);
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   return withAdmin(async (req, user) => {
     try {
       await connectDB();
-      
-      const role = await Role.findById(params.id);
+
+      const role = await Role.findById(id);
       
       if (!role) {
         return NextResponse.json(
@@ -105,12 +107,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })(request);
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   return withAdmin(async (req, user) => {
     try {
       await connectDB();
-      
-      const role = await Role.findById(params.id);
+
+      const role = await Role.findById(id);
       
       if (!role) {
         return NextResponse.json(
@@ -135,7 +138,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
         );
       }
       
-      await Role.findByIdAndDelete(params.id);
+      await Role.findByIdAndDelete(id);
       
       return NextResponse.json({
         success: true,

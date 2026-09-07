@@ -148,6 +148,11 @@ UserActivitySchema.statics.cleanupOldSessions = function(daysOld: number = 7) {
   });
 };
 
-const UserActivity: Model<IUserActivity> = mongoose.models.UserActivity || mongoose.model<IUserActivity>('UserActivity', UserActivitySchema);
+export interface IUserActivityModel extends Model<IUserActivity> {
+  getActiveUsers(minutesThreshold?: number): Promise<IUserActivity[]>;
+  cleanupOldSessions(daysOld?: number): Promise<{ deletedCount?: number }>;
+}
+
+const UserActivity = (mongoose.models.UserActivity as IUserActivityModel) || mongoose.model<IUserActivity, IUserActivityModel>('UserActivity', UserActivitySchema);
 
 export default UserActivity;

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from './auth';
 import { hasPermission, UserRole } from './rbac';
+import connectDB from './mongodb';
+import User from '@/models/User';
 
 export interface AuthResult {
   success: boolean;
@@ -10,13 +12,18 @@ export interface AuthResult {
 }
 
 /**
- * Authenticate a request and return the user session
+ * Authenticate a request and return the user session.
+ *
+ * Role and active-status are re-verified against the database on every
+ * request rather than trusted from the session's JWT, which is only
+ * populated at sign-in and can otherwise stay stale (old role, or an
+ * account deactivated after login) for up to the session's 30-day lifetime.
  */
 export async function authenticateRequest(request: NextRequest): Promise<AuthResult> {
   try {
     const session = await auth();
-    
-    if (!session?.user) {
+
+    if (!session?.user?.id) {
       return {
         success: false,
         error: 'Unauthorized - No valid session',
@@ -24,9 +31,23 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
       };
     }
 
+    await connectDB();
+    const dbUser = await User.findById(session.user.id).select('role isActive');
+
+    if (!dbUser || !dbUser.isActive) {
+      return {
+        success: false,
+        error: 'Unauthorized - Account not found or inactive',
+        statusCode: 401
+      };
+    }
+
     return {
       success: true,
-      user: session.user
+      user: {
+        ...session.user,
+        role: dbUser.role,
+      }
     };
   } catch (error) {
     return {

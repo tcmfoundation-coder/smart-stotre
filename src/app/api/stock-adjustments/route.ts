@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withManagerOrAdmin, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import { handleApiError } from '@/lib/error-handler';
 import { StockAdjustment } from '@/models';
 import { Product } from '@/models';
+import { escapeRegex } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withManagerOrAdmin(async (req, user) => {
     try {
       await connectDB();
-      
+
       const { searchParams } = new URL(request.url);
       const search = searchParams.get('search');
       const status = searchParams.get('status');
-      
+
       const query: any = {};
       if (search) {
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { productName: { $regex: search, $options: 'i' } },
-          { reason: { $regex: search, $options: 'i' } },
+          { productName: { $regex: safeSearch, $options: 'i' } },
+          { reason: { $regex: safeSearch, $options: 'i' } },
         ];
       }
       if (status && status !== 'all') {
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withPermission('stock_adjustments')(async (req, user) => {
     try {
       await connectDB();
       
@@ -65,36 +66,36 @@ export async function POST(request: NextRequest) {
         );
       }
       
+      // A requested-time estimate only, shown to reviewers before they decide -
+      // the real before/after stock is captured at approval time, since stock
+      // can change between the request and the review (see [id]/approve).
       const previousStock = product.stockQuantity || 0;
-      const newStock = data.adjustmentType === 'increase' 
-        ? previousStock + data.quantity 
+      const proposedStock = data.adjustmentType === 'increase'
+        ? previousStock + data.quantity
         : previousStock - data.quantity;
-      
-      if (newStock < 0) {
+
+      if (proposedStock < 0) {
         return NextResponse.json(
           { success: false, error: 'Insufficient stock for decrease adjustment' },
           { status: 400 }
         );
       }
-      
-      // Update product stock
-      product.stockQuantity = newStock;
-      await product.save();
-      
-      // Create stock adjustment record
+
+      // Create stock adjustment record - pending until reviewed. Stock is not
+      // touched here; see [id]/approve, which applies the change for real.
       const adjustment = await StockAdjustment.create({
         productId: data.productId,
         productName: product.name,
         adjustmentType: data.adjustmentType,
         quantity: data.quantity,
         previousStock,
-        newStock,
+        newStock: proposedStock,
         reason: data.reason,
         performedBy: user.name || 'Unknown',
         performedById: user.id,
-        status: 'approved',
+        status: 'pending',
       });
-      
+
       return NextResponse.json({
         success: true,
         data: {

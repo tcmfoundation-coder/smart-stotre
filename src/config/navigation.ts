@@ -195,7 +195,7 @@ export const CASHIER_NAVIGATION: NavGroup[] = [
     title: 'Point of Sale',
     items: [
       { name: 'POS Terminal', href: '/dashboard/pos', icon: Scan, roles: ['cashier'] },
-      { name: 'New Sale', href: '/dashboard/pos/new', icon: ShoppingCart, roles: ['cashier'] },
+      { name: 'New Sale', href: '/dashboard/pos', icon: ShoppingCart, roles: ['cashier'] },
       { name: 'Product Search', href: '/dashboard/products', icon: Search, roles: ['cashier'] },
     ]
   },
@@ -209,7 +209,7 @@ export const CASHIER_NAVIGATION: NavGroup[] = [
     title: 'Transactions',
     items: [
       { name: 'Returns', href: '/dashboard/returns', icon: ArrowLeftRight, roles: ['cashier'] },
-      { name: 'Receipt History', href: '/dashboard/receipt-history', icon: Receipt, roles: ['cashier'] },
+      { name: 'Receipt History', href: '/dashboard/receipts', icon: Receipt, roles: ['cashier'] },
       { name: 'Shift Summary', href: '/dashboard/shift-summary', icon: FileText, roles: ['cashier'] },
     ]
   },

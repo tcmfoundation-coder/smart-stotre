@@ -1,4 +1,6 @@
 import { auth } from '@/lib/auth';
+import connectDB from '@/lib/mongodb';
+import User from '@/models/User';
 
 export type UserRole = 'admin' | 'manager' | 'cashier';
 
@@ -19,19 +21,30 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Get the current authenticated user
+ * Get the current authenticated user.
+ *
+ * Role, active-status, and branch are re-verified against the database on
+ * every call rather than trusted from the session's JWT, which is only
+ * populated at sign-in and can otherwise stay stale (old role, or an
+ * account deactivated after login) for up to the session's 30-day lifetime.
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return null;
   }
 
   const email = typeof session.user.email === 'string' ? session.user.email : null;
   const name = typeof session.user.name === 'string' ? session.user.name : null;
-  const role = typeof session.user.role === 'string' ? session.user.role : null;
 
-  if (!session.user.id || !email || !name || !role) {
+  if (!email || !name) {
+    return null;
+  }
+
+  await connectDB();
+  const dbUser = await User.findById(session.user.id).select('role isActive branchId');
+
+  if (!dbUser || !dbUser.isActive) {
     return null;
   }
 
@@ -39,8 +52,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     id: session.user.id,
     email,
     name,
-    role: role as UserRole,
-    branchId: session.user.branchId,
+    role: dbUser.role as UserRole,
+    branchId: dbUser.branchId?.toString() || null,
   };
 }
 

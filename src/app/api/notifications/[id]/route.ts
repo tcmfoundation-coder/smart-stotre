@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteNotification, markAsRead } from '@/lib/actions/notifications';
 import { auth } from '@/lib/auth';
+import connectDB from '@/lib/mongodb';
+import User from '@/models/User';
 
 export async function PUT(
   request: NextRequest,
@@ -16,12 +18,21 @@ export async function PUT(
       );
     }
 
+    await connectDB();
+    const user = await User.findById(session.user.id);
+    if (!user || !user.isActive) {
+      return NextResponse.json(
+        { success: false, error: 'User not found or inactive' },
+        { status: 401 }
+      );
+    }
+
     const notification = await markAsRead(id);
     return NextResponse.json({ success: true, data: notification });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: error instanceof Error && error.message === 'Notification not found' ? 404 : 500 }
     );
   }
 }
@@ -40,12 +51,21 @@ export async function DELETE(
       );
     }
 
+    await connectDB();
+    const user = await User.findById(session.user.id);
+    if (!user || !user.isActive) {
+      return NextResponse.json(
+        { success: false, error: 'User not found or inactive' },
+        { status: 401 }
+      );
+    }
+
     await deleteNotification(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: error instanceof Error && error.message === 'Notification not found' ? 404 : 500 }
     );
   }
 }

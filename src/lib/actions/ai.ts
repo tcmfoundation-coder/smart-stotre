@@ -2,6 +2,7 @@
 
 import connectDB from '@/lib/mongodb';
 import { Sale, Product, Expense, Customer, AIReport } from '@/models';
+import { requireAuth } from '@/lib/security';
 import OpenAI from 'openai';
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 
@@ -12,12 +13,22 @@ type NvidiaChatCompletionParams = ChatCompletionCreateParamsNonStreaming & {
 };
 
 const aiModel = process.env.NVIDIA_AI_MODEL || 'deepseek-ai/deepseek-v4-pro';
-const openai = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY,
-  baseURL: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
-});
+
+// Constructed lazily (not at module load) so a missing NVIDIA_API_KEY only
+// fails the specific AI request that needs it, rather than the build itself
+// or every route that happens to import this file.
+function getOpenAIClient(): OpenAI {
+  if (!process.env.NVIDIA_API_KEY) {
+    throw new Error('AI features are not configured: NVIDIA_API_KEY is not set.');
+  }
+  return new OpenAI({
+    apiKey: process.env.NVIDIA_API_KEY,
+    baseURL: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+  });
+}
 
 export async function getBusinessInsights(query: string, userId: string) {
+  await requireAuth();
   const db = await connectDB();
 
   // Fetch relevant business data
@@ -302,7 +313,7 @@ export async function getBusinessInsights(query: string, userId: string) {
       stream: false,
     };
 
-    const completion = await openai.chat.completions.create(completionParams);
+    const completion = await getOpenAIClient().chat.completions.create(completionParams);
     const response = completion.choices[0]?.message?.content || '';
 
     console.log('[NVIDIA AI] Response received successfully');
@@ -359,6 +370,7 @@ export async function getBusinessInsights(query: string, userId: string) {
 }
 
 export async function getAIReports(userId?: string) {
+  await requireAuth();
   await connectDB();
 
   const query = userId ? { generatedBy: userId } : {};
@@ -370,6 +382,7 @@ export async function getAIReports(userId?: string) {
 }
 
 export async function predictSales(productId: string, days: number = 30) {
+  await requireAuth();
   await connectDB();
 
   // Get historical sales data for the product
@@ -393,12 +406,21 @@ export async function predictSales(productId: string, days: number = 30) {
   ]);
 
   // Simple prediction based on average
-  const avgDailySales = historicalSales.length > 0
-    ? historicalSales.reduce((sum, s) => sum + s.totalSold, 0) / historicalSales.length
-    : 0;
+  const totalHistoricalSold = historicalSales.reduce((sum, s) => sum + s.totalSold, 0);
+  const totalHistoricalRevenue = historicalSales.reduce((sum, s) => sum + s.revenue, 0);
+  const avgDailySales = historicalSales.length > 0 ? totalHistoricalSold / historicalSales.length : 0;
+
+  // Derive the average unit price from this product's own sales history rather
+  // than assuming a flat price; fall back to its current selling price when
+  // there's no sales history yet to derive one from.
+  let avgUnitPrice = totalHistoricalSold > 0 ? totalHistoricalRevenue / totalHistoricalSold : 0;
+  if (avgUnitPrice === 0) {
+    const product = await Product.findById(productId).select('sellingPrice');
+    avgUnitPrice = product?.sellingPrice || 0;
+  }
 
   const predictedSales = Math.round(avgDailySales * days);
-  const predictedRevenue = predictedSales * 10; // Assuming avg price of $10
+  const predictedRevenue = predictedSales * avgUnitPrice;
 
   return {
     productId,

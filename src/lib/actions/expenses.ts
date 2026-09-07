@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import { Expense } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
+import { requireAdmin } from '@/lib/security';
 
 export async function getExpenses(filters?: {
   category?: string;
@@ -53,6 +54,9 @@ export async function getExpenseById(id: string) {
 }
 
 export async function createExpense(data: any) {
+  // Security check: Only admins can manage expenses
+  await requireAdmin();
+
   await connectDB();
 
   const expense = await Expense.create(data);
@@ -62,6 +66,9 @@ export async function createExpense(data: any) {
 }
 
 export async function updateExpense(id: string, data: any) {
+  // Security check: Only admins can manage expenses
+  await requireAdmin();
+
   await connectDB();
 
   const expense = await Expense.findByIdAndUpdate(
@@ -75,6 +82,9 @@ export async function updateExpense(id: string, data: any) {
 }
 
 export async function deleteExpense(id: string) {
+  // Security check: Only admins can manage expenses
+  await requireAdmin();
+
   await connectDB();
 
   await Expense.findByIdAndDelete(id);

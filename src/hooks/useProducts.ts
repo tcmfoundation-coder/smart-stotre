@@ -9,14 +9,14 @@ export interface Product {
   name: string;
   sku?: string;
   barcode?: string;
-  category?: string;
-  price: number;
-  cost?: number;
-  stock: number;
-  minStock?: number;
+  categoryId?: { _id: string; name: string } | string;
+  sellingPrice: number;
+  buyingPrice?: number;
+  stockQuantity: number;
+  minStockLevel?: number;
   description?: string;
-  image?: string;
-  status?: 'active' | 'inactive';
+  images?: string[];
+  isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

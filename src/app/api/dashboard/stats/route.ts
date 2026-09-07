@@ -5,6 +5,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Product from '@/models/Product';
 import Sale from '@/models/Sale';
+import Customer from '@/models/Customer';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
         Product.countDocuments({ isActive: true, stockQuantity: { $lt: 10, $gt: 0 } }),
         Product.countDocuments({ isActive: true, stockQuantity: { $lte: 0 } }),
         User.countDocuments({ role: { $in: ['admin', 'manager', 'cashier'] } }),
-        User.countDocuments({}),
+        Customer.countDocuments({}),
         Sale.countDocuments({ status: 'completed', createdAt: { $gte: today } }),
         Sale.aggregate([
           { $match: { status: 'completed', createdAt: { $gte: today } } },

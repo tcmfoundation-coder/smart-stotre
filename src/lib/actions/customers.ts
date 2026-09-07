@@ -4,7 +4,7 @@ import connectDB from '@/lib/mongodb';
 import { Customer, Loyalty } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
-import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
+import { requireManagerOrAdmin } from '@/lib/security';
 
 export async function getCustomers(filters?: {
   search?: string;
@@ -44,6 +44,9 @@ export async function getCustomerById(id: string) {
 }
 
 export async function createCustomer(data: any) {
+  // Security check: Managers and admins can manage customers
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -57,6 +60,9 @@ export async function createCustomer(data: any) {
 }
 
 export async function updateCustomer(id: string, data: any) {
+  // Security check: Managers and admins can manage customers
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -74,6 +80,9 @@ export async function updateCustomer(id: string, data: any) {
 }
 
 export async function deleteCustomer(id: string) {
+  // Security check: Managers and admins can manage customers
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {

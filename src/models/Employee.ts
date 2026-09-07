@@ -103,8 +103,6 @@ const EmployeeSchema = new Schema<IEmployee>(
   }
 );
 
-EmployeeSchema.index({ name: 'text', email: 'text', phone: 'text' });
-
 const Employee: Model<IEmployee> = mongoose.models.Employee || mongoose.model<IEmployee>('Employee', EmployeeSchema);
 
 export default Employee;

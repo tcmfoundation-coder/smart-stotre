@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Plus } from 'lucide-react';
 import { createCustomer } from '@/lib/actions/customers';
+import { toast } from 'sonner';
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -23,10 +24,10 @@ export default function NewCustomerPage() {
 
     try {
       await createCustomer(formData);
+      toast.success('Customer created successfully');
       router.push('/dashboard/customers');
     } catch (error) {
-      console.error('Error creating customer:', error);
-      alert('Failed to create customer. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to create customer. Please try again.');
     } finally {
       setLoading(false);
     }

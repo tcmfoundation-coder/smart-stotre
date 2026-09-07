@@ -29,9 +29,9 @@ export async function GET(request: Request) {
     let customer;
     
     if (phone) {
-      customer = await Customer.findOne({ phone, isActive: true });
+      customer = await Customer.findOne({ phone });
     } else if (email) {
-      customer = await Customer.findOne({ email, isActive: true });
+      customer = await Customer.findOne({ email });
     }
 
     if (customer) {

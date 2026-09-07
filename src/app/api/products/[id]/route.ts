@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withAuth, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { handleApiError } from '@/lib/error-handler';
 
 // GET single product
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   return withAuth(async (req, user) => {
     try {
       await connectDB();
-      
-      const product = await Product.findById(params.id)
+
+      const product = await Product.findById(id)
         .populate('categoryId', 'name')
         .populate('supplierId', 'name');
       
@@ -37,15 +37,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT update product
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  return withAuth(async (req, user) => {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  return withPermission('edit_products')(async (req, user) => {
     try {
       await connectDB();
-      
+
       const data = await request.json();
-      
+
       const product = await Product.findByIdAndUpdate(
-        params.id,
+        id,
         { ...data, updatedAt: new Date() },
         { new: true, runValidators: true }
       );
@@ -72,13 +73,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE product
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  return withAuth(async (req, user) => {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  return withPermission('delete_products')(async (req, user) => {
     try {
       await connectDB();
-      
+
       const product = await Product.findByIdAndUpdate(
-        params.id,
+        id,
         { isActive: false },
         { new: true }
       );

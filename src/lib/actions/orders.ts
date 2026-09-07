@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Order from '@/models/Order';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
+import { requireManagerOrAdmin } from '@/lib/security';
 
 export async function getOrders(source?: 'online' | 'whatsapp', filters?: { search?: string }) {
   await connectDB();
@@ -24,6 +25,9 @@ export async function getOrders(source?: 'online' | 'whatsapp', filters?: { sear
 }
 
 export async function updateOrderStatus(id: string, status: string) {
+  // Security check: Managers and admins can update order status
+  await requireManagerOrAdmin();
+
   await connectDB();
   const order = await Order.findByIdAndUpdate(id, { orderStatus: status }, { new: true });
   revalidatePath('/dashboard/online-orders');
@@ -32,6 +36,9 @@ export async function updateOrderStatus(id: string, status: string) {
 }
 
 export async function updatePaymentStatus(id: string, status: string) {
+  // Security check: Managers and admins can update order status
+  await requireManagerOrAdmin();
+
   await connectDB();
   const order = await Order.findByIdAndUpdate(id, { paymentStatus: status }, { new: true });
   revalidatePath('/dashboard/online-orders');

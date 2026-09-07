@@ -1,16 +1,22 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getOrders } from '@/lib/actions/orders';
+import { getOrders, updateOrderStatus } from '@/lib/actions/orders';
 import { ShoppingBag, Truck, CheckCircle2, Clock, XCircle, MoreVertical, Search, Filter, X } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+
+const ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'] as const;
 
 export default function OnlineOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -25,7 +31,9 @@ export default function OnlineOrdersPage() {
   };
 
   useEffect(() => {
-    loadOrders();
+    (async () => {
+      await loadOrders();
+    })();
   }, []);
 
   async function loadOrders(search?: string) {
@@ -51,6 +59,24 @@ export default function OnlineOrdersPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const filteredOrders = statusFilter
+    ? orders.filter((o) => o.orderStatus === statusFilter)
+    : orders;
+
+  const handleStatusChange = async (orderId: string, status: string) => {
+    setUpdatingId(orderId);
+    setOpenMenuId(null);
+    try {
+      await updateOrderStatus(orderId, status);
+      setOrders((prev) => prev.map((o) => (o._id === orderId ? { ...o, orderStatus: status } : o)));
+      toast.success(`Order marked as ${status}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update order status');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
@@ -131,10 +157,19 @@ export default function OnlineOrdersPage() {
                 </button>
               )}
             </div>
-            <button className="flex items-center space-x-2 px-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm">
-              <Filter className="h-5 w-5" />
-              <span>Status</span>
-            </button>
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="appearance-none flex items-center space-x-2 pl-12 pr-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm outline-none"
+              >
+                <option value="">All Status</option>
+                {ORDER_STATUSES.map((s) => (
+                  <option key={s} value={s} className="capitalize">{s}</option>
+                ))}
+              </select>
+              <Filter className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
         </div>
 
@@ -144,12 +179,12 @@ export default function OnlineOrdersPage() {
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
               <p className="mt-4 text-sm font-semibold text-slate-400">Loading orders...</p>
             </div>
-          ) : orders.length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <div className="p-12 text-center">
               <ShoppingBag className="h-16 w-16 text-slate-400 mx-auto mb-4" />
               <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">No orders found</p>
               <p className="text-sm font-semibold text-slate-400">
-                {searchQuery ? 'Try a different search term' : 'No orders in the queue yet'}
+                {searchQuery || statusFilter ? 'Try a different search or filter' : 'No orders in the queue yet'}
               </p>
             </div>
           ) : (
@@ -167,7 +202,7 @@ export default function OnlineOrdersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {orders.map((order: any) => (
+                  {filteredOrders.map((order: any) => (
                   <tr key={order._id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="py-6 px-8">
                       <span className="text-sm font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">#{order.orderNumber}</span>
@@ -203,10 +238,33 @@ export default function OnlineOrdersPage() {
                         {order.orderStatus}
                       </span>
                     </td>
-                    <td className="py-6 px-8 text-right">
-                      <button className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400">
+                    <td className="py-6 px-8 text-right relative">
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === order._id ? null : order._id)}
+                        disabled={updatingId === order._id}
+                        className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 disabled:opacity-50"
+                      >
                         <MoreVertical className="h-5 w-5" />
                       </button>
+                      {openMenuId === order._id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                          <div className="absolute right-8 top-16 z-20 w-48 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-left">
+                            {ORDER_STATUSES.filter((s) => s !== order.orderStatus).map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => handleStatusChange(order._id, s)}
+                                className={cn(
+                                  'w-full text-left px-4 py-2 text-sm font-semibold capitalize hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
+                                  s === 'cancelled' ? 'text-rose-600' : 'text-slate-700 dark:text-slate-300'
+                                )}
+                              >
+                                Mark as {s}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -11,6 +11,9 @@ export interface IStockAdjustment extends Document {
   status: 'pending' | 'approved' | 'rejected';
   performedBy: string;
   performedById?: mongoose.Types.ObjectId;
+  reviewedBy?: string;
+  reviewedById?: mongoose.Types.ObjectId;
+  reviewedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +63,16 @@ const StockAdjustmentSchema = new Schema<IStockAdjustment>(
     performedById: {
       type: Schema.Types.ObjectId,
       ref: 'User',
+    },
+    reviewedBy: {
+      type: String,
+    },
+    reviewedById: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    reviewedAt: {
+      type: Date,
     },
   },
   {

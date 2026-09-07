@@ -1,11 +1,13 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getCustomerById, getCustomerPurchaseHistory } from '@/lib/actions/customers';
-import { ArrowLeft, Phone, Mail, MapPin, ShoppingBag, Award, Calendar, TrendingUp, Package } from 'lucide-react';
+import { getCustomerById, getCustomerPurchaseHistory, updateCustomer, deleteCustomer } from '@/lib/actions/customers';
+import { ArrowLeft, Phone, Mail, MapPin, ShoppingBag, Award, Calendar, TrendingUp, Package, Edit, Save, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface Customer {
   _id: string;
@@ -44,10 +46,14 @@ interface Sale {
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [purchaseHistory, setPurchaseHistory] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState<Partial<Customer>>({});
 
   useEffect(() => {
     const loadCustomerData = async () => {
@@ -58,6 +64,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           getCustomerPurchaseHistory(id),
         ]);
         setCustomer(customerData);
+        setFormData(customerData);
         setPurchaseHistory(historyData);
       } catch (err) {
         console.error('Error loading customer data:', err);
@@ -69,6 +76,42 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
     loadCustomerData();
   }, [id]);
+
+  const handleInputChange = (field: keyof Customer, value: string) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await updateCustomer(id, formData);
+      setCustomer({ ...customer!, ...formData } as Customer);
+      setEditing(false);
+      toast.success('Customer updated successfully');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save customer');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setFormData(customer!);
+    setEditing(false);
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this customer? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await deleteCustomer(id);
+      toast.success('Customer deleted successfully');
+      router.push('/dashboard/customers');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete customer');
+    }
+  };
 
   if (loading) {
     return (
@@ -143,12 +186,41 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
             <div className="flex space-x-3">
-              <button className="px-6 py-3 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
-                Edit
-              </button>
-              <button className="px-6 py-3 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl font-bold hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors">
-                Delete
-              </button>
+              {!editing ? (
+                <>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="flex items-center space-x-2 px-6 py-3 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                  >
+                    <Edit className="h-5 w-5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="px-6 py-3 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl font-bold hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleCancel}
+                    className="flex items-center space-x-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                    <span>Cancel</span>
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="h-5 w-5" />
+                    <span>{saving ? 'Saving...' : 'Save'}</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -211,45 +283,95 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm mb-8">
           <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">Contact Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Name</p>
+              {editing ? (
+                <input
+                  type="text"
+                  value={formData.name || ''}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                />
+              ) : (
+                <p className="text-lg font-semibold text-slate-900 dark:text-white">{customer.name || 'Walk-in Customer'}</p>
+              )}
+            </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mt-1">
                 <Phone className="h-5 w-5 text-blue-600" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Phone</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{customer.phone}</p>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone</p>
+                {editing ? (
+                  <input
+                    type="tel"
+                    value={formData.phone || ''}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  />
+                ) : (
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{customer.phone}</p>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
+            <div className="flex items-start space-x-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mt-1">
                 <Mail className="h-5 w-5 text-blue-600" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {customer.email || 'No email provided'}
-                </p>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email</p>
+                {editing ? (
+                  <input
+                    type="email"
+                    value={formData.email || ''}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  />
+                ) : (
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                    {customer.email || 'No email provided'}
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center space-x-4 md:col-span-2">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
+            <div className="flex items-start space-x-4 md:col-span-2">
+              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mt-1">
                 <MapPin className="h-5 w-5 text-blue-600" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {customer.address || 'No address provided'}
-                </p>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Address</p>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={formData.address || ''}
+                    onChange={(e) => handleInputChange('address', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  />
+                ) : (
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                    {customer.address || 'No address provided'}
+                  </p>
+                )}
               </div>
             </div>
           </div>
 
-          {customer.notes && (
+          {(editing || customer.notes) && (
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Notes</p>
-              <p className="text-slate-700 dark:text-slate-300">{customer.notes}</p>
+              {editing ? (
+                <textarea
+                  value={formData.notes || ''}
+                  onChange={(e) => handleInputChange('notes', e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none resize-none"
+                />
+              ) : (
+                <p className="text-slate-700 dark:text-slate-300">{customer.notes}</p>
+              )}
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { Percent, Search, Plus, Edit, Trash2, Calendar, Tag, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
+import { Percent, Search, Plus, Edit, Trash2, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +11,6 @@ import { usePromotions, useDeletePromotion, usePausePromotion, useResumePromotio
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 
 export default function PromotionsPage() {
   const router = useRouter();
@@ -41,11 +40,11 @@ export default function PromotionsPage() {
     }
   };
 
-  const getTypeLabel = (type: string, value: any) => {
+  const getTypeLabel = (type: string, value: number) => {
     switch (type) {
       case 'percentage': return `${value}% Off`;
       case 'fixed': return `${formatCurrency(value)} Off`;
-      case 'buy_x_get_y': return `Buy ${value.buy} Get ${value.get}`;
+      case 'buy-one-get-one': return `Buy 1 Get 1 (${value}% off 2nd)`;
       default: return type;
     }
   };
@@ -104,7 +103,10 @@ export default function PromotionsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {promotions?.map((promo: any, index: number) => (
+              {promotions?.map((promo, index: number) => {
+                const status = promo.effectiveStatus;
+                const applicable = [...(promo.categories || []), ...(promo.products || [])];
+                return (
             <motion.div
               key={promo._id}
               initial={{ opacity: 0, y: 20 }}
@@ -121,11 +123,11 @@ export default function PromotionsPage() {
                       </div>
                       <p className="text-sm text-muted-foreground">{promo.description}</p>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(promo.status)}`}>
-                      {promo.status.toUpperCase()}
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(status)}`}>
+                      {status.toUpperCase()}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Type</span>
@@ -136,43 +138,43 @@ export default function PromotionsPage() {
                       <span className="font-medium text-foreground">
                         {new Date(promo.startDate).toLocaleDateString()} - {
                           promo.endDate ? new Date(promo.endDate).toLocaleDateString() : "N/A"
-                        } 
+                        }
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Products</span>
-                      <span className="font-medium text-foreground">{promo.applicableProducts.join(', ')}</span>
+                      <span className="text-muted-foreground">Applies to</span>
+                      <span className="font-medium text-foreground">{applicable.length ? applicable.join(', ') : 'All Products'}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Usage</span>
-                      <span className="font-medium text-foreground">{promo.usageCount} times</span>
+                      <span className="font-medium text-foreground">{promo.usageCount || 0} times</span>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="flex-1"
                       onClick={() => handleEditPromotion(promo._id)}
                     >
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
                     </Button>
-                    {promo.status === 'active' ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                    {status === 'active' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="text-yellow-600 hover:text-yellow-700"
                         onClick={() => pausePromotion.mutate(promo._id)}
                         disabled={pausePromotion.isPending}
                       >
                         Pause
                       </Button>
-                    ) : promo.status === 'paused' ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                    ) : status === 'paused' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="text-green-600 hover:text-green-700"
                         onClick={() => resumePromotion.mutate(promo._id)}
                         disabled={resumePromotion.isPending}
@@ -181,9 +183,9 @@ export default function PromotionsPage() {
                         Resume
                       </Button>
                     ) : (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="text-red-600 hover:text-red-700"
                         onClick={() => {
                           if (confirm('Are you sure you want to delete this promotion?')) {
@@ -199,7 +201,8 @@ export default function PromotionsPage() {
                 </CardContent>
               </Card>
             </motion.div>
-          ))}
+                );
+              })}
           </div>
         )}
 
