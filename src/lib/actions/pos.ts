@@ -318,6 +318,7 @@ export async function createSale(data: {
 }
 
 export async function getSaleById(id: string) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -333,6 +334,7 @@ export async function getSaleById(id: string) {
 }
 
 export async function getRecentSales(limit: number = 10) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {

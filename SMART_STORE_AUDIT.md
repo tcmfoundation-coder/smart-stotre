@@ -590,7 +590,7 @@ the unmodified code; this batch introduces no test regressions.
 | WhatsApp send demo-mode fallback (`lib/whatsapp.ts`) | F | Real integration exists; silently returns `success:true` with no message sent when creds are absent. Also: `.env.example` documents `WHATSAPP_API_KEY`, but the code reads `WHATSAPP_ACCESS_TOKEN` — following the documented setup can never actually enable live sending. |
 | `dashboard/shift-summary` | E | Fully fabricated, explicitly commented as placeholder. |
 | `dashboard/page.tsx` low-stock/expiring mock arrays | E | Always renders (backing routes don't exist — see §6). |
-| `dashboard/returns` | E | No backend of any kind. |
+| ~~`dashboard/returns`~~ | E | **Fixed** — real `Return` model + full processing workflow. |
 | `dashboard/receipt-history` | E | Duplicates the real `receipts` page. |
 | `api/backup` (list/create/restore) | E/F | No model; writes discarded. |
 | ~~`api/activity-logs` (list/create)~~ | E/F | **Fixed** — real model + wired into the 4 events the frontend already declared. |
@@ -913,3 +913,105 @@ already-established bug classes. All fixed, all decision-free:
   anywhere — same situation as the write-only `AIReport`/R-9), but a leftover
   instance of the exact bug already fixed elsewhere in this same function.
   **Fixed** — now uses `authUser.id`/`authUser.branchId` too.
+
+**Returns/refunds — implemented per explicit baseline policy (§2 of the
+follow-up request), not guessed:**
+
+Investigated existing infrastructure first, per direction:
+- **No existing payment/refund integration to build on.** Paystack is UI/
+  schema scaffolding only (settings fields, a `paymentMethod` enum value) —
+  grepped for any actual API call anywhere in the codebase; there is none.
+- **`Transaction` model is a dead-end, not a payment abstraction.** It's
+  written once (in `createSale`, as a secondary denormalized copy of the sale,
+  linked via `orderId: sale._id`) and never read back anywhere (confirmed via
+  grep) — not a real transaction/payment system to integrate with.
+- **`Sale.paymentStatus` enum has no `'refunded'` value**, and the explicit
+  policy says "record the return separately rather than modifying... the
+  original sale" — so the original `Sale` document (`total`, `items`,
+  `paymentStatus`, everything) is never written to by any part of this
+  feature. It is read-only from the return flow's perspective. Return state
+  lives entirely in the new `Return` collection; anything needing "has this
+  sale been returned" queries `Return` by `saleId`.
+- **RBAC evidence dictated a single-step process, not an approval workflow**
+  (unlike Purchase Orders/Stock Adjustments): `rbac.ts` has exactly one
+  permission, `process_returns`, granted to **all three roles including
+  cashier** — no separate `approve_returns` permission exists. A return is
+  processed and effective the instant `process_returns` allows it; there's no
+  RBAC-backed reason to gate it behind a second review step.
+
+Implementation, matching the exact baseline policy given:
+- **New `Return` model** (`src/models/Return.ts`): `returnNumber`, `saleId`
+  (ref, never mutates the target), `saleNumber`/`customerId`/`customerName`
+  (denormalized for display), `items[]` (`productId`, `quantity`,
+  `unitRefundPrice`, `refundAmount`, `reason`, `restocked`), `totalRefund`,
+  `refundMethod`, `status: 'completed'`, `processedBy`/`processedById` (audit
+  trail — who processed it).
+- **`GET /api/returns/lookup?saleNumber=`** — finds the sale, computes
+  per-item quantity already returned (summed from prior `Return` records for
+  that sale) and the resulting returnable quantity, and the sale's remaining
+  refundable balance. Read-only; used by the frontend before showing the
+  return form.
+- **`POST /api/returns`** (`process_returns` permission) — the actual
+  workflow:
+  - Rejects if the sale isn't `status: 'completed'`.
+  - **Return quantity cannot exceed original sold quantity**: for each
+    requested item, checks `alreadyReturned + requested <= originallySold`
+    (summed across *all* prior returns for that sale/product, so partial
+    returns compose correctly).
+  - **Refund amount from the original sale price**: `unitRefundPrice =
+    saleItem.total / saleItem.quantity` — this is the item's actual per-unit
+    effective price from the original sale, which already bakes in any
+    per-item discount that was applied (the only discount mechanism
+    `createSale` currently ever populates — see note below).
+  - **Cannot exceed amount originally paid**: sums this return's total with
+    every prior return's total for the same sale and rejects if it would
+    exceed `sale.total`.
+  - **Partial returns supported** natively — a sale can have any number of
+    returns over time as long as the two caps above hold.
+  - **Restocks inventory** (`Product.stockQuantity += quantity`) only for
+    items the processor marks "returned to sellable stock" (a per-item
+    checkbox, defaulting checked) — the policy says restock happens "when
+    physically returned to stock," which isn't automatic for every return
+    (e.g. damaged goods), so this is a real per-item decision point for the
+    person actually handling the item, not an invented business rule.
+  - **Never mutates the original `Sale` document** — verified by a test
+    asserting no `.save()` is ever called on the sale and its fields are
+    unchanged after processing a return.
+  - **Full audit trail**: `processedBy`/`processedById` on the `Return`
+    record itself, plus a `RETURN_PROCESSED` entry in the real Activity Logs
+    system (extended its action-filter taxonomy to include this, matching how
+    `USER_LOGIN`/`PRODUCT_CREATED`/`STOCK_ADJUSTMENT`/`SALE_COMPLETED` were
+    already declared for the 4 pre-existing events).
+  - **Authorization per existing RBAC structure**: gated by `process_returns`
+    (the real, already-declared permission — not invented), same permission
+    for both `GET` (view) and `POST` (process), matching all three roles that
+    already hold it.
+- **Real frontend**: `dashboard/returns/page.tsx` rewritten from its fully
+  mock state — "New Return" now looks up a real sale by sale number, shows
+  each line's real returnable quantity, computes the refund live from real
+  unit prices, requires a reason per item, and calls the real API. The list/
+  detail panes show real `Return` records via a new `useReturns` hook.
+- **Known limitation, documented rather than silently glossed over**:
+  `createSale` always hardcodes the sale-level `discount`/`tax` fields to `0`
+  today, so no real sale currently has a sale-level discount to prorate across
+  a partial return. The refund calculation is correct for every case that
+  exists in the live code today (item-level pricing, which is the only
+  discount mechanism actually used). If a future change starts populating
+  `Sale.discount`/`Sale.tax` with real values, this refund calculation will
+  need a proportional-allocation step added — flagging now so it isn't
+  silently wrong later.
+- **10 new tests** (`returns-route.test.ts`) covering: a cashier (the
+  least-privileged permission holder) successfully processing a return;
+  correct partial-return refund math; restock respecting the per-item flag;
+  rejecting a return exceeding original sold quantity; rejecting a return
+  exceeding the amount paid; correctly accounting for quantity already
+  returned across prior partial returns; rejecting returns against
+  non-completed sales; and explicitly asserting the original sale is never
+  mutated.
+- Also fixed while in this area: `getSaleById`/`getRecentSales` in
+  `lib/actions/pos.ts` had no auth check at all (same missing-auth class
+  already fixed for other actions in this file) — added `requireAuth()` to
+  both.
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+18/18 suites / 158/158 tests.

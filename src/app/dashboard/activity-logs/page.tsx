@@ -129,6 +129,7 @@ export default function ActivityLogsPage() {
               <option value="PRODUCT_CREATED">Product Created</option>
               <option value="STOCK_ADJUSTMENT">Stock Adjustment</option>
               <option value="SALE_COMPLETED">Sale Completed</option>
+              <option value="RETURN_PROCESSED">Return Processed</option>
             </select>
             <select
               value={userFilter}
