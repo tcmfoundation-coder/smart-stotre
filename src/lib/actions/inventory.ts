@@ -4,7 +4,7 @@ import connectDB from '@/lib/mongodb';
 import { Product, Category } from '@/models';
 import { generateSKU, generateBarcode, escapeRegex } from '@/lib/utils';
 import { revalidatePath } from 'next/cache';
-import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
+import { requireAdmin, requireAuth, requireManagerOrAdmin } from '@/lib/security';
 import { logActivity } from '@/lib/activity-log';
 
 export async function getProducts(filters?: {
@@ -13,6 +13,7 @@ export async function getProducts(filters?: {
   lowStock?: boolean;
   expiring?: boolean;
 }) {
+  await requireAuth();
   const db = await connectDB();
   
   if (!db) {
@@ -52,6 +53,7 @@ export async function getProducts(filters?: {
 }
 
 export async function getProductById(id: string) {
+  await requireAuth();
   const db = await connectDB();
   
   if (!db) {
@@ -178,6 +180,7 @@ export async function updateStock(id: string, quantity: number, operation: 'add'
 }
 
 export async function getCategories() {
+  await requireAuth();
   const db = await connectDB();
   
   if (!db) {
@@ -191,6 +194,7 @@ export async function getCategories() {
 
 
 export async function getLowStockProducts() {
+  await requireAuth();
   const db = await connectDB();
   
   if (!db) {
@@ -208,6 +212,7 @@ export async function getLowStockProducts() {
 }
 
 export async function getExpiringProducts() {
+  await requireAuth();
   const db = await connectDB();
   
   if (!db) {

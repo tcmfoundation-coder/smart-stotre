@@ -3,6 +3,7 @@
 import connectDB from '@/lib/mongodb';
 import { WhatsAppMessage } from '@/models';
 import { escapeRegex } from '@/lib/utils';
+import { requireManagerOrAdmin } from '@/lib/security';
 
 interface SendWhatsAppMessageParams {
   customerId?: string;
@@ -162,6 +163,9 @@ export async function getWhatsAppMessages(filters?: {
   limit?: number;
   search?: string;
 }) {
+  // Matches the manager/admin-only nav entry for this page and exposes
+  // customer names/phone numbers/message content.
+  await requireManagerOrAdmin();
   await connectDB();
 
   const query: any = {};
@@ -192,6 +196,7 @@ export async function getWhatsAppMessages(filters?: {
 }
 
 export async function getWhatsAppMessageStats() {
+  await requireManagerOrAdmin();
   await connectDB();
 
   const total = await WhatsAppMessage.countDocuments();

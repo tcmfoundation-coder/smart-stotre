@@ -59,7 +59,10 @@ describe('recovery codes', () => {
 
     const matchIndex = await findMatchingRecoveryCodeIndex(codes[3], hashed);
     expect(matchIndex).toBe(3);
-  });
+    // 10 bcrypt hashes at cost 12 (deliberately slow) can exceed Jest's 5s
+    // default under a busy parallel test run, same reasoning as the sibling
+    // "-1" test below.
+  }, 20000);
 
   it('matching is case-insensitive (codes are uppercase, users may type lowercase)', async () => {
     const codes = generateRecoveryCodes();

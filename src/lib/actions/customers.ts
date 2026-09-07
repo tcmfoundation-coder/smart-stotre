@@ -4,11 +4,13 @@ import connectDB from '@/lib/mongodb';
 import { Customer, Loyalty } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
-import { requireManagerOrAdmin } from '@/lib/security';
+import { requireAuth, requireManagerOrAdmin } from '@/lib/security';
 
 export async function getCustomers(filters?: {
   search?: string;
 }) {
+  // Every role (cashier included) holds view_customers in rbac.ts.
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -32,6 +34,7 @@ export async function getCustomers(filters?: {
 }
 
 export async function getCustomerById(id: string) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -96,6 +99,7 @@ export async function deleteCustomer(id: string) {
 }
 
 export async function getTopCustomers(limit: number = 10) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -186,6 +190,7 @@ export async function getCustomerAnalytics() {
 }
 
 export async function getCustomerPurchaseHistory(customerId: string) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
