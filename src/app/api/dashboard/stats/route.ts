@@ -7,6 +7,32 @@ import Product from '@/models/Product';
 import Sale from '@/models/Sale';
 import Customer from '@/models/Customer';
 import { handleApiError } from '@/lib/error-handler';
+import { getDashboardCards, UserRole } from '@/lib/rbac';
+import { getDashboardRoleConfig } from '@/lib/dashboard-role';
+
+// Each dashboard KPI card is mapped to the response field(s) it reads, so a
+// role only receives the figures its own dashboard is allowed to show (per
+// rbac.ts's dashboardCards) - this endpoint previously returned every
+// aggregate to any authenticated user regardless of role, relying only on
+// the frontend to hide cards it shouldn't render; a cashier could still read
+// store-wide revenue and other roles' recent transactions by calling this
+// endpoint directly.
+const CARD_FIELDS: Record<string, string[]> = {
+  totalRevenue: ['totalRevenue'],
+  todaySales: ['todayRevenue', 'todaySalesCount'],
+  weeklySales: ['weeklyRevenue'],
+  monthlySales: ['monthlyRevenue', 'revenueChange'],
+  totalProducts: ['totalProducts'],
+  lowStockProducts: ['lowStockProducts'],
+  lowStockAlerts: ['lowStockProducts'],
+  outOfStockProducts: ['outOfStockProducts'],
+  outOfStockItems: ['outOfStockProducts'],
+  totalEmployees: ['totalEmployees'],
+  totalCustomers: ['totalCustomers'],
+  customerCount: ['totalCustomers'],
+  numberOfTransactions: ['todaySalesCount'],
+  itemsSoldToday: ['itemsSoldToday'],
+};
 
 export async function GET(request: NextRequest) {
   return withAuth(async (req, user) => {
@@ -81,28 +107,44 @@ export async function GET(request: NextRequest) {
         ? ((monthlyRevenue[0]?.total || 0) - lastMonthRevenue[0]?.total) / lastMonthRevenue[0]?.total * 100
         : 0;
 
-      const recentTransactions = await Sale.find({ status: 'completed' })
-        .populate('cashierId', 'name')
-        .sort({ createdAt: -1 })
-        .limit(10);
+      const role = user.role as UserRole;
+      const roleConfig = getDashboardRoleConfig(role);
+
+      const recentTransactions = roleConfig.showRecentTransactions
+        ? await Sale.find({ status: 'completed' })
+            .populate('cashierId', 'name')
+            .sort({ createdAt: -1 })
+            .limit(10)
+        : [];
+
+      const fullData: Record<string, unknown> = {
+        totalRevenue: totalRevenue[0]?.total || 0,
+        todayRevenue: todaySales[0]?.total || 0,
+        todaySalesCount: todaySales[0]?.count || 0,
+        weeklyRevenue: weeklyRevenue[0]?.total || 0,
+        monthlyRevenue: monthlyRevenue[0]?.total || 0,
+        revenueChange,
+        totalProducts,
+        lowStockProducts,
+        outOfStockProducts,
+        totalEmployees,
+        totalCustomers,
+        itemsSoldToday: itemsSoldToday[0]?.total || 0,
+      };
+
+      const allowedFields = new Set<string>();
+      for (const card of getDashboardCards(role)) {
+        for (const field of CARD_FIELDS[card] || []) allowedFields.add(field);
+      }
+
+      const scopedData: Record<string, unknown> = { recentTransactions };
+      for (const [key, value] of Object.entries(fullData)) {
+        if (allowedFields.has(key)) scopedData[key] = value;
+      }
 
       return NextResponse.json({
         success: true,
-        data: {
-          totalRevenue: totalRevenue[0]?.total || 0,
-          todayRevenue: todaySales[0]?.total || 0,
-          todaySalesCount: todaySales[0]?.count || 0,
-          weeklyRevenue: weeklyRevenue[0]?.total || 0,
-          monthlyRevenue: monthlyRevenue[0]?.total || 0,
-          revenueChange,
-          totalProducts,
-          lowStockProducts,
-          outOfStockProducts,
-          totalEmployees,
-          totalCustomers,
-          itemsSoldToday: itemsSoldToday[0]?.total || 0,
-          recentTransactions,
-        },
+        data: scopedData,
       });
     } catch (error) {
       const errorResponse = handleApiError(error);
