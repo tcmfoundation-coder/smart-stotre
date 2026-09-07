@@ -3,6 +3,8 @@
  * Run this to check if all required environment variables are set for production
  */
 
+import '../src/lib/load-env';
+
 const requiredVars = [
   'MONGODB_URI',
   'NEXTAUTH_SECRET',

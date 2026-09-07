@@ -1497,3 +1497,369 @@ fixed and committed in priority order:
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 33/33 suites / 233/233 tests.
+
+## Pass 4: finalization — final verification, PO receiving proposal, restore proposal, production readiness
+
+Direction for this pass: one more read-only verification sweep (no new features
+unless they're clearly bug fixes); investigate and *propose* (not implement) a
+Purchase Order receiving workflow and a database restore design; eliminate the
+public-registration ambiguity; keep the 2FA implementation as-is but make its
+configuration error surface properly; produce real production deployment
+documentation; and finish with a status report categorized as FIXED / VERIFIED /
+REQUIRES PRODUCT DECISION / REQUIRES ENVIRONMENT CONFIGURATION / INTENTIONALLY
+NOT IMPLEMENTED / RECOMMENDED FUTURE WORK.
+
+**Final read-only security/regression sweep.** Dispatched a fresh audit agent
+covering every category the client named explicitly (auth bypasses,
+unauthenticated actions, client-supplied financial values, sensitive data
+exposure, permission mismatches, DB integrity, race conditions, broken nav,
+dead buttons, broken forms, empty/error states, duplicated implementations,
+inconsistent schema fields, env-var assumptions, production-only failures).
+**That agent's own report flagged, correctly, that it had run inside a stale
+git worktree checked out at the merge-base rather than the tip of this
+branch** — meaning almost every one of its ~26 "findings" was a rediscovery
+of a bug already fixed earlier in this engagement, not a real regression.
+Rather than trust that report, every claim in it was independently
+re-verified directly against the actual branch tip by reading the real,
+current files:
+- Checkout price tampering, the Paystack secret leak, the `/api/reports`
+  permission gating, the real backup export route, the real Financial
+  Reports page, the Stock Adjustment approve/reject workflow, the
+  `api/customers/[id]`/`api/suppliers/[id]` routes, the employees list field
+  names, and the notification IDOR/`markAllAsRead` scoping (`buildVisibilityFilter`
+  already applies to every mutating notification action) — all confirmed
+  **already fixed and present** on the real branch; the agent's worktree
+  simply didn't have those commits.
+- Regex-escaping was independently re-checked on all 6 routes the stale
+  report named (`users`, `purchase-orders`, `categories`, `roles`,
+  `products`, `stock-adjustments`) — every one already wraps its search term
+  in `escapeRegex()`.
+- Nav integrity was independently re-verified by extracting every `href` in
+  `src/config/navigation.ts` and confirming a matching `page.tsx` exists for
+  each — no broken links found.
+- [x] **One genuine, new finding survived this cross-check**: `deleteCustomer`
+  (`lib/actions/customers.ts`) used a real hard `Customer.findByIdAndDelete`,
+  unlike every sibling delete (`deleteProduct`/`deleteBranch`/`deleteSupplier`/
+  `deleteCategory`), which all soft-delete via `isActive: false`. A hard
+  delete here would orphan `Sale.customerId`/`Loyalty.customerId`/
+  `Transaction.customerId`/`WhatsAppMessage.customerId` references,
+  permanently losing which customer a historical sale was for. **Fixed** —
+  added the missing `isActive` field to the `Customer` schema (additive) and
+  switched to soft-delete; `getCustomers` now matches `isActive: { $ne: false }`
+  rather than an exact-equality `isActive: true`, since pre-existing customer
+  documents have no value at all for a field just added to the schema and an
+  exact match would have hidden every one of them. 2 new tests.
+- **Race conditions** (`Product.findById` → mutate → `.save()`, used by
+  `createSale`, `updateStock`, and the Stock Adjustment approval route):
+  confirmed as a real, pre-existing characteristic, not a new regression —
+  it is the same read-modify-write pattern used consistently by every
+  already-shipped, already-tested stock-mutating flow in this codebase.
+  Rewriting these to atomic `findOneAndUpdate`/`$inc` operations would touch
+  multiple already-tested, already-shipped flows for a race window that
+  requires two genuinely concurrent requests against the exact same product
+  to manifest — **deliberately not done in this pass** (would be exactly the
+  kind of unrequested architectural change the client asked not to make
+  during finalization). Logged under Recommended Future Work below, not
+  silently ignored.
+- Also found and fixed while re-verifying environment-variable handling (see
+  MFA below): a `.env`/`.gitignore` gap, an unguarded destructive seed
+  script, and two stale/wrong variable names in `.env.example` and
+  `scripts/verify-env.ts` (`WHATSAPP_API_KEY` vs. the code's actual
+  `WHATSAPP_ACCESS_TOKEN`, and an unused `OPENAI_API_KEY`/`GOOGLE_AI_API_KEY`
+  pair standing in for the real `NVIDIA_*` variables) — see the Deployment
+  Safety section below for the full list.
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+35/35 suites / 239/239 tests (grew from 33/233 over the course of this pass
+as fixes above were tested).
+
+---
+
+### Purchase Order receiving — architecture investigation and proposal (NOT implemented)
+
+Investigated the existing architecture in full before proposing anything, per
+direction. This section documents what exists today, then proposes a
+receiving workflow addressing partial receipts, over-delivery, and a
+dedicated goods-receipt record — as a design for the client to approve,
+**not as something already built**.
+
+#### Current PO lifecycle (as it exists today)
+
+- **Model** (`src/models/PurchaseOrder.ts`): `orderNumber`, `supplierId` +
+  `supplierName` (denormalized), `items: [{ productId, productName,
+  quantity, unitPrice, total }]`, `totalAmount`, `status: 'pending' |
+  'approved' | 'delivered' | 'cancelled'`, `orderDate`, `expectedDelivery`,
+  `actualDelivery`, `createdBy`/`createdById`.
+- **Routes**: `POST /api/purchase-orders` (create, `create_purchase_orders`
+  permission) and `POST /api/purchase-orders/[id]/approve`
+  (`approve_purchase_orders` permission, `pending` → `approved`). **There is
+  no route or UI action anywhere that transitions a PO to `delivered` or
+  `cancelled`** — those two enum values are declared in the schema but
+  structurally unreachable today.
+- **Inventory relationship — the key fact driving this whole proposal**:
+  confirmed by grep, `Product.stockQuantity` is mutated in exactly three
+  places in the entire codebase — sales (decrement), approved Stock
+  Adjustments (apply the reviewed delta), and restocked Returns (increment).
+  **Approving a Purchase Order never touches `Product.stockQuantity`.**
+  A PO today is procurement paperwork only; nothing currently represents
+  "this order's goods physically arrived."
+- **RBAC** (`src/lib/rbac.ts`): `create_purchase_orders` and
+  `approve_purchase_orders` are separate permissions, both granted to admin
+  **and** manager identically (no role distinction between who can create
+  vs. approve a PO). `manage_inventory` is a third, separate permission,
+  also granted to admin and manager identically.
+- **Comparable, already-shipped precedent #1 — Stock Adjustment** (`src/models/StockAdjustment.ts`):
+  `status: 'pending' | 'approved' | 'rejected'`, `performedBy`/`performedById`
+  (who requested it), `reviewedBy`/`reviewedById`/`reviewedAt` (who
+  actioned it). The approval route re-reads the **live** product quantity
+  at approval time and applies the delta then — not at request time — to
+  avoid approving against a stale stock snapshot.
+- **Comparable, already-shipped precedent #2 — Returns** (`src/models/Return.ts`):
+  a `Return` record references its `Sale` by id and is **never** used to
+  mutate the original `Sale` document; "how much of this sale has already
+  been returned" is computed on demand by summing every prior `Return`
+  record for that sale, so partial returns compose correctly without ever
+  touching the original record. This is the exact shape of problem
+  "partial PO receipts" is, one level up the supply chain.
+- **Audit logging**: `logActivity()` (`src/lib/activity-log.ts`) is a
+  best-effort, free-form-`action`-string logger already used for
+  `STOCK_ADJUSTMENT`, `RETURN_PROCESSED`, `SALE_COMPLETED`, `DATABASE_EXPORTED`,
+  etc. — adding a new action name costs nothing structurally.
+
+#### Proposed receiving workflow
+
+**1. A dedicated `GoodsReceipt` model — not fields bolted onto `PurchaseOrder`.**
+This matches the client's stated preference and mirrors the Return-vs-Sale
+precedent above exactly: the PO's own `items[].quantity`/`unitPrice` are
+**never mutated**; each physical delivery creates one new, immutable
+`GoodsReceipt` record, and "received so far" / "remaining" are **computed**
+by summing every `GoodsReceipt` tied to that PO — never stored redundantly
+on the PO itself, so the two can never drift out of sync.
+
+```ts
+interface IGoodsReceiptItem {
+  productId: ObjectId;
+  productName: string;         // denormalized, same convention as PO/Sale/Return items
+  sku: string;
+  orderedQuantity: number;     // this line's ordered qty, denormalized from the PO at receipt time (display/audit only)
+  quantityReceived: number;    // what this specific delivery brought for this line
+  unitCost: number;            // denormalized from the PO item's unitPrice
+  condition?: 'good' | 'damaged' | 'rejected';  // optional; lets a damaged partial delivery be recorded without inflating sellable stock
+}
+
+interface IGoodsReceipt extends Document {
+  receiptNumber: string;                  // GRN-<timestamp>, same convention as saleNumber/returnNumber
+  purchaseOrderId: ObjectId;              // ref only - the PO document is never written to
+  orderNumber: string;                    // denormalized
+  supplierId: ObjectId;
+  supplierName: string;
+  items: IGoodsReceiptItem[];
+  status: 'completed' | 'pending_approval' | 'rejected';   // see over-delivery below
+  receivedBy: string;
+  receivedById: ObjectId;
+  approvedBy?: string;                    // only set if an over-delivery required approval
+  approvedById?: ObjectId;
+  approvedAt?: Date;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+**2. Partial receipts** — computed exactly like Returns compute "already
+returned": for a given PO, sum `quantityReceived` across every
+non-`rejected` `GoodsReceipt` referencing it, grouped by `productId`. That
+gives `receivedQuantity` per line; `remainingQuantity = orderedQuantity -
+receivedQuantity`. The example in the brief:
+
+```
+PO = 100 units
+Delivery 1 = 40  →  GoodsReceipt #1 (quantityReceived: 40)
+Delivery 2 = 60  →  GoodsReceipt #2 (quantityReceived: 60)
+Ordered: 100 / Received: 100 / Remaining: 0
+```
+falls directly out of this without any special-case code — it's the same
+summation whether there were 1, 2, or 10 deliveries.
+
+**3. Over-delivery — recommend explicit approval, not a tolerance setting.**
+The brief asks for either a configurable tolerance or an explicit-approval
+mechanism. Recommending **approval**, not tolerance, for one concrete
+reason: a numeric tolerance (5%? 10 units? per-product or system-wide?) is
+itself an undisclosed business rule this session was told not to invent,
+whereas "require a manager/admin to approve anything that would push
+received-to-date past ordered-to-date" needs no new configuration surface
+and mirrors a workflow already shipped and tested for Stock Adjustments. Concretely:
+for each line in an incoming receipt, if `quantityReceived >
+remainingQuantity`, the whole `GoodsReceipt` is created with
+`status: 'pending_approval'` and **does not touch `Product.stockQuantity`
+at all** until an admin/manager explicitly approves it (mirroring the Stock
+Adjustment approve route's pattern of re-reading live quantity at approval
+time, not at submission time) or rejects it (no stock effect, ever). A
+receipt with no over-delivered lines is `status: 'completed'` immediately —
+a single-step process, matching how Returns work today for the same reason
+(no separate "approve a receipt" RBAC permission exists to justify a
+universal two-step flow the way one already exists for POs/Stock
+Adjustments). If the client later wants a numeric tolerance instead of
+"any overage needs approval," that tolerance value is exactly the kind of
+number this session won't invent — it would need to come from them.
+
+**4. Applying the stock effect.** When a `GoodsReceipt` (or the approved
+portion of one) is finalized, `Product.stockQuantity` increases by
+`quantityReceived` for each `condition !== 'rejected'` line — recommend
+doing this via `Product.findByIdAndUpdate(productId, { $inc: { stockQuantity:
+qty } })` rather than the codebase's more common `findById` → mutate →
+`.save()` pattern, specifically because this is new code with no existing
+call sites to stay consistent with, and `$inc` is atomic at the database
+level (closes the exact class of race condition noted in the read-only audit
+above, without having to touch any already-shipped code to get there).
+
+**5. PO status.** Recommend the PO's own `status` auto-transitions to
+`delivered` once every line's `receivedQuantity >= orderedQuantity` (a
+direct, mechanical reading of the enum's own already-declared intent, not a
+new rule) — and recommend adding a `partially_received` status value for the
+in-between state, since the current enum has no way to represent "some, but
+not all, of this order has arrived" and the client's own example explicitly
+wants that state visible. Whether `partially_received` is the right label,
+versus just leaving `status: 'approved'` until 100% received and relying on
+the computed received/remaining figures for visibility, is a small
+naming/UX call for the client, not an architectural one.
+
+**6. Permissions.** Recommend gating "record a receipt" behind the existing
+`manage_inventory` permission (already held identically by admin and
+manager, and semantically the closest fit — receiving directly changes
+inventory levels), and gating "approve an over-delivery" behind the existing
+`approve_purchase_orders` permission (closest existing precedent for
+elevated authority specifically over a PO's lifecycle). Both are **existing,
+already-granted permissions** — this proposal introduces no new RBAC entries
+unless the client would rather split "receive" into its own permission the
+way create/approve are split for POs and Stock Adjustments, which is their
+call to make, not an assumption to bake in silently.
+
+**7. Audit logging.** `GOODS_RECEIVED` on every receipt (whether
+`completed` or `pending_approval`), `GOODS_RECEIPT_APPROVED` /
+`GOODS_RECEIPT_REJECTED` on the resolution of an over-delivery — same
+`logActivity()` call already used for every other lifecycle event in this
+app, just two new action-name strings.
+
+**8. Immediate follow-on benefit, not built now**: once `GoodsReceipt`
+exists, the Inventory Reports movement feed (Phase F above) gains a real
+`PURCHASE` movement type sourced from actual receipt records — resolving
+the gap flagged in that section, where purchase orders were excluded from
+the feed specifically because nothing represented a real stock-affecting
+receiving event. Not implemented as part of this proposal; noted so the two
+pieces of work are understood to connect.
+
+**Nothing above has been implemented.** No new model, route, or UI exists
+yet for any of this — it is a design for the client to approve, adjust, or
+reject before any code is written.
+
+---
+
+### Database restore — technical proposal (NOT implemented)
+
+The existing `GET /api/backup/export` (admin-only, streams a live JSON
+snapshot of every collection, nothing stored server-side) remains the
+recommended and sufficient application-level export mechanism. This section
+is the requested proposal for what a *restore* feature would need — written
+so the client can decide whether to commission it, not as a plan already
+underway.
+
+**Recommended default: do not build self-service restore into the web
+application at all**, for one structural reason that doesn't depend on how
+carefully it's engineered: a restore endpoint's entire purpose is to
+overwrite live data from a file, which means its failure mode — a stale
+backup, a malformed upload, a wrong-environment mix-up — is silent,
+irreversible data loss, on the one feature category where "irreversible" is
+the whole risk this project's own standing rules exist to prevent. The safer
+production posture is the layered one already partly in place:
+
+1. **MongoDB Atlas Cloud Backups** (M10+ cluster tier) for real,
+   automated, point-in-time-recoverable backups, configured entirely on the
+   Atlas side — zero application code, and Atlas's own restore tooling is
+   already built, tested, and maintained by people whose job is exactly
+   this.
+2. **Controlled operational restore procedures** — an admin or DBA running
+   `mongorestore` directly against a chosen export, outside the web app,
+   when Atlas's own point-in-time restore isn't the right tool (e.g.
+   restoring into a fresh environment for testing).
+3. **The existing application-level export** for portability — moving data
+   out of Atlas, seeding a staging environment, or handing a client their
+   own data on request.
+
+**If, despite that recommendation, an in-app restore is ever commissioned**,
+here is what it would need — every one of these is a real design question,
+not a checkbox:
+
+- **Authentication & authorization**: admin-only (`backup_restore`,
+  already exists and already gates the export route) is necessary but not
+  sufficient on its own for an operation this destructive — recommend
+  requiring a **fresh re-authentication** (password and/or 2FA code, not
+  just an existing session) immediately before the restore call, the same
+  reasoning already applied to 2FA disable.
+- **Backup validation**: the uploaded file must be parsed and structurally
+  validated (every expected top-level collection key present, no unexpected
+  keys, no malformed documents) *before* any write begins — reject
+  malformed input outright rather than importing whatever parses.
+- **Schema/version validation**: the export format needs its own version
+  marker (e.g. `formatVersion: 1` in the export's metadata, already close to
+  free to add to the existing export route) so a restore can refuse an
+  incompatible or unrecognized export instead of guessing.
+- **Dry-run validation**: a mode that reports what a restore *would* do
+  (collection counts, a diff summary against current data) without writing
+  anything — the only way an admin can sanity-check a restore before
+  committing to it.
+- **Transaction strategy**: MongoDB multi-document transactions (available
+  since this is presumably a replica-set-backed Atlas cluster, which
+  `mongodb+srv://` connection strings always are) so a restore either fully
+  applies or fully rolls back — never leaves the database in a half-restored
+  state if it fails partway through a 20-collection import.
+- **Rollback strategy**: given a transaction can still fail to buy full
+  safety at Atlas-scale collection sizes (transaction time/size limits), the
+  practical rollback plan is "take a fresh export immediately before
+  starting the restore" as a mandatory, automatic first step of the restore
+  flow itself — not a manual precaution an admin might forget.
+- **Destructive-operation confirmation**: a multi-step confirmation (type
+  the exact word "RESTORE" or the target environment's name, not just an
+  OK/Cancel dialog) — matching the weight of the action, not a POST request
+  that can happen accidentally.
+- **Audit logging**: `logActivity()` before and after, with the export's own
+  metadata (its `generatedAt` timestamp, uploading admin's identity,
+  collection counts) — a restore is exactly the kind of event that must be
+  traceable after the fact.
+- **Rate limiting**: this is inherently a rare, deliberate action — a strict
+  limit (e.g. 1 per hour) mostly guards against a compromised admin session
+  being used to repeatedly attempt destructive imports.
+- **Backup integrity verification**: a checksum (e.g. SHA-256) computed at
+  export time and included in the export's own metadata, verified before
+  any restore begins, so a truncated or corrupted file is rejected outright
+  rather than partially imported.
+- **Protection against malicious backup files**: the restore path is,
+  structurally, "parse untrusted JSON and write its contents into the
+  database" — needs strict schema validation per collection (reject any
+  field not in that collection's own Mongoose schema, cap array/string
+  lengths, reject unexpected types) so a crafted file can't inject
+  unexpected fields or oversized payloads.
+- **Maximum backup size**: an explicit cap (matching or slightly above the
+  export route's own realistic output size) enforced before parsing begins,
+  not discovered by the server running out of memory mid-parse.
+- **Replace vs. merge**: recommend **replace-only** — a restore that merges
+  with live data has to resolve conflicting `_id`s, unique-index collisions
+  (emails, SKUs, barcodes, phone numbers), and ordering between the two data
+  sets, each of which is a real business-rule decision with no obviously
+  correct default. Replace (this collection's contents become exactly what's
+  in the export) is unambiguous; merge is not, and shouldn't be guessed at.
+- **Should this be an application feature at all**: given everything above,
+  restated plainly — no, not as a self-service button in the admin UI.
+  If the client wants an in-app path anyway despite this recommendation,
+  the design above is the minimum bar before any code should be written for
+  it; this session has not written any of it.
+
+---
+
+### Production readiness documentation
+
+See the new `DEPLOYMENT.md` at the repo root for the full required/optional
+environment variable reference (grouped by app startup, authentication, 2FA,
+database, Redis, and optional integrations) and the recommended deployment
+sequence. Summary of what changed to get there is in the "Deployment safety"
+notes above and in `DEPLOYMENT.md` itself.
