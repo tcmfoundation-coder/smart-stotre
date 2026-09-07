@@ -21,3 +21,4 @@ export { default as Role } from './Role';
 export { default as Promotion } from './Promotion';
 export { default as ActivityLog } from './ActivityLog';
 export { default as Return } from './Return';
+export { default as Shift } from './Shift';

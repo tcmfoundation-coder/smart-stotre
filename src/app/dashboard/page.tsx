@@ -30,6 +30,7 @@ import { useSession } from 'next-auth/react';
 import { getDashboardRoleConfig } from '@/lib/dashboard-role';
 import { getDashboardCards, UserRole } from '@/lib/rbac';
 import { useDashboardStats, useSalesData, useLowStockAlerts, useExpiringItems } from '@/hooks/useDashboard';
+import { useCurrentShift } from '@/hooks/useShifts';
 import { DashboardSkeleton } from '@/components/loading/DashboardSkeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ChartSkeleton } from '@/components/loading/ChartSkeleton';
@@ -65,6 +66,7 @@ export default function DashboardPage() {
   const dashboardCards = getDashboardCards(role);
 
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats();
+  const { data: currentShift } = useCurrentShift();
   const { data: salesData, isLoading: salesLoading, error: salesError } = useSalesData(salesTimeFilter);
   const { data: lowStockItems, isLoading: lowStockLoading } = useLowStockAlerts();
   const { data: expiringItems, isLoading: expiringLoading } = useExpiringItems();
@@ -274,8 +276,8 @@ export default function DashboardPage() {
             <motion.div variants={itemVariants}>
               <KPICard
                 title="Shift Sales"
-                value={formatCurrency(stats?.shiftRevenue ?? 0)}
-                change="Current shift"
+                value={formatCurrency(currentShift?.salesTotal ?? 0)}
+                change={currentShift ? 'Current shift' : 'No open shift'}
                 icon={DollarSign}
                 iconColor="text-emerald-600"
               />

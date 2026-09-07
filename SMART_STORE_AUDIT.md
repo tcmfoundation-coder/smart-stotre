@@ -588,7 +588,7 @@ the unmodified code; this batch introduces no test regressions.
 | Item | Bucket | Notes |
 |---|---|---|
 | WhatsApp send demo-mode fallback (`lib/whatsapp.ts`) | F | Real integration exists; silently returns `success:true` with no message sent when creds are absent. Also: `.env.example` documents `WHATSAPP_API_KEY`, but the code reads `WHATSAPP_ACCESS_TOKEN` — following the documented setup can never actually enable live sending. |
-| `dashboard/shift-summary` | E | Fully fabricated, explicitly commented as placeholder. |
+| ~~`dashboard/shift-summary`~~ | E | **Fixed** — real `Shift` model + open/close workflow. |
 | `dashboard/page.tsx` low-stock/expiring mock arrays | E | Always renders (backing routes don't exist — see §6). |
 | ~~`dashboard/returns`~~ | E | **Fixed** — real `Return` model + full processing workflow. |
 | `dashboard/receipt-history` | E | Duplicates the real `receipts` page. |
@@ -1015,3 +1015,58 @@ Implementation, matching the exact baseline policy given:
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 18/18 suites / 158/158 tests.
+
+**Shift Summary — implemented per the explicit model given, not guessed:**
+
+- **New `Shift` model** (`src/models/Shift.ts`) with exactly the fields
+  specified: `openedAt`/`closedAt`, `openedBy`/`openedByName`,
+  `closedBy`/`closedByName`, `openingCashBalance`, `closingCashBalance`,
+  `expectedCash`, `actualCash`, `cashVariance`, `salesCount`/`salesTotal`,
+  `refundsCount`/`refundsTotal`, `paymentMethodTotals` (cash/card/transfer/
+  paystack), `status: 'open'|'closed'`. No morning/evening inference anywhere
+  — a shift exists only between an explicit open and close action.
+  `closingCashBalance` and `actualCash` are set to the same value (the amount
+  physically counted at close) — both field names were specified, and there
+  was no indication they should differ; documented as a comment in the model.
+- **Sales/refunds/payment totals are computed live from the source `Sale`/
+  `Return` records** (`src/lib/shifts.ts`), not incremented at write time —
+  the shift is a read-only lens over `cashierId` + a time window, so it can
+  never drift out of sync with the real data, and nothing had to be added to
+  `createSale`/the returns flow to "push" updates into a shift document.
+  Scoped per-cashier (the shift's own `openedBy`), matching "opened by"/
+  "closed by" framing this as a personal register session, not a store-wide
+  shift.
+- **`POST /api/shifts/open`** — any authenticated role (no RBAC permission
+  for shifts exists in `rbac.ts`; this is a personal action every role needs,
+  matching cashier's own `currentShiftSales` dashboard card). Rejects opening
+  a second shift while one is already open for that user.
+- **`GET /api/shifts/current`** — the requesting user's open shift with live
+  stats and `expectedCash` (`openingCashBalance + cash sales - cash refunds`
+  so far).
+- **`POST /api/shifts/[id]/close`** — recomputes live stats one final time up
+  to the close instant, sets `expectedCash`/`actualCash`/`cashVariance
+  (actual - expected)`, `closedAt`/`closedBy`. Only the shift's own opener, or
+  an admin/manager reconciling on their behalf, can close it.
+- **`GET /api/shifts`** — history, scoped to the caller's own shifts unless
+  they're admin/manager (who see everyone's).
+- **Real frontend**: `dashboard/shift-summary/page.tsx` rewritten from its
+  fully mock state (hardcoded shift object, fake "top products"/"shift
+  notes" sections) — now shows an Open-Shift form when there's no active
+  shift, live KPIs and a Close-Shift form (with the expected-cash figure
+  shown before the count is entered) while one is open, and real closed-shift
+  history with a cash-variance indicator. Deliberately dropped the mock's
+  fabricated "Top Selling Products" and "Shift Notes" sections rather than
+  either inventing real ones out of scope or leaving fake content in a now
+  mostly-real page.
+- **Integrated with the main dashboard**: the "Shift Sales" KPI card
+  (`dashboardCards.includes('currentShiftSales')`, cashier's own dashboard)
+  referenced `stats?.shiftRevenue`, a field declared in the `DashboardStats`
+  type but never populated by `/api/dashboard/stats` — always showed ₦0
+  regardless of real activity. Wired to `useCurrentShift()`'s real
+  `salesTotal` instead; removed the dead `shiftRevenue` field from the type.
+- **8 new tests**, including exact arithmetic assertions for `expectedCash`
+  and `cashVariance`, and authorization checks (a cashier can't close someone
+  else's shift; a manager can, for reconciliation).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+19/19 suites / 166/166 tests.

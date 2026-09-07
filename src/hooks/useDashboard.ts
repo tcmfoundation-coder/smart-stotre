@@ -18,7 +18,6 @@ export interface DashboardStats {
   pendingPurchaseOrders?: number;
   totalSuppliers?: number;
   itemsSoldToday?: number;
-  shiftRevenue?: number;
   activeSuppliers?: number;
   recentTransactions?: any[];
 }
