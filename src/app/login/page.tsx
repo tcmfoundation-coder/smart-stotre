@@ -9,6 +9,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [needsTotp, setNeedsTotp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,10 +24,16 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         email,
         password,
+        totpCode: needsTotp ? totpCode : undefined,
         redirect: false,
       });
 
-      if (result?.error) {
+      if (result?.code === 'totp_required') {
+        setNeedsTotp(true);
+        setError('');
+      } else if (result?.code === 'totp_invalid') {
+        setError('Invalid two-factor code. You can also use a recovery code.');
+      } else if (result?.error) {
         setError('Invalid email or password');
       } else {
         router.push('/dashboard');
@@ -76,7 +84,8 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
+                disabled={needsTotp}
+                className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground disabled:opacity-60"
                 placeholder="admin@smartmart.com"
               />
             </div>
@@ -92,7 +101,8 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
+                  disabled={needsTotp}
+                  className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground disabled:opacity-60"
                   placeholder="••••••••"
                 />
                 <button
@@ -105,6 +115,25 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {needsTotp && (
+              <div className="space-y-2">
+                <label htmlFor="totpCode" className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
+                  Two-Factor Code
+                </label>
+                <input
+                  id="totpCode"
+                  type="text"
+                  inputMode="text"
+                  autoFocus
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  required
+                  className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground text-center tracking-[0.3em]"
+                  placeholder="6-digit code or recovery code"
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -115,7 +144,7 @@ export default function LoginPage() {
               ) : (
                 <>
                   <LogIn className="h-6 w-6 group-hover:translate-x-1 transition-transform" />
-                  <span>AUTHENTICATE</span>
+                  <span>{needsTotp ? 'VERIFY' : 'AUTHENTICATE'}</span>
                 </>
               )}
             </button>

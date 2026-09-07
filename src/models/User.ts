@@ -11,6 +11,10 @@ export interface IUser extends Document {
   branchId?: mongoose.Types.ObjectId;
   isActive: boolean;
   lastLogin?: Date;
+  twoFactorEnabled: boolean;
+  twoFactorSecretEncrypted?: string;
+  twoFactorRecoveryCodesHashed?: string[];
+  twoFactorEnabledAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -56,6 +60,21 @@ const UserSchema = new Schema<IUser>(
       default: true,
     },
     lastLogin: {
+      type: Date,
+    },
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    twoFactorSecretEncrypted: {
+      type: String,
+      select: false,
+    },
+    twoFactorRecoveryCodesHashed: {
+      type: [String],
+      select: false,
+    },
+    twoFactorEnabledAt: {
       type: Date,
     },
   },

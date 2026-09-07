@@ -1070,3 +1070,101 @@ Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 19/19 suites / 166/166 tests.
+
+**Two-factor authentication — real TOTP, not a UI toggle:**
+
+Investigated the existing auth architecture first, per direction, before
+designing anything:
+- **Session strategy is JWT-only, no server-side sessions/adapter** (`session:
+  { strategy: "jwt" }` in `src/lib/auth.ts`, no `adapter` configured) — so
+  there is no session store to hold a "pending 2FA challenge" between two
+  separate requests. The entire password + TOTP exchange has to complete
+  inside one `authorize()` call, or a challenge-token mechanism would need to
+  be invented from scratch. Chose the former: the client re-submits the same
+  credentials plus a `totpCode` once it learns one is required, so session
+  issuance stays atomic with full authentication (no half-authenticated
+  intermediate state to secure separately).
+- **Confirmed the exact NextAuth v5 mechanism from installed source, not
+  assumed** — per `AGENTS.md`'s warning that this Next.js/NextAuth version's
+  APIs may differ from training data, read `node_modules/@auth/core/errors.js`
+  and `node_modules/next-auth/react.js` directly: a `CredentialsSignin`
+  subclass can set a custom `code` string property, and client-side
+  `signIn('credentials', { redirect: false })` parses that `code` out of the
+  response and returns it in the result object. This is what lets the login
+  page distinguish "wrong password" from "this account needs a 2FA code next"
+  without a redirect-based flow.
+- **No competing auth architecture introduced** — no new React auth context,
+  no new cookie, no new session table; 2FA state (`twoFactorEnabled`,
+  encrypted secret, hashed recovery codes) lives entirely on the existing
+  `User` document, `select: false` by default like `password` already is.
+
+Implementation:
+- **`src/lib/mfa-crypto.ts`** — AES-256-GCM encrypt/decrypt for the TOTP
+  secret at rest, keyed by a new `MFA_ENCRYPTION_KEY` env var (base64, must
+  decode to exactly 32 bytes). The key is read lazily (only when
+  encrypt/decrypt is actually called), so a server with the var unset still
+  boots and runs fine — it only fails, with a clear error, if someone actually
+  tries to set up 2FA. Secrets are never stored in plaintext.
+- **`src/lib/mfa.ts`** — TOTP generation/verification via `otpauth`
+  (SHA1/6-digit/30s, the universal default every authenticator app supports),
+  `window: 1` on verification (tolerates ±30s clock drift). 10 recovery codes
+  per enable, generated with `crypto.randomBytes` and hashed with `bcryptjs`
+  at the same cost factor (12) already used for passwords — never stored or
+  logged in plaintext after generation.
+- **`User` model** — additive fields only: `twoFactorEnabled` (default
+  `false`), `twoFactorSecretEncrypted` (`select: false`),
+  `twoFactorRecoveryCodesHashed` (`select: false`), `twoFactorEnabledAt`. No
+  existing field touched.
+- **`POST /api/auth/2fa/setup`** — authenticated; refuses if already enabled;
+  generates a secret, stores it encrypted (not yet "enabled" — enabling
+  requires proving possession via a real code first), returns the QR code
+  (`qrcode` package, server-rendered PNG data URL) and the manual-entry
+  secret. The raw secret is only ever sent to the browser at this one step,
+  which the user needs anyway to scan the QR/type it into their authenticator
+  app — after this it lives only encrypted in the database.
+- **`POST /api/auth/2fa/enable`** — rate-limited (5 attempts / 15 min per
+  user, matching the existing login throttle pattern); requires a valid code
+  against the stored secret; only on success does it flip
+  `twoFactorEnabled = true`, generate the 10 recovery codes, and return them
+  **once**, in plaintext, in this one response — never retrievable again.
+- **`POST /api/auth/2fa/disable`** — rate-limited; requires the account
+  **password** (not a TOTP code — the standard re-auth pattern, since the
+  point of disabling is often "I lost my authenticator," so requiring the
+  authenticator to disable it would be a lockout trap); clears all 2FA fields
+  on success.
+- **`GET /api/auth/2fa/status`** — returns `{ enabled, enabledAt }` for the
+  current user only.
+- **Login challenge flow** (`src/lib/auth.ts`, `src/app/login/page.tsx`) — if
+  a user with `twoFactorEnabled` submits correct credentials without a
+  `totpCode`, `authorize()` throws a custom `TwoFactorRequiredError`
+  (`code: "totp_required"`) instead of failing or succeeding; the login page
+  catches this via `result.code`, reveals a code input (email/password fields
+  disabled, not cleared) and re-submits. A wrong code throws
+  `InvalidTotpError` (`code: "totp_invalid"`), shown with a distinct message
+  that also mentions recovery codes are accepted. Both TOTP and recovery
+  codes are checked in the same field; a used recovery code is removed from
+  the stored hash list immediately (one-time use). The existing 5-attempt/
+  15-minute rate limit already covers this path too, since both password and
+  code attempts happen inside the same `authorize()` call keyed by email.
+- **`src/components/settings/TwoFactorSettings.tsx`** — replaces the old
+  fake, permanently-disabled toggle on the Settings → Security tab
+  ("Not available yet") with the real enable/QR/verify/recovery-codes/disable
+  flow, wired to the routes above.
+- **Constraints documented, not silently worked around:** no
+  authentication-provider (Google OAuth) interaction was changed — 2FA only
+  applies to the credentials/password login path, since TOTP is meaningless
+  layered on top of an OAuth provider that already performs its own
+  challenge. `MFA_ENCRYPTION_KEY` documented in `.env.example` with a
+  generation command; **this must be set in Railway's production environment
+  variables before any user can enable 2FA in production** — this is a
+  deployment step for the client, not something this session can set.
+- **19 new tests** (`mfa.test.ts`, `mfa-crypto.test.ts`, `2fa-routes.test.ts`)
+  covering: real TOTP generation/verification (including a sanity check that
+  a wrong code is genuinely rejected, guarding against the route tests
+  passing for the wrong reason), recovery code hashing/matching/case-
+  insensitivity/exhaustion, AES-GCM round-trip and tamper/wrong-key/missing-
+  key failure modes, and all four routes' success and rejection paths
+  (already-enabled guard, wrong code, wrong password, status reporting).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+22/22 suites / 187/187 tests.
