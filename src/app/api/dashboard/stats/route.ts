@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
         Product.countDocuments({ isActive: true }),
         Product.countDocuments({ isActive: true, stockQuantity: { $lt: 10, $gt: 0 } }),
         Product.countDocuments({ isActive: true, stockQuantity: { $lte: 0 } }),
-        User.countDocuments({ role: { $in: ['admin', 'manager', 'cashier'] } }),
+        User.countDocuments({ role: { $in: ['admin', 'manager', 'cashier'] }, isActive: true }),
         Customer.countDocuments({}),
         Sale.countDocuments({ status: 'completed', createdAt: { $gte: today } }),
         Sale.aggregate([

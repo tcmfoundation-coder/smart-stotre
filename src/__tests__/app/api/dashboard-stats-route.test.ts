@@ -100,4 +100,15 @@ describe('GET /api/dashboard/stats', () => {
     // this field is (correctly) never exposed to any role, admin included.
     expect(payload.data.weeklyRevenue).toBeUndefined();
   });
+
+  it('counts only active staff for totalEmployees, not deactivated accounts', async () => {
+    mockSession('admin');
+
+    const request = new NextRequest('http://localhost/api/dashboard/stats');
+    await getDashboardStats(request);
+
+    expect(User.countDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({ isActive: true })
+    );
+  });
 });
