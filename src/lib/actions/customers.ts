@@ -110,6 +110,9 @@ export async function getTopCustomers(limit: number = 10) {
 }
 
 export async function getCustomerAnalytics() {
+  // Security check: exposes revenue/customer analytics - managers and admins only
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {

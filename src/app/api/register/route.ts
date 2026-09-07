@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { User, Role } from '@/models';
-import { auth } from '@/lib/auth';
+import { withAdmin } from '@/lib/api-auth';
 import { rateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function POST(request: NextRequest) {
+  return withAdmin(async (req) => {
   try {
     // Rate limiting: 5 requests per minute per user/IP (strict for user creation)
-    const identifier = getClientIdentifier(request);
+    const identifier = getClientIdentifier(req);
     const rateLimitResult = rateLimit(identifier, 5, 60 * 1000);
-    
+
     if (!rateLimitResult.success) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Too many registration attempts. Please try again later.',
           retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
         },
@@ -22,23 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Only admins can create new users
-    if (session.user.role !== 'admin') {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: Only admins can create users' },
-        { status: 403 }
-      );
-    }
-
-    const { name, email, password, role, phone } = await request.json();
+    const { name, email, password, role, phone } = await req.json();
 
     // Validate input
     if (!name || !email || !password || !role) {
@@ -112,4 +97,5 @@ export async function POST(request: NextRequest) {
       { status: errorResponse.statusCode }
     );
   }
+  })(request);
 }

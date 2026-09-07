@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Role from '@/models/Role';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
+import { escapeRegex } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   return withAdmin(async (req, user) => {
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
       
       let query: any = {};
       if (search) {
-        query.name = { $regex: search, $options: 'i' };
+        query.name = { $regex: escapeRegex(search), $options: 'i' };
       }
       
       const roles = await Role.find(query).sort({ name: 1 });

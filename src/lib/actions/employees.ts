@@ -4,12 +4,15 @@ import connectDB from '@/lib/mongodb';
 import { Employee, User, Branch } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
-import { requireAdmin } from '@/lib/security';
+import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
 
 export async function getEmployees(filters?: {
   search?: string;
   department?: string;
 }) {
+  // Security check: exposes salary - only managers and admins (view_employees)
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -48,6 +51,9 @@ export async function getEmployees(filters?: {
 }
 
 export async function getEmployeeById(id: string) {
+  // Security check: exposes salary - only managers and admins (view_employees)
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -136,6 +142,8 @@ export async function deleteEmployee(id: string) {
 }
 
 export async function updateEmployeePerformance(id: string, performance: any) {
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -153,6 +161,8 @@ export async function updateEmployeePerformance(id: string, performance: any) {
 }
 
 export async function updateEmployeeAttendance(id: string, attendance: any) {
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {

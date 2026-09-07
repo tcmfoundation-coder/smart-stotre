@@ -1,5 +1,6 @@
 'use server';
 
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import { Sale, Product, Expense, Customer, AIReport } from '@/models';
 import { requireAuth } from '@/lib/security';
@@ -385,11 +386,17 @@ export async function predictSales(productId: string, days: number = 30) {
   await requireAuth();
   await connectDB();
 
-  // Get historical sales data for the product
+  if (!mongoose.isValidObjectId(productId)) {
+    throw new Error('Invalid product id');
+  }
+
+  // Get historical sales data for the product. Aggregation pipelines don't
+  // auto-cast $match values against the schema the way Model.find() does, so
+  // productId must be cast to a real ObjectId or this will never match anything.
   const historicalSales = await Sale.aggregate([
     { $match: { status: 'completed' } },
     { $unwind: '$items' },
-    { $match: { 'items.productId': productId } },
+    { $match: { 'items.productId': new mongoose.Types.ObjectId(productId) } },
     {
       $group: {
         _id: {

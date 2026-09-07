@@ -282,8 +282,8 @@ export async function createSale(data: {
     total,
     paymentMethod: data.paymentMethod,
     pointsEarned,
-    branchId: data.branchId,
-    cashierId: data.cashierId,
+    branchId: authUser.branchId || data.branchId,
+    cashierId: authUser.id,
   });
 
   // Send WhatsApp thank you message if customer phone is available

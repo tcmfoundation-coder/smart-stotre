@@ -804,3 +804,112 @@ to implement or leave its dead UI; keep auditing for anything not yet found.
   now resolved.
 - **StockAdjustment approve/reject** — see §6 "Missing endpoints," now
   implemented based on strong architectural evidence (documented in full there).
+
+**General audit sweep** (dispatched to cover ground beyond the items already
+tracked above) found a genuinely broken core page and several new instances of
+already-established bug classes. All fixed, all decision-free:
+
+- [x] **`dashboard/products` (Product Catalog) broken end-to-end for every
+  role** — `useProducts.ts`'s `Product` interface declared `price`/`cost`/
+  `stock`/`category`/`status`, but the real schema and every API response use
+  `sellingPrice`/`buyingPrice`/`stockQuantity`/`categoryId`/`isActive`. Result:
+  every price/stock/cost on the page rendered as `NaN`/`undefined`; the stock
+  filter compared `undefined` to numbers so every product silently showed "In
+  Stock" regardless of truth; the category filter used hardcoded fake strings
+  (`beverages`, `food`...) that, once selected, threw a Mongoose `CastError`
+  trying to match a non-ObjectId string, breaking the whole page into its error
+  state; the Stock Level filter's `lowStock`/`outOfStock` params were sent but
+  never read by the API at all. The same bad field names had also leaked into
+  `PurchaseOrderForm` (every new PO line item's unit cost silently defaulted to
+  $0) and `StockAdjustmentForm` ("Stock: undefined" in the product picker).
+  **Fixed** — corrected the interface to match the real schema; the category
+  filter now uses `useCategories()` for real ids; the API validates the
+  category param is a real ObjectId (`mongoose.isValidObjectId`) before using
+  it and now actually implements `lowStock`/`outOfStock` (`$expr` comparing
+  `stockQuantity` to `minStockLevel`, and `stockQuantity <= 0` respectively);
+  both dependent forms updated to the real field names. 4 new tests. Net lint
+  improvement (fixing the types let several `any` casts be removed).
+- [x] **Two more instances of the "stale JWT privilege" bug already fixed
+  elsewhere** (§8) — `api/register/route.ts` and
+  `api/user-activity/active/route.ts` both checked `session.user.role !==
+  'admin'` directly against the cached JWT claim instead of re-verifying
+  against the database, unlike every other admin-gated route in the app
+  (already hardened to use `withAdmin`/`getCurrentUser` specifically to close
+  this window — a demoted-but-still-logged-in admin could keep using these
+  two routes until their token naturally expired). **Fixed** — both now go
+  through `withAdmin`, matching the rest of the app. 3 new tests, including
+  one asserting a demoted admin is rejected by each route.
+  - Separately, `register/page.tsx` is a fully **public** page (no session
+    gate, linked from the login screen's "Sign Up") offering a Designation
+    dropdown with Cashier/Manager/**Admin** — but its endpoint requires an
+    existing admin session, so the page's actual anonymous audience can never
+    successfully submit it. **Not fixed — this is a product decision, not a
+    bug fix.** Whether `/register` should be genuine public self-signup (and
+    if so, at what default/allowed role — Admin as a public self-signup
+    option would be a severe privilege-escalation risk), or should instead
+    redirect to the already-working, already-fixed "Create User" flow under
+    `/dashboard/users` (admin-only, has a real password field as of this
+    audit), is a call only the client can make. Flagging rather than guessing.
+- [x] **Unauthenticated reads leaking salary/revenue/supplier-debt data to
+  lower-privileged roles** — with no edge `middleware.ts` and `rbac.ts`'s
+  `canAccessRoute`/`getAllowedRoutes` being dead code (never referenced
+  outside `rbac.ts` itself), nothing centrally enforces per-role page access;
+  combined with these actions having zero auth check, this was live, not
+  theoretical:
+  - `lib/actions/employees.ts`'s `getEmployees`/`getEmployeeById` return
+    `salary` and had no auth check — any authenticated cashier navigating
+    directly to `/dashboard/employees` (or `/dashboard/employees/[id]`) could
+    see full company payroll. **Fixed** — both now require
+    `requireManagerOrAdmin()` (matches `rbac.ts`'s `view_employees` grant).
+    Also added the same check to `updateEmployeePerformance`/
+    `updateEmployeeAttendance` (zero live callers today, same
+    no-live-exposure bucket as the already-flagged `lib/actions/dashboard.ts`,
+    fixed anyway since it was a one-line addition while already in the file).
+  - `lib/actions/customers.ts`'s `getCustomerAnalytics` (total revenue,
+    average spend, loyalty distribution) had no auth check, and
+    `dashboard/customers/analytics` (linked from a button visible to every
+    role on the customers list page) calls it directly from a Server
+    Component. **Fixed** — added `requireManagerOrAdmin()` (matches
+    `view_customer_reports`).
+  - `lib/actions/suppliers.ts`'s `getSuppliers`/`getSupplierById` (outstanding
+    debt, payment terms) had no auth check at all. **Fixed** — added
+    `requireManagerOrAdmin()` (matches the single bundled `manage_suppliers`
+    permission). While in this file: `createSupplier`/`updateSupplier`/
+    `deleteSupplier` were all gated `requireAdmin()`-only, contradicting
+    `rbac.ts`'s single `manage_suppliers` permission (granted to admin **and**
+    manager) — the same "inconsistent enforcement" class already fixed for
+    products earlier in this audit. Realigned all three to
+    `requireManagerOrAdmin()`. Also added the same check to
+    `updateSupplierDebt` (zero live callers today, same bucket as above).
+- [x] **AI Sales Prediction always returned zero** — `predictSales()`'s
+  aggregation pipeline did `$match: {'items.productId': productId}` with
+  `productId` as a plain string; unlike `Model.find()`, an aggregation
+  `$match` does **not** auto-cast values against the schema, so a JS string
+  can never equal the real `ObjectId` stored in `items.productId` — the match
+  always returned 0 documents, so every prediction was 0 regardless of real
+  sales history (distinct from the already-fixed R-5, which only addressed the
+  unit-price fallback in this same function). **Fixed** — cast to
+  `new mongoose.Types.ObjectId(productId)` before matching, with an
+  `isValidObjectId` guard so a malformed id throws a clear error instead of a
+  silent empty result. 2 new tests.
+- [x] **Suppliers list Delete button always 404'd** — `useDeleteSupplier`
+  targets `DELETE /api/suppliers/${id}`, but only `api/suppliers/route.ts`
+  (collection-level GET/POST) existed — the exact same "list page's button
+  calls a route that was never built" bug already fixed for customers.
+  **Fixed** — added `api/suppliers/[id]/route.ts` (GET/PUT/DELETE),
+  delegating to the existing, already-secured `getSupplierById`/
+  `updateSupplier`/`deleteSupplier` actions, mirroring the customers `[id]`
+  route pattern exactly.
+- [x] **Unescaped `$regex` in `api/roles/route.ts`** — the one route missed in
+  the earlier regex-escaping pass (§10); every sibling route (categories,
+  products, users, purchase-orders, stock-adjustments) already uses
+  `escapeRegex()`. **Fixed** — wrapped with the existing helper.
+- [x] **`createSale`'s `Transaction` record still trusted caller-supplied
+  identity** — even after the `Sale` record itself was fixed earlier in this
+  audit to use `authUser.id`/`authUser.branchId`, the `Transaction.create`
+  call a few lines later in the same function still used raw
+  `data.cashierId`/`data.branchId` from the request body. Low real-world
+  impact (`Transaction` is write-only, confirmed via grep it's never read back
+  anywhere — same situation as the write-only `AIReport`/R-9), but a leftover
+  instance of the exact bug already fixed elsewhere in this same function.
+  **Fixed** — now uses `authUser.id`/`authUser.branchId` too.
