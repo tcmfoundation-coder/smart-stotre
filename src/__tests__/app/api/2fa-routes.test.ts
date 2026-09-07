@@ -26,6 +26,12 @@ jest.mock('@/models/User', () => ({
 
 const ORIGINAL_KEY = process.env.MFA_ENCRYPTION_KEY;
 
+// @types/node marks NODE_ENV as read-only; this test needs to flip it to
+// verify production behavior specifically.
+function setNodeEnv(value: string | undefined) {
+  (process.env as { NODE_ENV?: string }).NODE_ENV = value;
+}
+
 function mockSession() {
   (auth as jest.Mock).mockResolvedValue({
     user: { id: 'user-1', email: 'user@example.com', role: 'cashier', name: 'Test User' },
@@ -89,6 +95,32 @@ describe('2FA API routes', () => {
       const response = await setupTwoFactor(request);
 
       expect(response.status).toBe(400);
+    });
+
+    it('surfaces a clear config error - even in production - when MFA_ENCRYPTION_KEY is unset', async () => {
+      mockDbUserForAuth();
+      (User.findById as jest.Mock)
+        .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ role: 'cashier', isActive: true }) })
+        .mockReturnValueOnce(Promise.resolve({ email: 'user@example.com', twoFactorEnabled: false, save: jest.fn() }));
+
+      const originalEnv = process.env.NODE_ENV;
+      delete process.env.MFA_ENCRYPTION_KEY;
+      setNodeEnv('production');
+      try {
+        const request = new NextRequest('http://localhost/api/auth/2fa/setup', { method: 'POST' });
+        const response = await setupTwoFactor(request);
+        const payload = await response.json();
+
+        // This is an operational AppError, so handleApiError must show the
+        // real message even in production - a generic "unexpected error"
+        // would leave whoever hit this with no way to know the server is
+        // simply missing MFA_ENCRYPTION_KEY.
+        expect(response.status).toBe(503);
+        expect(payload.error).toMatch(/MFA_ENCRYPTION_KEY is not set/);
+      } finally {
+        process.env.MFA_ENCRYPTION_KEY = crypto.randomBytes(32).toString('base64');
+        setNodeEnv(originalEnv);
+      }
     });
   });
 
