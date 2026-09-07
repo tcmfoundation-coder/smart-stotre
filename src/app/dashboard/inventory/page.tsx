@@ -137,7 +137,7 @@ export default function InventoryPage() {
                   <Plus className="h-6 w-6" />
                   <span>ADD PRODUCT</span>
                 </Link>
-                <Link href="/dashboard/inventory/categories" className="flex items-center justify-center space-x-2 px-6 py-4 bg-card border border-border rounded-2xl text-muted-foreground font-bold hover:bg-secondary transition-all shadow-sm">
+                <Link href="/dashboard/categories" className="flex items-center justify-center space-x-2 px-6 py-4 bg-card border border-border rounded-2xl text-muted-foreground font-bold hover:bg-secondary transition-all shadow-sm">
                   <Package className="h-5 w-5" />
                   <span>Categories</span>
                 </Link>

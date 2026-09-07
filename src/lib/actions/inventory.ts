@@ -189,57 +189,6 @@ export async function getCategories() {
   return JSON.parse(JSON.stringify(categories));
 }
 
-export async function createCategory(data: any) {
-  // Security check: Managers and admins can manage categories
-  await requireManagerOrAdmin();
-
-  const db = await connectDB();
-
-  if (!db) {
-    throw new Error('Database not connected');
-  }
-
-  const category = await Category.create(data);
-
-  revalidatePath('/dashboard/inventory');
-  return JSON.parse(JSON.stringify(category));
-}
-
-export async function updateCategory(id: string, data: any) {
-  // Security check: Managers and admins can manage categories
-  await requireManagerOrAdmin();
-
-  const db = await connectDB();
-
-  if (!db) {
-    throw new Error('Database not connected');
-  }
-
-  const category = await Category.findByIdAndUpdate(
-    id,
-    { ...data },
-    { new: true, runValidators: true }
-  );
-
-  revalidatePath('/dashboard/inventory');
-  return JSON.parse(JSON.stringify(category));
-}
-
-export async function deleteCategory(id: string) {
-  // Security check: Managers and admins can manage categories
-  await requireManagerOrAdmin();
-
-  const db = await connectDB();
-
-  if (!db) {
-    throw new Error('Database not connected');
-  }
-
-  await Category.findByIdAndUpdate(id, { isActive: false });
-
-  revalidatePath('/dashboard/inventory');
-  return { success: true };
-}
 
 export async function getLowStockProducts() {
   const db = await connectDB();
