@@ -71,9 +71,9 @@ export function StockAdjustmentForm({ open, onOpenChange, onSuccess }: StockAdju
               <SelectValue placeholder="Select product" />
             </SelectTrigger>
             <SelectContent>
-              {products?.map((product: any) => (
+              {products?.map((product) => (
                 <SelectItem key={product._id} value={product._id}>
-                  {product.name} (Stock: {product.stock})
+                  {product.name} (Stock: {product.stockQuantity})
                 </SelectItem>
               ))}
             </SelectContent>

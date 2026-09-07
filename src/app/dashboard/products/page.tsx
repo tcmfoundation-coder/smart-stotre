@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useProducts, useDeleteProduct, type Product } from '@/hooks/useProducts';
+import { useCategories } from '@/hooks/useCategories';
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
@@ -20,10 +21,11 @@ export default function ProductsPage() {
 
   const { data: products, isLoading, error, refetch } = useProducts({
     search: searchQuery,
-    category: categoryFilter,
+    category: categoryFilter !== 'all' ? categoryFilter : undefined,
     lowStock: stockFilter === 'low-stock',
     outOfStock: stockFilter === 'out-of-stock',
   });
+  const { data: categories } = useCategories();
 
   const deleteProduct = useDeleteProduct();
 
@@ -45,9 +47,9 @@ export default function ProductsPage() {
     router.push(`/dashboard/inventory/${id}`);
   };
 
-  const getStockStatus = (product: any) => {
-    if (product.stock === 0) return { label: 'Out of Stock', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
-    if (product.stock <= (product.lowStockThreshold ?? 10)) return { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' };
+  const getStockStatus = (product: Product) => {
+    if (product.stockQuantity === 0) return { label: 'Out of Stock', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
+    if (product.stockQuantity <= (product.minStockLevel ?? 10)) return { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' };
     return { label: 'In Stock', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
   };
 
@@ -75,10 +77,9 @@ export default function ProductsPage() {
               className="px-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="all">All Categories</option>
-              <option value="beverages">Beverages</option>
-              <option value="food">Food</option>
-              <option value="bakery">Bakery</option>
-              <option value="dairy">Dairy</option>
+              {categories?.map((cat) => (
+                <option key={cat._id} value={cat._id}>{cat.name}</option>
+              ))}
             </select>
             <select
               value={stockFilter}
@@ -112,7 +113,7 @@ export default function ProductsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {products?.map((product: any, index: number) => {
+              {products?.map((product, index: number) => {
                 const stockStatus = getStockStatus(product);
                 return (
                 <motion.div
@@ -137,19 +138,21 @@ export default function ProductsPage() {
                       <div className="space-y-2 mb-4">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Category</span>
-                          <span className="font-medium text-foreground">{product.categoryId?.name || 'N/A'}</span>
+                          <span className="font-medium text-foreground">
+                            {typeof product.categoryId === 'object' ? product.categoryId?.name || 'N/A' : 'N/A'}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Stock</span>
-                          <span className="font-medium text-foreground">{product.stock} units</span>
+                          <span className="font-medium text-foreground">{product.stockQuantity} units</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Price</span>
-                          <span className="font-bold text-foreground">{formatCurrency(product.price)}</span>
+                          <span className="font-bold text-foreground">{formatCurrency(product.sellingPrice)}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Cost</span>
-                          <span className="font-medium text-foreground">{formatCurrency(product.cost)}</span>
+                          <span className="font-medium text-foreground">{formatCurrency(product.buyingPrice || 0)}</span>
                         </div>
                       </div>
 

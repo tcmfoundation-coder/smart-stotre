@@ -61,12 +61,12 @@ export function PurchaseOrderForm({ open, onOpenChange, onSuccess }: PurchaseOrd
   const calculateTotal = (quantity: number, unitPrice: number) => quantity * unitPrice;
 
   const handleProductChange = (index: number, productId: string) => {
-    const product = products?.find((p: any) => p._id === productId);
+    const product = products?.find((p) => p._id === productId);
     if (product) {
       form.setValue(`items.${index}.productName`, product.name);
-      form.setValue(`items.${index}.unitPrice`, product.cost || product.price || 0);
+      form.setValue(`items.${index}.unitPrice`, product.buyingPrice || 0);
       const quantity = form.watch(`items.${index}.quantity`);
-      form.setValue(`items.${index}.total`, calculateTotal(quantity, product.cost || product.price || 0));
+      form.setValue(`items.${index}.total`, calculateTotal(quantity, product.buyingPrice || 0));
     }
   };
 
@@ -172,9 +172,9 @@ export function PurchaseOrderForm({ open, onOpenChange, onSuccess }: PurchaseOrd
                       <SelectValue placeholder="Select product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products?.map((product: any) => (
+                      {products?.map((product) => (
                         <SelectItem key={product._id} value={product._id}>
-                          {product.name} - ${product.cost || product.price || 0}
+                          {product.name} - ${product.buyingPrice || 0}
                         </SelectItem>
                       ))}
                     </SelectContent>

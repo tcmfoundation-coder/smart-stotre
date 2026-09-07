@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { withAuth, withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest) {
       const searchParams = request.nextUrl.searchParams;
       const search = searchParams.get('search') || '';
       const category = searchParams.get('category') || '';
+      const lowStock = searchParams.get('lowStock') === 'true';
+      const outOfStock = searchParams.get('outOfStock') === 'true';
       const page = parseInt(searchParams.get('page') || '1');
       const limit = parseInt(searchParams.get('limit') || '20');
 
@@ -28,11 +31,18 @@ export async function GET(request: NextRequest) {
           { barcode: { $regex: safeSearch, $options: 'i' } }
         ];
       }
-      
-      if (category && category !== 'all') {
+
+      if (category && category !== 'all' && mongoose.isValidObjectId(category)) {
         query.categoryId = category;
       }
-      
+
+      if (outOfStock) {
+        query.stockQuantity = { $lte: 0 };
+      } else if (lowStock) {
+        query.$expr = { $lte: ['$stockQuantity', '$minStockLevel'] };
+        query.stockQuantity = { $gt: 0 };
+      }
+
       const skip = (page - 1) * limit;
       const products = await Product.find(query)
         .populate('categoryId', 'name')
