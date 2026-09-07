@@ -1168,3 +1168,112 @@ Implementation:
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 22/22 suites / 187/187 tests.
+
+**Inventory Reports — defensible turnover formula + real unified movement feed:**
+
+`dashboard/inventory-reports/page.tsx` was 100% hardcoded fake data (fixed
+metric values, a 5-row fake category table, 4 fake "recent movements" with
+2024 dates) with no backend at all. Investigated the actual data model before
+choosing any calculation, per direction:
+
+- **`Sale.items[]` stores `buyingPrice` (cost) per line, immutably, at the
+  moment of sale** (verified in `src/models/Sale.ts`) — so real, exact
+  historical COGS is directly computable from existing data: no estimation
+  needed for the numerator of the turnover formula.
+- **`Product.stockQuantity` is mutated in exactly three places in the entire
+  codebase** (confirmed by grepping every `stockQuantity` write site): sales
+  decrement it (`lib/actions/pos.ts`), approved stock adjustments apply their
+  delta at approval time (the Phase B workflow), and restocked returns
+  increment it (Phase C). **Purchase orders never touch it anywhere** — there
+  is no endpoint that transitions a `PurchaseOrder` past `'approved'` into
+  `'delivered'`, and even the `updateStock()` server action that could apply
+  a delivery is dead code with zero callers (confirmed by grep). This is a
+  real architectural gap, not a guess: the schema declares `status:
+  'delivered'` and an `actualDelivery` field, but nothing wires a delivery to
+  inventory. Fixing that would mean deciding real business rules (partial
+  receipt handling, over/delivery tolerance, whether a separate goods-
+  received record is needed) that this session was told not to invent, so it
+  is **flagged below as its own decision item**, not silently implemented.
+- Because those three sources are the *only* mutators, and because no
+  periodic inventory snapshot is stored anywhere, **historical quantity at
+  any past instant can be validly reconstructed**: take a product's current
+  quantity and reverse every one of those three event types that happened
+  after that instant. This is exact arithmetic over real records, not an
+  estimate. What genuinely isn't available is **historical cost** —
+  `Product.buyingPrice` is a single mutable current value with no price-
+  history table — so both ends of the reconstruction are valued at *today's*
+  buying price. This is the one real limitation, and it's returned by the API
+  and shown directly in the report UI rather than hidden.
+
+Implementation, following the requested `COGS / Average Inventory` formula
+with the strongest data that exists:
+
+- **`GET /api/inventory-reports`** (`view_inventory_reports` permission,
+  already existed in `rbac.ts`, granted to admin+manager only — matches how
+  every other report route in this app is gated):
+  - `endingInventoryValue` = current on-hand quantity × current buying price,
+    summed over active products (optionally filtered by category).
+  - `beginningInventoryValue` = the same, using each product's quantity
+    reconstructed as of the period's start (reversing sales/adjustments/
+    restocked-returns dated after that instant).
+  - `averageInventoryValue` = `(beginning + ending) / 2`.
+  - `cogs` = gross cost of items sold in the period, **net of** the cost of
+    items that were both returned and physically restocked in that same
+    period — looked up from the *original sale's* recorded buying price
+    (not today's), which is the actually-correct historical cost for that
+    unit.
+  - `turnoverRatio` = `cogs / averageInventoryValue`, returned as `null`
+    (never a fabricated `0` or `NaN`) when average inventory is `0` — e.g. a
+    brand-new store with no stock history yet.
+  - Reconstructed quantities are floored at `0` as a defensive guard against
+    ever displaying a nonsensical negative currency figure if some future
+    data inconsistency existed outside the three tracked mutation paths; this
+    doesn't fabricate a number, it only prevents an impossible one from
+    rendering.
+  - Real category breakdown (replacing the 5 hardcoded fake rows), same
+    methodology grouped by `categoryId`.
+  - `limitations: string[]` in the response spells out the current-cost-basis
+    caveat and the purchase-order gap in plain language; the frontend renders
+    both directly instead of presenting the numbers as unqualified fact.
+- **`GET /api/inventory-reports/movements`** (same permission) — merges
+  Sales, approved Stock Adjustments, and restocked Returns into one
+  chronologically-sorted, typed feed (`SALE` / `ADJUSTMENT` / `RETURN`,
+  `quantityChange` signed +/-, product/reference/performer per entry),
+  read-only over the source collections (nothing is ever written back).
+  `PURCHASE` and `OTHER` are real values in the type union (for forward
+  compatibility once/if a receiving workflow is decided) but are never
+  populated today, for the same reason given above — including them would
+  mean showing a stock increase that never actually happened to
+  `Product.stockQuantity`, which would make the feed not reconcile with real
+  stock and actively mislead rather than inform. A `notes[]` field explains
+  this in the same response rather than silently omitting purchase orders
+  with no explanation. Supports type/search/product filtering and pagination.
+- **Real frontend**: `dashboard/inventory-reports/page.tsx` rewritten — real
+  metric cards, a visible limitations panel, a real category table, and a
+  paginated/filterable movement feed with a distinct badge per movement type
+  and a note explaining the purchase-order gap. CSV export now exports real
+  numbers instead of hardcoded ones.
+- **6 new tests** (`inventory-reports-route.test.ts`), including one that
+  hand-verifies the exact reconstructed-average-inventory arithmetic (a
+  known starting quantity, one sale reversed, asserting the exact beginning/
+  ending/average/turnover numbers), one confirming per-product
+  `minStockLevel` (not a hardcoded threshold) drives low/out-of-stock counts,
+  one confirming unrestocked return items are excluded from the movement
+  feed, one confirming type filtering skips querying collections that were
+  filtered out entirely, and a permission-denial check for a cashier.
+
+**Flagged as requiring a decision (not implemented, per direction not to
+invent business rules):** wiring Purchase Order delivery to actually
+increase `Product.stockQuantity`. The schema already has the vocabulary for
+it (`status: 'delivered'`, `actualDelivery`), but no endpoint exists to reach
+that status, and building one raises real questions this session can't
+answer alone: should partial delivery (receiving less than the ordered
+quantity) be supported, is over-delivery allowed, and should there be a
+distinct goods-received record for audit purposes separate from the PO
+document itself? Until decided, purchase orders remain procurement paperwork
+only and are correctly excluded from both the movement feed and the COGS/
+turnover numbers above (including them would fabricate stock events that
+never happened).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+23/23 suites / 193/193 tests.
