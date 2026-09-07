@@ -17,7 +17,11 @@ export async function getCustomers(filters?: {
     throw new Error('Database connection failed');
   }
 
-  const query: any = {};
+  // isActive is a new field - existing documents predating it have no value
+  // for it at all, so match "true or absent" ($ne: false) rather than an
+  // exact { isActive: true } equality, which would hide every customer that
+  // existed before this field was introduced.
+  const query: any = { isActive: { $ne: false } };
 
   if (filters?.search) {
     const safeSearch = escapeRegex(filters.search);
@@ -92,7 +96,11 @@ export async function deleteCustomer(id: string) {
     throw new Error('Database connection failed');
   }
 
-  await Customer.findByIdAndDelete(id);
+  // Soft delete, matching deleteProduct/deleteBranch/deleteSupplier/
+  // deleteCategory - a hard delete here would orphan every Sale/Loyalty/
+  // Transaction/WhatsAppMessage document that references this customer by
+  // id, permanently losing who a historical sale was actually for.
+  await Customer.findByIdAndUpdate(id, { isActive: false });
 
   revalidatePath('/dashboard/customers');
   return { success: true };
