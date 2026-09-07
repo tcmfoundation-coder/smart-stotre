@@ -15,6 +15,7 @@ export default function WhatsAppOrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -39,10 +40,12 @@ export default function WhatsAppOrdersPage() {
   const loadOrders = async (search?: string) => {
     try {
       setLoading(true);
+      setError(false);
       const data = await getOrders('whatsapp', search ? { search } : undefined);
       setOrders(data);
-    } catch (error) {
-      console.error('Error loading orders:', error);
+    } catch (err) {
+      console.error('Error loading orders:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -135,6 +138,17 @@ export default function WhatsAppOrdersPage() {
             <div className="p-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-emerald-600 border-r-transparent"></div>
               <p className="mt-4 text-sm font-semibold text-slate-400">Loading WhatsApp orders...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <MessageSquare className="h-16 w-16 text-red-400 mx-auto mb-4" />
+              <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">Failed to load WhatsApp orders</p>
+              <button
+                onClick={() => loadOrders(searchQuery || undefined)}
+                className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold"
+              >
+                Retry
+              </button>
             </div>
           ) : filteredOrders.length === 0 ? (
             <div className="p-12 text-center">

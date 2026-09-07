@@ -14,6 +14,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { data: session } = useSession();
   const role = (session?.user?.role as string | undefined) || 'cashier';
@@ -31,10 +32,12 @@ export default function EmployeesPage() {
   const loadEmployees = async (search?: string) => {
     try {
       setLoading(true);
+      setError(false);
       const data = await getEmployees(search ? { search } : undefined);
       setEmployees(data);
-    } catch (error) {
-      console.error('Error loading employees:', error);
+    } catch (err) {
+      console.error('Error loading employees:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -157,6 +160,17 @@ export default function EmployeesPage() {
             <div className="p-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
               <p className="mt-4 text-sm font-semibold text-slate-400">Loading employees...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <Users className="h-16 w-16 text-red-400 mx-auto mb-4" />
+              <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">Failed to load employees</p>
+              <button
+                onClick={() => loadEmployees(searchQuery || undefined)}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold"
+              >
+                Retry
+              </button>
             </div>
           ) : employees.length === 0 ? (
             <div className="p-12 text-center">
