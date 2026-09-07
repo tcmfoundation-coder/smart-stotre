@@ -1,7 +1,7 @@
 'use server';
 
 import connectDB from '@/lib/mongodb';
-import { Product, Category, Supplier } from '@/models';
+import { Product, Category } from '@/models';
 import { generateSKU, generateBarcode, escapeRegex } from '@/lib/utils';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
@@ -226,14 +226,3 @@ export async function getExpiringProducts() {
   return JSON.parse(JSON.stringify(products));
 }
 
-export async function getSuppliers() {
-  const db = await connectDB();
-  
-  if (!db) {
-    return [];
-  }
-
-  const suppliers = await Supplier.find({ isActive: true }).sort({ name: 1 });
-
-  return JSON.parse(JSON.stringify(suppliers));
-}
