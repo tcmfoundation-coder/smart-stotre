@@ -366,15 +366,39 @@ no seeded database in this sandbox)
   `/api/inventory/products` / `/api/sales/analytics` directly instead.
 
 **Real bug — wrong record mutated:**
-- [ ] `DELETE /api/users/[id]` reads `id` from the route params but never uses it —
-  it calls `User.findByIdAndUpdate(user._id, ...)` using the **calling admin's own
-  id** from the auth check, not the target id in the URL. Deactivating any user in
-  the Users list actually deactivates your own account, and reports success as if it
-  worked correctly.
+- [x] `DELETE /api/users/[id]` — stale duplicate entry; this was the same
+  wrong-target-delete bug already fixed and documented in §8 ("Wrong-target
+  delete/deactivate"). Verified against the current code: it correctly uses the
+  route's `id` param, not the caller's own id. Leaving this line struck through
+  rather than deleting it, so the doc's history stays honest about having had a
+  stale duplicate.
 
 **Missing endpoints the schema/workflow implies should exist:**
-- [ ] No `[id]` route for `PurchaseOrder` at all (approve/deliver/cancel transitions).
-- [ ] No `[id]` route for `StockAdjustment` approve/reject (see above).
+- [x] `PurchaseOrder` had no `[id]/approve` route at all, even though the
+  purchase-orders list page has a real, wired "Approve" button
+  (`useApprovePurchaseOrder`) that's reachable on every order (new orders default
+  to `status: 'pending'` per the schema) — clicking it always 404'd. **Fixed** —
+  added `POST /api/purchase-orders/[id]/approve`, gated by the
+  `approve_purchase_orders` permission (already defined in `rbac.ts` for
+  admin+manager, never wired to any route before this), only valid from
+  `pending`. 4 new passing tests. Did not build `deliver`/`cancel` endpoints or a
+  general `[id]` GET/PUT/DELETE route — `usePurchaseOrder(id)`,
+  `useUpdatePurchaseOrder`, `useDeletePurchaseOrder` exist in the hook file but
+  are never called from any page (confirmed via grep), so building routes for
+  them now would be speculative, not a fix for a reachable bug.
+- [!] **`StockAdjustment` approve/reject — needs a decision, not fixed.** The
+  frontend has real, wired Approve/Reject buttons
+  (`useApproveStockAdjustment`/`useRejectStockAdjustment`) for adjustments with
+  `status: 'pending'` (the schema's own default) — but `POST
+  /api/stock-adjustments` **always** creates records with `status: 'approved'`
+  and applies the stock change immediately and unconditionally in the same
+  request. So today, no adjustment is ever actually `pending` — the Approve/Reject
+  buttons are currently unreachable dead UI, not just "missing a route." Building
+  the missing `[id]/approve`/`[id]/reject` routes wouldn't fix anything on their
+  own; making them reachable would mean changing stock adjustments from
+  "immediate effect" to "request now, adjust stock only on approval" — a real
+  inventory-workflow change, not a targeted fix. Flagging for a decision rather
+  than guessing at intended behavior.
 - [ ] No route backing `Promotion` beyond the mock list/create.
 
 ---
@@ -675,6 +699,16 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   (`log.timestamp.toLocaleString()` called on a JSON string) and replaced the
   Export button's 404'ing endpoint + `alert()` with a real client-side CSV export,
   matching the working pattern already used by the `whatsapp-messages` page.
+
+- `PurchaseOrder` approve endpoint: the list page's "Approve" button was real and
+  reachable (new orders default to `pending`) but always 404'd —
+  `POST /api/purchase-orders/[id]/approve` didn't exist. Fixed, gated by the
+  `approve_purchase_orders` permission that was already defined but never wired
+  anywhere. 4 new tests. Also found and flagged (not fixed — needs a decision):
+  `StockAdjustment`'s matching Approve/Reject buttons are currently unreachable
+  dead UI, because `POST /api/stock-adjustments` always auto-approves and applies
+  the stock change immediately — there's no code path that ever produces a
+  `pending` record for those buttons to act on.
 
 **Still open, in priority order per the working plan:** the remaining mock/fake
 features in §9 (Backup, Financial/Inventory Reports pages themselves, Returns,
