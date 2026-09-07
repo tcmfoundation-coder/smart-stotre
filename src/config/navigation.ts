@@ -117,7 +117,7 @@ export const ADMIN_NAVIGATION: NavGroup[] = [
     title: 'System',
     items: [
       { name: 'System Control', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
-      { name: 'Backup & Restore', href: '/dashboard/backup', icon: Database, roles: ['admin'] },
+      { name: 'Backup & Export', href: '/dashboard/backup', icon: Database, roles: ['admin'] },
     ]
   },
 ];

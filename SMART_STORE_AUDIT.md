@@ -1277,3 +1277,123 @@ never happened).
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 23/23 suites / 193/193 tests.
+
+**Backup & Restore — architecture investigated and documented before any
+storage mechanism was chosen, per explicit direction:**
+
+`dashboard/backup/page.tsx` and `api/backup/route.ts` were both 100% fake:
+`GET` returned two hardcoded 2024 backup entries, `POST {action:'create'}`
+returned a fabricated `"2.4 GB"` size after doing no work at all, and `POST
+{action:'restore'}` returned `"Backup restored successfully"` while touching
+nothing — and all of it, including the fake restore, was gated only by
+`withAuth` (any authenticated role, cashier included), not even the
+`backup_restore` permission `rbac.ts` already declares for this exact page.
+This is worse than most mock functionality found so far: it actively told an
+admin their data was backed up or restored when neither happened.
+
+Investigated deployment architecture first, as directed:
+
+- **Single Next.js service, no separate backend.** Every backend endpoint in
+  this repo is a `src/app/api/**` route handler in the same Next.js app —
+  there is no standalone API service to consider separately for this feature.
+- **`MONGODB_URI` is a `mongodb+srv://...@cluster.mongodb.net` string**
+  (`.env.example`) — MongoDB **Atlas** (managed, cloud-hosted), not a
+  self-hosted Mongo instance running on Railway.
+- **No object storage is configured anywhere in this stack** (no S3/R2/GCS
+  credentials or SDK anywhere in the codebase or `.env.example` — Cloudinary
+  is image-upload only, unrelated). There is nowhere to durably store a
+  generated backup file server-side even if one were produced.
+- **Railway's web service filesystem is ephemeral** — anything written to
+  local disk does not survive a redeploy/restart and isn't shared if the
+  service ever scales to multiple instances. A "list of backup files on
+  disk" (the shape the old mock implied) would look real until the next
+  deploy silently erased it — this is exactly the kind of fake durability the
+  direction warned against.
+- **`mongodump`/`mongorestore` (MongoDB Database Tools) are not present in
+  this app's runtime.** They're not part of Next.js's Node base image and
+  nothing in this repo's build config installs them. Shelling out to them
+  from a route handler would fail with "command not found" in production;
+  making that work would require adding a Nixpacks/Dockerfile step to the
+  deployment image — an infrastructure change, not an application code
+  change, and outside what this session can safely make unilaterally.
+
+Recommended production architecture (documented, not silently substituted):
+
+1. **Primary path — MongoDB Atlas Cloud Backups.** Atlas clusters on M10+
+   tiers include continuous, point-in-time-recoverable snapshots configured
+   entirely on the Atlas side — zero application code. This is the standard,
+   low-risk way to get real disaster-recovery backups for this database. If
+   the current cluster is on a free/shared tier (M0/M2/M5), Cloud Backups
+   aren't available there; enabling this needs an Atlas tier upgrade, which
+   is a billing decision for the account owner, not something this session
+   can enable.
+2. **Complementary path — implemented now.** An on-demand, admin-only export
+   that reads every collection through the app's existing server-side
+   Mongoose connection and streams it directly to the requesting admin's
+   browser as a downloadable JSON file. Needs no new infrastructure, no new
+   credentials, and writes nothing to server-side disk — the HTTP response
+   *is* the backup, so there's nothing left behind to secure or clean up.
+   This is the "application-level backup/export without external
+   infrastructure" the direction said to implement if it could be done
+   safely, and it can.
+3. **Deliberately not implemented — self-service restore.** Overwriting live
+   production data from an uploaded file, with no server-side structural
+   validation, no dry run, and no automatic pre-restore snapshot, is exactly
+   the kind of destructive, hard-to-reverse action this project's standing
+   rules say never to build without explicit sign-off. It has been left out
+   entirely rather than faked (as the old mock did) or half-built. A real
+   restore should be performed directly against Atlas — either its own
+   point-in-time restore (if Cloud Backups are enabled) or an administrator
+   running `mongorestore` with proper precautions — never as a one-click
+   in-app action. **Flagged as a decision item**: if real in-app restore is
+   ever wanted, it needs an explicit decision on safeguards (confirmation
+   flow, a staging/dry-run target, who is authorized) before any code is
+   written for it.
+4. **Deliberately not implemented — a byte-identical `mongodump` archive.**
+   Possible in principle by shelling out to the MongoDB Database Tools, but
+   only after they're added to the deployment image (see the Nixpacks point
+   above). The JSON export in (2) is today's safe substitute; a real BSON
+   dump needs the infrastructure change first, not an application code
+   change.
+
+What's implemented:
+
+- **`GET /api/backup/export`** (`backup_restore` permission — the one
+  `rbac.ts` already declares for this page, granted to admin only; not
+  invented) streams one JSON file with every model registered in
+  `src/models/index.ts` as a named array, read via `.find().lean()` and
+  written to the response stream one collection at a time (so the full
+  multi-collection export is never held in memory at once, matching this
+  codebase's existing `.find().lean()` idiom rather than introducing cursor-
+  based streaming nothing else in the app uses). A new model added later
+  must be added to the route's explicit list — documented in-line as a
+  deliberate simplicity/testability trade-off over enumerating every raw
+  MongoDB collection generically.
+- **Hashed passwords and encrypted MFA secrets are included exactly as
+  stored** (bcrypt hashes / AES-256-GCM ciphertext — never plaintext, since
+  nothing in this codebase stores them any other way) because a backup that
+  couldn't restore login capability wouldn't be a real backup. Called out
+  explicitly in both the exported file's own metadata field and the page UI,
+  so whoever holds the file treats it with the same care as direct database
+  access. `MONGODB_URI` and `MFA_ENCRYPTION_KEY` are environment
+  configuration, never database documents, so they are never part of the
+  export by construction.
+- **Every export is logged** (`DATABASE_EXPORTED`, severity `warning`) with
+  the exporting admin's identity — a full database export is a sensitive,
+  high-privilege action and needed an audit trail like every other
+  sensitive action in this app.
+- **Real frontend**: `dashboard/backup/page.tsx` rewritten — a real "Export
+  Full Backup" button wired to the route above, the architecture notes and
+  restore guidance from this section rendered directly in the page (not
+  hidden in a doc nobody reads), and the fake schedule cards, fake storage
+  stats, and fake restore-upload UI removed entirely rather than left
+  pointing at nothing. Nav label changed from "Backup & Restore" to "Backup &
+  Export" to stop advertising a capability that doesn't exist.
+- **4 new tests** (`backup-export-route.test.ts`): every registered
+  collection appears in the exported JSON (including ones with zero
+  documents), the activity log entry is written with the correct actor and
+  severity, and both a manager and a cashier are rejected with 403 (only the
+  `backup_restore`-holding admin role may export).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+24/24 suites / 197/197 tests.

@@ -1,74 +1,42 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost, apiDelete, ApiResponse } from '@/lib/api-client';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
-export interface Backup {
-  _id: string;
-  name: string;
-  size: string;
-  type: 'manual' | 'scheduled';
-  createdAt: string;
-}
+// Backups are generated on demand and streamed straight to the browser as a
+// download - nothing is stored server-side, so there is no history list to
+// fetch (see the "Backup & Restore" section of SMART_STORE_AUDIT.md for why).
+export function useExportBackup() {
+  const [isExporting, setIsExporting] = useState(false);
 
-export interface BackupsParams {
-  page?: number;
-  limit?: number;
-}
+  const exportBackup = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch('/api/backup/export');
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to generate backup export');
+      }
 
-export function useBackups(params?: BackupsParams) {
-  const queryParams = new URLSearchParams();
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || `smart-store-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.json`;
 
-  return useQuery({
-    queryKey: ['backups', params],
-    queryFn: () => apiGet<Backup[]>(`/api/backup?${queryParams}`),
-    select: (data) => data.data ?? [],
-  });
-}
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
 
-export function useCreateBackup() {
-  const queryClient = useQueryClient();
+      toast.success('Backup export downloaded');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate backup export');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-  return useMutation({
-    mutationFn: (data: { name: string }) => apiPost<Backup>('/api/backup', { action: 'create', ...data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups'] });
-      toast.success('Backup created successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.error || 'Failed to create backup');
-    },
-  });
-}
-
-export function useRestoreBackup() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (backupId: string) => apiPost('/api/backup', { action: 'restore', backupId }),
-    onSuccess: () => {
-      toast.success('Backup restored successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.error || 'Failed to restore backup');
-    },
-  });
-}
-
-export function useDeleteBackup() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (backupId: string) => apiDelete(`/api/backup/${backupId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups'] });
-      toast.success('Backup deleted successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.error || 'Failed to delete backup');
-    },
-  });
+  return { exportBackup, isExporting };
 }
