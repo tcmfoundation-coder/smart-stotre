@@ -23,11 +23,7 @@ export async function GET() {
       );
     }
 
-    const count = await getUnreadCount({
-      userId: session.user.id,
-      userRole: user.role,
-      branchId: user.branchId,
-    });
+    const count = await getUnreadCount();
     return NextResponse.json({ success: true, count });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });

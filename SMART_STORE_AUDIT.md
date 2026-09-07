@@ -411,6 +411,25 @@ no seeded database in this sandbox)
   `markAllAsRead`, and `getUnreadCount` — each now only sees/affects notifications
   the requesting user is actually allowed to see, based on their role/branch, not
   every record in the collection.
+- [x] **Follow-up found in a later pass: that visibility filter was bypassable.**
+  `markAsRead`/`markAllAsRead`/`deleteNotification`/`getUnreadCount`/`getNotifications`
+  took the requester's `userId`/`userRole`/`branchId` as plain function parameters,
+  trusted as-is — but these are `'use server'` actions, independently callable over
+  the network bypassing the API route layer entirely (the same class of gap fixed
+  for products/categories/customers/expenses earlier in this pass). Anyone who could
+  reach the action directly could pass `{ userRole: 'admin' }` and see or mark-read
+  every notification in the system, or delete any notification, without a session at
+  all. **Fixed** — every function in `lib/actions/notifications.ts` now derives the
+  requester from `getCurrentUser()` internally (a fresh, DB-verified lookup) instead
+  of accepting it as a parameter; the 4 API routes were updated to stop passing
+  role/branch data the actions no longer accept. Also found and fixed the identical
+  gap in `lib/actions/pos.ts` (`createSale`, `searchProducts`, `getProductByBarcode`
+  had zero auth checks at all — `createSale` also trusted a caller-supplied
+  `cashierId` instead of the session, meaning a direct call could forge a completed
+  sale, decrement stock, and attribute it to any user id) and
+  `lib/actions/ai.ts` (`getBusinessInsights`, `predictSales`, `getAIReports` had no
+  auth check, exposing revenue/profit/expense data to an unauthenticated direct
+  caller). All now call `requireAuth()`/`requireAuth()`-equivalent internally.
 - [x] **Inconsistent enforcement across duplicate code paths for products** — see
   RBAC fix above; `/api/products`, `/api/inventory/products`, and the `createProduct`
   action now all agree (admin+manager can create/edit, admin-only can delete).
@@ -424,6 +443,11 @@ no seeded database in this sandbox)
   ad hoc `auth()` + manual checks instead of the shared helpers) up to the same
   standard. Chose the "re-check DB every request" option over shortening session
   lifetime, per explicit direction.
+- [ ] **Minor, deferred**: `lib/actions/dashboard.ts`'s `getDashboardStats`/
+  `getSalesData` also have no auth check, but have zero callers anywhere in the
+  codebase (the real dashboard page uses the separately-secured
+  `/api/dashboard/stats` route instead) — no live exposure, so not fixed this pass;
+  flagging so it doesn't get wired up later without the same fix applied.
 - [ ] **No Next.js edge `middleware.ts`** exists anywhere in the project — there is
   no centralized route-protection layer; every route/page is independently
   responsible for its own check. Not fixed — would be a structural change, not a

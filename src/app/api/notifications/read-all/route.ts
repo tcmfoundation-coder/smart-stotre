@@ -23,11 +23,7 @@ export async function PUT(_request: NextRequest) {
       );
     }
 
-    await markAllAsRead({
-      userId: session.user.id,
-      userRole: user.role,
-      branchId: user.branchId,
-    });
+    await markAllAsRead();
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

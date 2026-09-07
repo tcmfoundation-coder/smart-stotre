@@ -2,6 +2,7 @@
 
 import connectDB from '@/lib/mongodb';
 import { Sale, Product, Expense, Customer, AIReport } from '@/models';
+import { requireAuth } from '@/lib/security';
 import OpenAI from 'openai';
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 
@@ -27,6 +28,7 @@ function getOpenAIClient(): OpenAI {
 }
 
 export async function getBusinessInsights(query: string, userId: string) {
+  await requireAuth();
   const db = await connectDB();
 
   // Fetch relevant business data
@@ -368,6 +370,7 @@ export async function getBusinessInsights(query: string, userId: string) {
 }
 
 export async function getAIReports(userId?: string) {
+  await requireAuth();
   await connectDB();
 
   const query = userId ? { generatedBy: userId } : {};
@@ -379,6 +382,7 @@ export async function getAIReports(userId?: string) {
 }
 
 export async function predictSales(productId: string, days: number = 30) {
+  await requireAuth();
   await connectDB();
 
   // Get historical sales data for the product

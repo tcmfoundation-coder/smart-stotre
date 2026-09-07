@@ -27,11 +27,7 @@ export async function PUT(
       );
     }
 
-    const notification = await markAsRead(id, {
-      userId: session.user.id,
-      userRole: user.role,
-      branchId: user.branchId,
-    });
+    const notification = await markAsRead(id);
     return NextResponse.json({ success: true, data: notification });
   } catch (error) {
     return NextResponse.json(
@@ -64,11 +60,7 @@ export async function DELETE(
       );
     }
 
-    await deleteNotification(id, {
-      userId: session.user.id,
-      userRole: user.role,
-      branchId: user.branchId,
-    });
+    await deleteNotification(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

@@ -25,11 +25,8 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const filters = {
-      userId: session.user.id,
       isRead: searchParams.get('isRead') === 'true' ? true : searchParams.get('isRead') === 'false' ? false : undefined,
       category: searchParams.get('category') || undefined,
-      userRole: user.role,
-      branchId: user.branchId,
     };
 
     const notifications = await getNotifications(filters);
@@ -62,12 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    const notification = await createNotification({
-      ...data,
-      userId: session.user.id,
-      userRole: user.role,
-      branchId: user.branchId,
-    });
+    const notification = await createNotification(data);
     return NextResponse.json({ success: true, data: notification });
   } catch (error) {
     return NextResponse.json(
