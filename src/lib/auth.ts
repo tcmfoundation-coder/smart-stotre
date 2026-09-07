@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import connectDB from "./mongodb"
 import { User } from "@/models"
 import { checkRateLimit, resetRateLimit } from "./auth-rate-limit"
+import { logActivity } from "./activity-log"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -51,6 +52,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Record last login (best-effort - don't fail the login over it)
           User.findByIdAndUpdate(user._id, { lastLogin: new Date() }).catch((err) => {
             console.error('Failed to record lastLogin:', err)
+          })
+
+          logActivity({
+            action: 'USER_LOGIN',
+            description: `${user.name} logged in`,
+            userId: user._id.toString(),
+            userName: user.name,
+            userRole: user.role,
           })
 
           return {

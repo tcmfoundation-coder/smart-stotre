@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { handleApiError } from '@/lib/error-handler';
 import { escapeRegex } from '@/lib/utils';
+import { logActivity } from '@/lib/activity-log';
 
 // GET all products
 export async function GET(request: NextRequest) {
@@ -74,7 +75,16 @@ export async function POST(request: NextRequest) {
         ...data,
         createdBy: user.id
       });
-      
+
+      logActivity({
+        action: 'PRODUCT_CREATED',
+        description: `${user.name || 'Unknown'} created product "${product.name}"`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+      });
+
       return NextResponse.json({
         success: true,
         data: product

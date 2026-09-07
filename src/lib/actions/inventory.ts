@@ -5,6 +5,7 @@ import { Product, Category, Supplier } from '@/models';
 import { generateSKU, generateBarcode, escapeRegex } from '@/lib/utils';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
+import { logActivity } from '@/lib/activity-log';
 
 export async function getProducts(filters?: {
   category?: string;
@@ -66,10 +67,10 @@ export async function getProductById(id: string) {
 
 export async function createProduct(data: any) {
   // Security check: Managers and admins can create products
-  await requireManagerOrAdmin();
+  const currentUser = await requireManagerOrAdmin();
 
   const db = await connectDB();
-  
+
   if (!db) {
     throw new Error('Database not connected');
   }
@@ -83,6 +84,14 @@ export async function createProduct(data: any) {
     sku,
     barcode,
     barcodeType,
+  });
+
+  logActivity({
+    action: 'PRODUCT_CREATED',
+    description: `${currentUser.name} created product "${product.name}"`,
+    userId: currentUser.id,
+    userName: currentUser.name,
+    userRole: currentUser.role,
   });
 
   revalidatePath('/dashboard/inventory');

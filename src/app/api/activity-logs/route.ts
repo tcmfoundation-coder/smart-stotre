@@ -1,52 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { withAuth } from '@/lib/api-auth';
+import { withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
+import ActivityLog from '@/models/ActivityLog';
+import { escapeRegex } from '@/lib/utils';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withPermission('view_activity_logs')(async (req) => {
     try {
       await connectDB();
-      
-      const searchParams = request.nextUrl.searchParams;
+
+      const searchParams = req.nextUrl.searchParams;
       const action = searchParams.get('action') || 'all';
+      const user = searchParams.get('user') || 'all';
       const search = searchParams.get('search') || '';
-      const limit = parseInt(searchParams.get('limit') || '50');
-      
-      // Mock data for now - create ActivityLog model in production
-      const activityLogs = [
-        {
-          id: 'LOG-001',
-          action: 'USER_LOGIN',
-          description: 'User logged in',
-          userId: user.id,
-          userName: user.name || 'Unknown',
-          userRole: user.role || 'unknown',
-          ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-          timestamp: new Date(),
-          severity: 'info'
-        }
-      ];
-      
-      let filtered = activityLogs;
-      
+      const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200);
+
+      const query: Record<string, unknown> = {};
+
       if (action !== 'all') {
-        filtered = filtered.filter(log => log.action === action);
+        query.action = action;
       }
-      
+
+      if (user !== 'all') {
+        query.userRole = user;
+      }
+
       if (search) {
-        filtered = filtered.filter(log => 
-          log.action.toLowerCase().includes(search.toLowerCase()) ||
-          log.description.toLowerCase().includes(search.toLowerCase()) ||
-          log.userName.toLowerCase().includes(search.toLowerCase())
-        );
+        const safeSearch = escapeRegex(search);
+        query.$or = [
+          { action: { $regex: safeSearch, $options: 'i' } },
+          { description: { $regex: safeSearch, $options: 'i' } },
+          { userName: { $regex: safeSearch, $options: 'i' } },
+        ];
       }
-      
-      return NextResponse.json({
-        success: true,
-        data: filtered.slice(0, limit)
-      });
+
+      const logs = await ActivityLog.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+
+      const data = logs.map((log) => ({
+        id: log._id.toString(),
+        action: log.action,
+        description: log.description,
+        userId: log.userId?.toString(),
+        userName: log.userName,
+        userRole: log.userRole,
+        ipAddress: log.ipAddress || 'unknown',
+        severity: log.severity,
+        timestamp: log.createdAt,
+      }));
+
+      return NextResponse.json({ success: true, data });
     } catch (error) {
       const errorResponse = handleApiError(error);
       return NextResponse.json(
@@ -58,25 +64,43 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withAuth(async (req, user) => {
+  return withPermission('view_activity_logs')(async (req, user) => {
     try {
       await connectDB();
-      
-      const data = await request.json();
-      
-      const activityLog = {
-        id: `LOG-${Date.now()}`,
-        ...data,
+
+      const data = await req.json();
+
+      if (!data.action || !data.description) {
+        return NextResponse.json(
+          { success: false, error: 'action and description are required' },
+          { status: 400 }
+        );
+      }
+
+      const log = await ActivityLog.create({
+        action: data.action,
+        description: data.description,
+        severity: data.severity || 'info',
+        metadata: data.metadata,
         userId: user.id,
         userName: user.name || 'Unknown',
         userRole: user.role || 'unknown',
         ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-        timestamp: new Date()
-      };
-      
+      });
+
       return NextResponse.json({
         success: true,
-        data: activityLog
+        data: {
+          id: log._id.toString(),
+          action: log.action,
+          description: log.description,
+          userId: log.userId.toString(),
+          userName: log.userName,
+          userRole: log.userRole,
+          ipAddress: log.ipAddress,
+          severity: log.severity,
+          timestamp: log.createdAt,
+        },
       });
     } catch (error) {
       const errorResponse = handleApiError(error);

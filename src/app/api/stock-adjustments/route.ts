@@ -5,6 +5,7 @@ import { handleApiError } from '@/lib/error-handler';
 import { StockAdjustment } from '@/models';
 import { Product } from '@/models';
 import { escapeRegex } from '@/lib/utils';
+import { logActivity } from '@/lib/activity-log';
 
 export async function GET(request: NextRequest) {
   return withManagerOrAdmin(async (req, user) => {
@@ -95,7 +96,17 @@ export async function POST(request: NextRequest) {
         performedById: user.id,
         status: 'approved',
       });
-      
+
+      logActivity({
+        action: 'STOCK_ADJUSTMENT',
+        description: `${user.name || 'Unknown'} ${data.adjustmentType === 'increase' ? 'increased' : 'decreased'} stock for "${product.name}" by ${data.quantity}`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: 'warning',
+      });
+
       return NextResponse.json({
         success: true,
         data: {

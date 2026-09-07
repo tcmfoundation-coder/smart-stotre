@@ -6,17 +6,32 @@ import { History, Search, Filter, Calendar, User, Shield, Download, FileText, Al
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { toast } from 'sonner';
+
+interface ActivityLogEntry {
+  id: string;
+  action: string;
+  description: string;
+  userId?: string;
+  userName: string;
+  userRole: string;
+  ipAddress: string;
+  severity: 'info' | 'warning' | 'critical';
+  timestamp: string;
+}
 
 export default function ActivityLogsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('all');
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchActivityLogs();
+    (async () => {
+      await fetchActivityLogs();
+    })();
   }, [searchQuery, actionFilter, userFilter]);
 
   const fetchActivityLogs = async () => {
@@ -42,21 +57,31 @@ export default function ActivityLogsPage() {
     }
   };
 
-  const handleExport = async () => {
-    try {
-      const response = await fetch('/api/activity-logs/export', {
-        method: 'POST'
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        alert('Logs exported successfully');
-      } else {
-        alert(data.error || 'Failed to export logs');
-      }
-    } catch (err) {
-      alert('Failed to connect to server');
+  const handleExport = () => {
+    if (activityLogs.length === 0) {
+      toast.info('No activity logs to export');
+      return;
     }
+
+    const headers = ['Timestamp', 'Severity', 'Action', 'Description', 'User', 'Role', 'IP Address'];
+    const rows = activityLogs.map((log) => [
+      new Date(log.timestamp).toLocaleString(),
+      log.severity,
+      log.action,
+      `"${(log.description || '').replace(/"/g, '""')}"`,
+      log.userName,
+      log.userRole,
+      log.ipAddress,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Activity logs exported');
   };
 
   const getSeverityColor = (severity: string) => {
@@ -167,7 +192,7 @@ export default function ActivityLogsPage() {
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span>{log.timestamp.toLocaleString()}</span>
+                            <span>{new Date(log.timestamp).toLocaleString()}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Shield className="h-3 w-3" />

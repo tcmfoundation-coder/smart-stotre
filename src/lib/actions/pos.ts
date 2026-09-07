@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { generateThankYouMessage } from '@/lib/whatsapp-utils';
 import { requireAuth } from '@/lib/security';
+import { logActivity } from '@/lib/activity-log';
 
 export async function searchProducts(query: string) {
   await requireAuth();
@@ -154,6 +155,14 @@ export async function createSale(data: {
     branchId: authUser.branchId || data.branchId,
     notes: data.notes,
     status: 'completed',
+  });
+
+  logActivity({
+    action: 'SALE_COMPLETED',
+    description: `${authUser.name} completed sale ${saleNumber} for ${total}`,
+    userId: authUser.id,
+    userName: authUser.name,
+    userRole: authUser.role,
   });
 
   // Handle customer - automatic creation or update

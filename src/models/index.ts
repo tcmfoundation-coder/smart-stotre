@@ -19,3 +19,4 @@ export { default as PurchaseOrder } from './PurchaseOrder';
 export { default as Report } from './Report';
 export { default as Role } from './Role';
 export { default as Promotion } from './Promotion';
+export { default as ActivityLog } from './ActivityLog';

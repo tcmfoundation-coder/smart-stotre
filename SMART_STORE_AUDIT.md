@@ -237,9 +237,15 @@ no seeded database in this sandbox)
   in the list query's response, no new endpoint needed).
 - [ ] `dashboard/backup` — Download and file-upload Restore: `toast.info('...coming soon')`.
 - [ ] `dashboard/reports` — "View": `toast.info('Report viewer coming soon')`.
-- [ ] `dashboard/activity-logs` — "Export": calls `/api/activity-logs/export`, which
-  doesn't exist (always 404s), and reports the result via raw `alert()` instead of
-  the app's own `sonner` toast system.
+- [x] `dashboard/activity-logs` — was: "Export" called `/api/activity-logs/export`,
+  which doesn't exist (always 404s), and reported the result via raw `alert()`.
+  Also found while fixing this: `log.timestamp.toLocaleString()` was called
+  directly on a value that only ever arrives as a JSON-serialized string (strings
+  have no `toLocaleString`), so this page would have thrown at render time the
+  moment it had any real data to show. **Fixed** — Export now generates a real
+  client-side CSV from the loaded logs (matching the working pattern already used
+  by `whatsapp-messages`' Export) via `sonner`, and the timestamp is wrapped in
+  `new Date(...)` before rendering. See §6 for the backend fix this depended on.
 - [x] `dashboard/customers/new` — was: error path used raw `alert()` instead of
   `sonner` (inconsistent with sibling `employees/new`, `suppliers/new`). Fixed.
 
@@ -295,9 +301,26 @@ no seeded database in this sandbox)
 ## 6. Broken / mock APIs
 
 **Entirely mock, no backing model, writes are discarded:**
-- [ ] `api/activity-logs` — GET returns a hardcoded array; POST builds and returns an
-  object but never saves it. No `ActivityLog` model exists at all, despite
-  `VIEW_ACTIVITY_LOGS` being a defined permission in `lib/rbac.ts`.
+- [x] `api/activity-logs` — was: GET returned a hardcoded array; POST built and
+  returned an object but never saved it. No `ActivityLog` model existed at all,
+  despite `VIEW_ACTIVITY_LOGS` being a defined permission in `lib/rbac.ts`.
+  **Fixed** — added a real `ActivityLog` model, a `logActivity()` best-effort
+  helper (errors are caught and logged, never allowed to fail the operation being
+  logged, matching the `lastLogin` pattern already used in `auth.ts`), and made
+  `GET`/`POST /api/activity-logs` real (`withPermission('view_activity_logs')`,
+  admin-only per `rbac.ts`). Wired `logActivity()` calls at the exact 4 events the
+  frontend's own action filter already declared: `USER_LOGIN` (`auth.ts`, on
+  successful login), `PRODUCT_CREATED` (both `createProduct` in
+  `lib/actions/inventory.ts` and the separate `/api/products` POST path — this
+  model has two creation routes, see the "duplicate code paths" note in §8),
+  `STOCK_ADJUSTMENT` (`/api/stock-adjustments` POST), and `SALE_COMPLETED`
+  (`createSale` in `lib/actions/pos.ts`). Added
+  `activity-logs-route.test.ts` (5 tests: non-admin rejection on GET/POST, real
+  data returned/mapped correctly, missing-field validation, record actually
+  persisted). Not wired into every other mutation in the app (user
+  deactivation, category/expense/branch CRUD, etc.) — that would be a much larger,
+  open-ended instrumentation project; scoped this pass to exactly what the
+  frontend already promised via its action filter.
 - [ ] `api/backup` — GET returns a hardcoded list; "create" and "restore" actions
   build/return objects but do nothing real. No `Backup` model exists.
 - [x] `api/promotions` — was: GET returns one hardcoded promotion; POST builds and
@@ -403,8 +426,10 @@ no seeded database in this sandbox)
   `createProduct`/`updateProduct` from `requireAdmin()` to `requireManagerOrAdmin()`
   to match `rbac.ts`'s actual grant to managers (this was blocking managers from a
   feature they're supposed to have, on the `inventory/new` and `/api/inventory/products`
-  code paths) — `deleteProduct` correctly stays admin-only. `backup`, `activity-logs`,
-  and `promotions` still need this once they get real models/routes (see §6).
+  code paths) — `deleteProduct` correctly stays admin-only. `activity-logs` got
+  this when it got its real model/routes (`withPermission('view_activity_logs')`,
+  see §6) — `backup` and `promotions` beyond CRUD (pause/resume already covered)
+  still need it once/if they get more real routes.
 - [x] **Notification endpoints had no ownership scoping.** Added a shared
   `buildVisibilityFilter()` (mirroring the role-based visibility rules already used
   by `getNotifications`) and applied it to `markAsRead`, `deleteNotification`,
@@ -484,15 +509,15 @@ the unmodified code; this batch introduces no test regressions.
 | `dashboard/returns` | E | No backend of any kind. |
 | `dashboard/receipt-history` | E | Duplicates the real `receipts` page. |
 | `api/backup` (list/create/restore) | E/F | No model; writes discarded. |
-| `api/activity-logs` (list/create) | E/F | No model; writes discarded. |
+| ~~`api/activity-logs` (list/create)~~ | E/F | **Fixed** — real model + wired into the 4 events the frontend already declared. |
 | ~~`api/promotions` (list/create)~~ | E/F | **Fixed** — real model + full CRUD now backs the frontend's existing expectations. |
 | `dashboard/reports` "View" button | E | Labeled placeholder (`toast.info`), at least honestly stated. |
 | `dashboard/backup` stat tiles + schedule panel | E | Hardcoded; no cron/schedule exists anywhere. |
 | `dashboard/financial-reports`, `inventory-reports` | E | Fully hardcoded metrics presented as live. |
-| `dashboard/employees` list Delete button | E | `console.log` only, real action exists but isn't called. |
-| Sales analytics 30%-flat profit | F | Real feature, fabricated business assumption. |
-| AI sales prediction $10 flat price | F | Real feature, fabricated business assumption. |
-| Settings → Security tab | F | Fake delay + fake success, no real call. |
+| ~~`dashboard/employees` list Delete button~~ | E | **Fixed** — wired to the real `deleteEmployee` action. |
+| ~~Sales analytics 30%-flat profit~~ | F | **Fixed** — real per-sale cost-based profit (R-4). |
+| ~~AI sales prediction $10 flat price~~ | F | **Fixed** — derived from real sales history (R-5). |
+| ~~Settings → Security tab~~ | F | **Fixed (password half)** — real bcrypt-verified change; 2FA honestly disabled rather than faked further. |
 | Payment gateway (Paystack) | E | Fully UI/schema scaffolding (settings fields, payment-method enum) — no code anywhere calls the Paystack API. POS accepts "paystack" as a payment method but nothing actually processes a payment through it. |
 | Email/SMS notification toggles | E | Stored on `Branch.settings`, but no email or SMS provider (no nodemailer/SMTP/SendGrid/Twilio) exists anywhere in the codebase to act on them. |
 | `ALLOWED_ORIGINS` env var | E | Documented in `.env.example`, `SECURITY_AUDIT.md`, and checked by `scripts/verify-env.ts` as if it were an enforced CORS control — but nothing in `src` (no root middleware, no CORS logic) ever reads it. |
@@ -629,9 +654,31 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   by name or ID despite its own placeholder text. All computed from real data now;
   `tsc`/`build`/`jest` re-verified green after this batch too.
 
+- Nav-link fixes: cashier "New Sale"/"Receipt History" pointed at dead/fake pages;
+  `customers/analytics` was a real page with zero links to it; `inventory/categories`
+  Edit pushed to a route that didn't exist.
+- `UserForm` had no password field — since `User.password` is schema-required,
+  **creating any user through the admin UI never worked, for any role, at all**
+  until this fix.
+- Closed unauthenticated-`'use server'`-action gaps found while scoping the
+  Activity Logs work: `createSale`/`searchProducts`/`getProductByBarcode`
+  (`pos.ts`) and the AI insight/prediction actions had zero auth checks; every
+  notification action trusted a caller-supplied `userId`/`userRole`/`branchId`
+  instead of the real session — all independently network-callable, bypassing the
+  API routes that looked like they guarded them. `createSale` also now derives
+  `cashierId`/`branchId` from the verified session instead of the caller.
+- Activity Logs: real `ActivityLog` model, a best-effort `logActivity()` helper,
+  real `GET`/`POST /api/activity-logs` (admin-only), and `logActivity()` wired at
+  the 4 events the frontend's own action filter already declared (`USER_LOGIN`,
+  `PRODUCT_CREATED` on both of its two creation code paths, `STOCK_ADJUSTMENT`,
+  `SALE_COMPLETED`). Also fixed a render-crash bug found along the way
+  (`log.timestamp.toLocaleString()` called on a JSON string) and replaced the
+  Export button's 404'ing endpoint + `alert()` with a real client-side CSV export,
+  matching the working pattern already used by the `whatsapp-messages` page.
+
 **Still open, in priority order per the working plan:** the remaining mock/fake
-features in §9 (Backup, Activity Logs, Financial/Inventory Reports pages themselves,
-Returns, Shift Summary, Payments, Email/SMS), the remaining dead-button/broken-link
+features in §9 (Backup, Financial/Inventory Reports pages themselves, Returns,
+Shift Summary, Payments, Email/SMS), the remaining dead-button/broken-link
 items in §3/§4, the still-open runtime bugs R-8/R-9 in §2, the `user.branch` display
 gap (schema only has `branchId`, never populated to a name anywhere — noted, not
 fixed, since it's not a build error and needs no product decision beyond "should
