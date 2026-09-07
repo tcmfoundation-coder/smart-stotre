@@ -19,6 +19,7 @@ interface Notification {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -26,13 +27,17 @@ export default function NotificationsPage() {
 
   const fetchNotifications = async () => {
     try {
+      setError(false);
       const response = await fetch('/api/notifications');
       const data = await response.json();
       if (data.success) {
         setNotifications(data.data);
+      } else {
+        setError(true);
       }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -40,8 +45,12 @@ export default function NotificationsPage() {
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      await fetch(`/api/notifications/${id}/read`, { method: 'PUT' });
-      setNotifications(notifications.map(n => 
+      const response = await fetch(`/api/notifications/${id}`, { method: 'PUT' });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to mark notification as read');
+      }
+      setNotifications(notifications.map(n =>
         n._id === id ? { ...n, isRead: true } : n
       ));
     } catch (error) {
@@ -51,7 +60,11 @@ export default function NotificationsPage() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', { method: 'PUT' });
+      const response = await fetch('/api/notifications/read-all', { method: 'PUT' });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to mark all notifications as read');
+      }
       setNotifications(notifications.map(n => ({ ...n, isRead: true })));
     } catch (error) {
       console.error('Error marking all as read:', error);
@@ -123,6 +136,19 @@ export default function NotificationsPage() {
             <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800">
               <div className="h-10 w-10 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mb-4"></div>
               <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Syncing alerts...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-sm border border-slate-100 dark:border-slate-800 p-20 text-center">
+              <div className="h-24 w-24 bg-red-50 dark:bg-red-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                <Bell className="h-10 w-10 text-red-400" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Failed to load notifications</h3>
+              <button
+                onClick={fetchNotifications}
+                className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-2xl text-sm font-bold"
+              >
+                Retry
+              </button>
             </div>
           ) : notifications.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-sm border border-slate-100 dark:border-slate-800 p-20 text-center">

@@ -4,18 +4,24 @@ import connectDB from '@/lib/mongodb';
 import { Customer, Loyalty } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
-import { requireManagerOrAdmin } from '@/lib/security';
+import { requireAuth, requireManagerOrAdmin } from '@/lib/security';
 
 export async function getCustomers(filters?: {
   search?: string;
 }) {
+  // Every role (cashier included) holds view_customers in rbac.ts.
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
     throw new Error('Database connection failed');
   }
 
-  const query: any = {};
+  // isActive is a new field - existing documents predating it have no value
+  // for it at all, so match "true or absent" ($ne: false) rather than an
+  // exact { isActive: true } equality, which would hide every customer that
+  // existed before this field was introduced.
+  const query: any = { isActive: { $ne: false } };
 
   if (filters?.search) {
     const safeSearch = escapeRegex(filters.search);
@@ -32,6 +38,7 @@ export async function getCustomers(filters?: {
 }
 
 export async function getCustomerById(id: string) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -89,13 +96,18 @@ export async function deleteCustomer(id: string) {
     throw new Error('Database connection failed');
   }
 
-  await Customer.findByIdAndDelete(id);
+  // Soft delete, matching deleteProduct/deleteBranch/deleteSupplier/
+  // deleteCategory - a hard delete here would orphan every Sale/Loyalty/
+  // Transaction/WhatsAppMessage document that references this customer by
+  // id, permanently losing who a historical sale was actually for.
+  await Customer.findByIdAndUpdate(id, { isActive: false });
 
   revalidatePath('/dashboard/customers');
   return { success: true };
 }
 
 export async function getTopCustomers(limit: number = 10) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -110,6 +122,9 @@ export async function getTopCustomers(limit: number = 10) {
 }
 
 export async function getCustomerAnalytics() {
+  // Security check: exposes revenue/customer analytics - managers and admins only
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -183,6 +198,7 @@ export async function getCustomerAnalytics() {
 }
 
 export async function getCustomerPurchaseHistory(customerId: string) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {

@@ -4,7 +4,7 @@ import connectDB from '@/lib/mongodb';
 import { Expense } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
-import { requireAdmin } from '@/lib/security';
+import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
 
 export async function getExpenses(filters?: {
   category?: string;
@@ -12,6 +12,8 @@ export async function getExpenses(filters?: {
   endDate?: Date;
   search?: string;
 }) {
+  // Security check: exposes expense amounts/categories - matches view_expenses (manager/admin only)
+  await requireManagerOrAdmin();
   await connectDB();
 
   const query: any = {};
@@ -46,6 +48,7 @@ export async function getExpenses(filters?: {
 }
 
 export async function getExpenseById(id: string) {
+  await requireManagerOrAdmin();
   await connectDB();
 
   const expense = await Expense.findById(id).populate('createdBy', 'name');
@@ -94,6 +97,7 @@ export async function deleteExpense(id: string) {
 }
 
 export async function getExpenseSummary(startDate: Date, endDate: Date) {
+  await requireManagerOrAdmin();
   await connectDB();
 
   const expenses = await Expense.find({

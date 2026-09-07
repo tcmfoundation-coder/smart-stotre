@@ -7,6 +7,9 @@ import { escapeRegex } from '@/lib/utils';
 import { requireManagerOrAdmin } from '@/lib/security';
 
 export async function getOrders(source?: 'online' | 'whatsapp', filters?: { search?: string }) {
+  // Matches updateOrderStatus/updatePaymentStatus below and the
+  // manager/admin-only nav entries for these pages.
+  await requireManagerOrAdmin();
   await connectDB();
   const query: any = {};
   if (source) {

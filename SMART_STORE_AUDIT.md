@@ -588,9 +588,9 @@ the unmodified code; this batch introduces no test regressions.
 | Item | Bucket | Notes |
 |---|---|---|
 | WhatsApp send demo-mode fallback (`lib/whatsapp.ts`) | F | Real integration exists; silently returns `success:true` with no message sent when creds are absent. Also: `.env.example` documents `WHATSAPP_API_KEY`, but the code reads `WHATSAPP_ACCESS_TOKEN` — following the documented setup can never actually enable live sending. |
-| `dashboard/shift-summary` | E | Fully fabricated, explicitly commented as placeholder. |
+| ~~`dashboard/shift-summary`~~ | E | **Fixed** — real `Shift` model + open/close workflow. |
 | `dashboard/page.tsx` low-stock/expiring mock arrays | E | Always renders (backing routes don't exist — see §6). |
-| `dashboard/returns` | E | No backend of any kind. |
+| ~~`dashboard/returns`~~ | E | **Fixed** — real `Return` model + full processing workflow. |
 | `dashboard/receipt-history` | E | Duplicates the real `receipts` page. |
 | `api/backup` (list/create/restore) | E/F | No model; writes discarded. |
 | ~~`api/activity-logs` (list/create)~~ | E/F | **Fixed** — real model + wired into the 4 events the frontend already declared. |
@@ -804,3 +804,696 @@ to implement or leave its dead UI; keep auditing for anything not yet found.
   now resolved.
 - **StockAdjustment approve/reject** — see §6 "Missing endpoints," now
   implemented based on strong architectural evidence (documented in full there).
+
+**General audit sweep** (dispatched to cover ground beyond the items already
+tracked above) found a genuinely broken core page and several new instances of
+already-established bug classes. All fixed, all decision-free:
+
+- [x] **`dashboard/products` (Product Catalog) broken end-to-end for every
+  role** — `useProducts.ts`'s `Product` interface declared `price`/`cost`/
+  `stock`/`category`/`status`, but the real schema and every API response use
+  `sellingPrice`/`buyingPrice`/`stockQuantity`/`categoryId`/`isActive`. Result:
+  every price/stock/cost on the page rendered as `NaN`/`undefined`; the stock
+  filter compared `undefined` to numbers so every product silently showed "In
+  Stock" regardless of truth; the category filter used hardcoded fake strings
+  (`beverages`, `food`...) that, once selected, threw a Mongoose `CastError`
+  trying to match a non-ObjectId string, breaking the whole page into its error
+  state; the Stock Level filter's `lowStock`/`outOfStock` params were sent but
+  never read by the API at all. The same bad field names had also leaked into
+  `PurchaseOrderForm` (every new PO line item's unit cost silently defaulted to
+  $0) and `StockAdjustmentForm` ("Stock: undefined" in the product picker).
+  **Fixed** — corrected the interface to match the real schema; the category
+  filter now uses `useCategories()` for real ids; the API validates the
+  category param is a real ObjectId (`mongoose.isValidObjectId`) before using
+  it and now actually implements `lowStock`/`outOfStock` (`$expr` comparing
+  `stockQuantity` to `minStockLevel`, and `stockQuantity <= 0` respectively);
+  both dependent forms updated to the real field names. 4 new tests. Net lint
+  improvement (fixing the types let several `any` casts be removed).
+- [x] **Two more instances of the "stale JWT privilege" bug already fixed
+  elsewhere** (§8) — `api/register/route.ts` and
+  `api/user-activity/active/route.ts` both checked `session.user.role !==
+  'admin'` directly against the cached JWT claim instead of re-verifying
+  against the database, unlike every other admin-gated route in the app
+  (already hardened to use `withAdmin`/`getCurrentUser` specifically to close
+  this window — a demoted-but-still-logged-in admin could keep using these
+  two routes until their token naturally expired). **Fixed** — both now go
+  through `withAdmin`, matching the rest of the app. 3 new tests, including
+  one asserting a demoted admin is rejected by each route.
+  - Separately, `register/page.tsx` is a fully **public** page (no session
+    gate, linked from the login screen's "Sign Up") offering a Designation
+    dropdown with Cashier/Manager/**Admin** — but its endpoint requires an
+    existing admin session, so the page's actual anonymous audience can never
+    successfully submit it. **Not fixed — this is a product decision, not a
+    bug fix.** Whether `/register` should be genuine public self-signup (and
+    if so, at what default/allowed role — Admin as a public self-signup
+    option would be a severe privilege-escalation risk), or should instead
+    redirect to the already-working, already-fixed "Create User" flow under
+    `/dashboard/users` (admin-only, has a real password field as of this
+    audit), is a call only the client can make. Flagging rather than guessing.
+- [x] **Unauthenticated reads leaking salary/revenue/supplier-debt data to
+  lower-privileged roles** — with no edge `middleware.ts` and `rbac.ts`'s
+  `canAccessRoute`/`getAllowedRoutes` being dead code (never referenced
+  outside `rbac.ts` itself), nothing centrally enforces per-role page access;
+  combined with these actions having zero auth check, this was live, not
+  theoretical:
+  - `lib/actions/employees.ts`'s `getEmployees`/`getEmployeeById` return
+    `salary` and had no auth check — any authenticated cashier navigating
+    directly to `/dashboard/employees` (or `/dashboard/employees/[id]`) could
+    see full company payroll. **Fixed** — both now require
+    `requireManagerOrAdmin()` (matches `rbac.ts`'s `view_employees` grant).
+    Also added the same check to `updateEmployeePerformance`/
+    `updateEmployeeAttendance` (zero live callers today, same
+    no-live-exposure bucket as the already-flagged `lib/actions/dashboard.ts`,
+    fixed anyway since it was a one-line addition while already in the file).
+  - `lib/actions/customers.ts`'s `getCustomerAnalytics` (total revenue,
+    average spend, loyalty distribution) had no auth check, and
+    `dashboard/customers/analytics` (linked from a button visible to every
+    role on the customers list page) calls it directly from a Server
+    Component. **Fixed** — added `requireManagerOrAdmin()` (matches
+    `view_customer_reports`).
+  - `lib/actions/suppliers.ts`'s `getSuppliers`/`getSupplierById` (outstanding
+    debt, payment terms) had no auth check at all. **Fixed** — added
+    `requireManagerOrAdmin()` (matches the single bundled `manage_suppliers`
+    permission). While in this file: `createSupplier`/`updateSupplier`/
+    `deleteSupplier` were all gated `requireAdmin()`-only, contradicting
+    `rbac.ts`'s single `manage_suppliers` permission (granted to admin **and**
+    manager) — the same "inconsistent enforcement" class already fixed for
+    products earlier in this audit. Realigned all three to
+    `requireManagerOrAdmin()`. Also added the same check to
+    `updateSupplierDebt` (zero live callers today, same bucket as above).
+- [x] **AI Sales Prediction always returned zero** — `predictSales()`'s
+  aggregation pipeline did `$match: {'items.productId': productId}` with
+  `productId` as a plain string; unlike `Model.find()`, an aggregation
+  `$match` does **not** auto-cast values against the schema, so a JS string
+  can never equal the real `ObjectId` stored in `items.productId` — the match
+  always returned 0 documents, so every prediction was 0 regardless of real
+  sales history (distinct from the already-fixed R-5, which only addressed the
+  unit-price fallback in this same function). **Fixed** — cast to
+  `new mongoose.Types.ObjectId(productId)` before matching, with an
+  `isValidObjectId` guard so a malformed id throws a clear error instead of a
+  silent empty result. 2 new tests.
+- [x] **Suppliers list Delete button always 404'd** — `useDeleteSupplier`
+  targets `DELETE /api/suppliers/${id}`, but only `api/suppliers/route.ts`
+  (collection-level GET/POST) existed — the exact same "list page's button
+  calls a route that was never built" bug already fixed for customers.
+  **Fixed** — added `api/suppliers/[id]/route.ts` (GET/PUT/DELETE),
+  delegating to the existing, already-secured `getSupplierById`/
+  `updateSupplier`/`deleteSupplier` actions, mirroring the customers `[id]`
+  route pattern exactly.
+- [x] **Unescaped `$regex` in `api/roles/route.ts`** — the one route missed in
+  the earlier regex-escaping pass (§10); every sibling route (categories,
+  products, users, purchase-orders, stock-adjustments) already uses
+  `escapeRegex()`. **Fixed** — wrapped with the existing helper.
+- [x] **`createSale`'s `Transaction` record still trusted caller-supplied
+  identity** — even after the `Sale` record itself was fixed earlier in this
+  audit to use `authUser.id`/`authUser.branchId`, the `Transaction.create`
+  call a few lines later in the same function still used raw
+  `data.cashierId`/`data.branchId` from the request body. Low real-world
+  impact (`Transaction` is write-only, confirmed via grep it's never read back
+  anywhere — same situation as the write-only `AIReport`/R-9), but a leftover
+  instance of the exact bug already fixed elsewhere in this same function.
+  **Fixed** — now uses `authUser.id`/`authUser.branchId` too.
+
+**Returns/refunds — implemented per explicit baseline policy (§2 of the
+follow-up request), not guessed:**
+
+Investigated existing infrastructure first, per direction:
+- **No existing payment/refund integration to build on.** Paystack is UI/
+  schema scaffolding only (settings fields, a `paymentMethod` enum value) —
+  grepped for any actual API call anywhere in the codebase; there is none.
+- **`Transaction` model is a dead-end, not a payment abstraction.** It's
+  written once (in `createSale`, as a secondary denormalized copy of the sale,
+  linked via `orderId: sale._id`) and never read back anywhere (confirmed via
+  grep) — not a real transaction/payment system to integrate with.
+- **`Sale.paymentStatus` enum has no `'refunded'` value**, and the explicit
+  policy says "record the return separately rather than modifying... the
+  original sale" — so the original `Sale` document (`total`, `items`,
+  `paymentStatus`, everything) is never written to by any part of this
+  feature. It is read-only from the return flow's perspective. Return state
+  lives entirely in the new `Return` collection; anything needing "has this
+  sale been returned" queries `Return` by `saleId`.
+- **RBAC evidence dictated a single-step process, not an approval workflow**
+  (unlike Purchase Orders/Stock Adjustments): `rbac.ts` has exactly one
+  permission, `process_returns`, granted to **all three roles including
+  cashier** — no separate `approve_returns` permission exists. A return is
+  processed and effective the instant `process_returns` allows it; there's no
+  RBAC-backed reason to gate it behind a second review step.
+
+Implementation, matching the exact baseline policy given:
+- **New `Return` model** (`src/models/Return.ts`): `returnNumber`, `saleId`
+  (ref, never mutates the target), `saleNumber`/`customerId`/`customerName`
+  (denormalized for display), `items[]` (`productId`, `quantity`,
+  `unitRefundPrice`, `refundAmount`, `reason`, `restocked`), `totalRefund`,
+  `refundMethod`, `status: 'completed'`, `processedBy`/`processedById` (audit
+  trail — who processed it).
+- **`GET /api/returns/lookup?saleNumber=`** — finds the sale, computes
+  per-item quantity already returned (summed from prior `Return` records for
+  that sale) and the resulting returnable quantity, and the sale's remaining
+  refundable balance. Read-only; used by the frontend before showing the
+  return form.
+- **`POST /api/returns`** (`process_returns` permission) — the actual
+  workflow:
+  - Rejects if the sale isn't `status: 'completed'`.
+  - **Return quantity cannot exceed original sold quantity**: for each
+    requested item, checks `alreadyReturned + requested <= originallySold`
+    (summed across *all* prior returns for that sale/product, so partial
+    returns compose correctly).
+  - **Refund amount from the original sale price**: `unitRefundPrice =
+    saleItem.total / saleItem.quantity` — this is the item's actual per-unit
+    effective price from the original sale, which already bakes in any
+    per-item discount that was applied (the only discount mechanism
+    `createSale` currently ever populates — see note below).
+  - **Cannot exceed amount originally paid**: sums this return's total with
+    every prior return's total for the same sale and rejects if it would
+    exceed `sale.total`.
+  - **Partial returns supported** natively — a sale can have any number of
+    returns over time as long as the two caps above hold.
+  - **Restocks inventory** (`Product.stockQuantity += quantity`) only for
+    items the processor marks "returned to sellable stock" (a per-item
+    checkbox, defaulting checked) — the policy says restock happens "when
+    physically returned to stock," which isn't automatic for every return
+    (e.g. damaged goods), so this is a real per-item decision point for the
+    person actually handling the item, not an invented business rule.
+  - **Never mutates the original `Sale` document** — verified by a test
+    asserting no `.save()` is ever called on the sale and its fields are
+    unchanged after processing a return.
+  - **Full audit trail**: `processedBy`/`processedById` on the `Return`
+    record itself, plus a `RETURN_PROCESSED` entry in the real Activity Logs
+    system (extended its action-filter taxonomy to include this, matching how
+    `USER_LOGIN`/`PRODUCT_CREATED`/`STOCK_ADJUSTMENT`/`SALE_COMPLETED` were
+    already declared for the 4 pre-existing events).
+  - **Authorization per existing RBAC structure**: gated by `process_returns`
+    (the real, already-declared permission — not invented), same permission
+    for both `GET` (view) and `POST` (process), matching all three roles that
+    already hold it.
+- **Real frontend**: `dashboard/returns/page.tsx` rewritten from its fully
+  mock state — "New Return" now looks up a real sale by sale number, shows
+  each line's real returnable quantity, computes the refund live from real
+  unit prices, requires a reason per item, and calls the real API. The list/
+  detail panes show real `Return` records via a new `useReturns` hook.
+- **Known limitation, documented rather than silently glossed over**:
+  `createSale` always hardcodes the sale-level `discount`/`tax` fields to `0`
+  today, so no real sale currently has a sale-level discount to prorate across
+  a partial return. The refund calculation is correct for every case that
+  exists in the live code today (item-level pricing, which is the only
+  discount mechanism actually used). If a future change starts populating
+  `Sale.discount`/`Sale.tax` with real values, this refund calculation will
+  need a proportional-allocation step added — flagging now so it isn't
+  silently wrong later.
+- **10 new tests** (`returns-route.test.ts`) covering: a cashier (the
+  least-privileged permission holder) successfully processing a return;
+  correct partial-return refund math; restock respecting the per-item flag;
+  rejecting a return exceeding original sold quantity; rejecting a return
+  exceeding the amount paid; correctly accounting for quantity already
+  returned across prior partial returns; rejecting returns against
+  non-completed sales; and explicitly asserting the original sale is never
+  mutated.
+- Also fixed while in this area: `getSaleById`/`getRecentSales` in
+  `lib/actions/pos.ts` had no auth check at all (same missing-auth class
+  already fixed for other actions in this file) — added `requireAuth()` to
+  both.
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+18/18 suites / 158/158 tests.
+
+**Shift Summary — implemented per the explicit model given, not guessed:**
+
+- **New `Shift` model** (`src/models/Shift.ts`) with exactly the fields
+  specified: `openedAt`/`closedAt`, `openedBy`/`openedByName`,
+  `closedBy`/`closedByName`, `openingCashBalance`, `closingCashBalance`,
+  `expectedCash`, `actualCash`, `cashVariance`, `salesCount`/`salesTotal`,
+  `refundsCount`/`refundsTotal`, `paymentMethodTotals` (cash/card/transfer/
+  paystack), `status: 'open'|'closed'`. No morning/evening inference anywhere
+  — a shift exists only between an explicit open and close action.
+  `closingCashBalance` and `actualCash` are set to the same value (the amount
+  physically counted at close) — both field names were specified, and there
+  was no indication they should differ; documented as a comment in the model.
+- **Sales/refunds/payment totals are computed live from the source `Sale`/
+  `Return` records** (`src/lib/shifts.ts`), not incremented at write time —
+  the shift is a read-only lens over `cashierId` + a time window, so it can
+  never drift out of sync with the real data, and nothing had to be added to
+  `createSale`/the returns flow to "push" updates into a shift document.
+  Scoped per-cashier (the shift's own `openedBy`), matching "opened by"/
+  "closed by" framing this as a personal register session, not a store-wide
+  shift.
+- **`POST /api/shifts/open`** — any authenticated role (no RBAC permission
+  for shifts exists in `rbac.ts`; this is a personal action every role needs,
+  matching cashier's own `currentShiftSales` dashboard card). Rejects opening
+  a second shift while one is already open for that user.
+- **`GET /api/shifts/current`** — the requesting user's open shift with live
+  stats and `expectedCash` (`openingCashBalance + cash sales - cash refunds`
+  so far).
+- **`POST /api/shifts/[id]/close`** — recomputes live stats one final time up
+  to the close instant, sets `expectedCash`/`actualCash`/`cashVariance
+  (actual - expected)`, `closedAt`/`closedBy`. Only the shift's own opener, or
+  an admin/manager reconciling on their behalf, can close it.
+- **`GET /api/shifts`** — history, scoped to the caller's own shifts unless
+  they're admin/manager (who see everyone's).
+- **Real frontend**: `dashboard/shift-summary/page.tsx` rewritten from its
+  fully mock state (hardcoded shift object, fake "top products"/"shift
+  notes" sections) — now shows an Open-Shift form when there's no active
+  shift, live KPIs and a Close-Shift form (with the expected-cash figure
+  shown before the count is entered) while one is open, and real closed-shift
+  history with a cash-variance indicator. Deliberately dropped the mock's
+  fabricated "Top Selling Products" and "Shift Notes" sections rather than
+  either inventing real ones out of scope or leaving fake content in a now
+  mostly-real page.
+- **Integrated with the main dashboard**: the "Shift Sales" KPI card
+  (`dashboardCards.includes('currentShiftSales')`, cashier's own dashboard)
+  referenced `stats?.shiftRevenue`, a field declared in the `DashboardStats`
+  type but never populated by `/api/dashboard/stats` — always showed ₦0
+  regardless of real activity. Wired to `useCurrentShift()`'s real
+  `salesTotal` instead; removed the dead `shiftRevenue` field from the type.
+- **8 new tests**, including exact arithmetic assertions for `expectedCash`
+  and `cashVariance`, and authorization checks (a cashier can't close someone
+  else's shift; a manager can, for reconciliation).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+19/19 suites / 166/166 tests.
+
+**Two-factor authentication — real TOTP, not a UI toggle:**
+
+Investigated the existing auth architecture first, per direction, before
+designing anything:
+- **Session strategy is JWT-only, no server-side sessions/adapter** (`session:
+  { strategy: "jwt" }` in `src/lib/auth.ts`, no `adapter` configured) — so
+  there is no session store to hold a "pending 2FA challenge" between two
+  separate requests. The entire password + TOTP exchange has to complete
+  inside one `authorize()` call, or a challenge-token mechanism would need to
+  be invented from scratch. Chose the former: the client re-submits the same
+  credentials plus a `totpCode` once it learns one is required, so session
+  issuance stays atomic with full authentication (no half-authenticated
+  intermediate state to secure separately).
+- **Confirmed the exact NextAuth v5 mechanism from installed source, not
+  assumed** — per `AGENTS.md`'s warning that this Next.js/NextAuth version's
+  APIs may differ from training data, read `node_modules/@auth/core/errors.js`
+  and `node_modules/next-auth/react.js` directly: a `CredentialsSignin`
+  subclass can set a custom `code` string property, and client-side
+  `signIn('credentials', { redirect: false })` parses that `code` out of the
+  response and returns it in the result object. This is what lets the login
+  page distinguish "wrong password" from "this account needs a 2FA code next"
+  without a redirect-based flow.
+- **No competing auth architecture introduced** — no new React auth context,
+  no new cookie, no new session table; 2FA state (`twoFactorEnabled`,
+  encrypted secret, hashed recovery codes) lives entirely on the existing
+  `User` document, `select: false` by default like `password` already is.
+
+Implementation:
+- **`src/lib/mfa-crypto.ts`** — AES-256-GCM encrypt/decrypt for the TOTP
+  secret at rest, keyed by a new `MFA_ENCRYPTION_KEY` env var (base64, must
+  decode to exactly 32 bytes). The key is read lazily (only when
+  encrypt/decrypt is actually called), so a server with the var unset still
+  boots and runs fine — it only fails, with a clear error, if someone actually
+  tries to set up 2FA. Secrets are never stored in plaintext.
+- **`src/lib/mfa.ts`** — TOTP generation/verification via `otpauth`
+  (SHA1/6-digit/30s, the universal default every authenticator app supports),
+  `window: 1` on verification (tolerates ±30s clock drift). 10 recovery codes
+  per enable, generated with `crypto.randomBytes` and hashed with `bcryptjs`
+  at the same cost factor (12) already used for passwords — never stored or
+  logged in plaintext after generation.
+- **`User` model** — additive fields only: `twoFactorEnabled` (default
+  `false`), `twoFactorSecretEncrypted` (`select: false`),
+  `twoFactorRecoveryCodesHashed` (`select: false`), `twoFactorEnabledAt`. No
+  existing field touched.
+- **`POST /api/auth/2fa/setup`** — authenticated; refuses if already enabled;
+  generates a secret, stores it encrypted (not yet "enabled" — enabling
+  requires proving possession via a real code first), returns the QR code
+  (`qrcode` package, server-rendered PNG data URL) and the manual-entry
+  secret. The raw secret is only ever sent to the browser at this one step,
+  which the user needs anyway to scan the QR/type it into their authenticator
+  app — after this it lives only encrypted in the database.
+- **`POST /api/auth/2fa/enable`** — rate-limited (5 attempts / 15 min per
+  user, matching the existing login throttle pattern); requires a valid code
+  against the stored secret; only on success does it flip
+  `twoFactorEnabled = true`, generate the 10 recovery codes, and return them
+  **once**, in plaintext, in this one response — never retrievable again.
+- **`POST /api/auth/2fa/disable`** — rate-limited; requires the account
+  **password** (not a TOTP code — the standard re-auth pattern, since the
+  point of disabling is often "I lost my authenticator," so requiring the
+  authenticator to disable it would be a lockout trap); clears all 2FA fields
+  on success.
+- **`GET /api/auth/2fa/status`** — returns `{ enabled, enabledAt }` for the
+  current user only.
+- **Login challenge flow** (`src/lib/auth.ts`, `src/app/login/page.tsx`) — if
+  a user with `twoFactorEnabled` submits correct credentials without a
+  `totpCode`, `authorize()` throws a custom `TwoFactorRequiredError`
+  (`code: "totp_required"`) instead of failing or succeeding; the login page
+  catches this via `result.code`, reveals a code input (email/password fields
+  disabled, not cleared) and re-submits. A wrong code throws
+  `InvalidTotpError` (`code: "totp_invalid"`), shown with a distinct message
+  that also mentions recovery codes are accepted. Both TOTP and recovery
+  codes are checked in the same field; a used recovery code is removed from
+  the stored hash list immediately (one-time use). The existing 5-attempt/
+  15-minute rate limit already covers this path too, since both password and
+  code attempts happen inside the same `authorize()` call keyed by email.
+- **`src/components/settings/TwoFactorSettings.tsx`** — replaces the old
+  fake, permanently-disabled toggle on the Settings → Security tab
+  ("Not available yet") with the real enable/QR/verify/recovery-codes/disable
+  flow, wired to the routes above.
+- **Constraints documented, not silently worked around:** no
+  authentication-provider (Google OAuth) interaction was changed — 2FA only
+  applies to the credentials/password login path, since TOTP is meaningless
+  layered on top of an OAuth provider that already performs its own
+  challenge. `MFA_ENCRYPTION_KEY` documented in `.env.example` with a
+  generation command; **this must be set in Railway's production environment
+  variables before any user can enable 2FA in production** — this is a
+  deployment step for the client, not something this session can set.
+- **19 new tests** (`mfa.test.ts`, `mfa-crypto.test.ts`, `2fa-routes.test.ts`)
+  covering: real TOTP generation/verification (including a sanity check that
+  a wrong code is genuinely rejected, guarding against the route tests
+  passing for the wrong reason), recovery code hashing/matching/case-
+  insensitivity/exhaustion, AES-GCM round-trip and tamper/wrong-key/missing-
+  key failure modes, and all four routes' success and rejection paths
+  (already-enabled guard, wrong code, wrong password, status reporting).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+22/22 suites / 187/187 tests.
+
+**Inventory Reports — defensible turnover formula + real unified movement feed:**
+
+`dashboard/inventory-reports/page.tsx` was 100% hardcoded fake data (fixed
+metric values, a 5-row fake category table, 4 fake "recent movements" with
+2024 dates) with no backend at all. Investigated the actual data model before
+choosing any calculation, per direction:
+
+- **`Sale.items[]` stores `buyingPrice` (cost) per line, immutably, at the
+  moment of sale** (verified in `src/models/Sale.ts`) — so real, exact
+  historical COGS is directly computable from existing data: no estimation
+  needed for the numerator of the turnover formula.
+- **`Product.stockQuantity` is mutated in exactly three places in the entire
+  codebase** (confirmed by grepping every `stockQuantity` write site): sales
+  decrement it (`lib/actions/pos.ts`), approved stock adjustments apply their
+  delta at approval time (the Phase B workflow), and restocked returns
+  increment it (Phase C). **Purchase orders never touch it anywhere** — there
+  is no endpoint that transitions a `PurchaseOrder` past `'approved'` into
+  `'delivered'`, and even the `updateStock()` server action that could apply
+  a delivery is dead code with zero callers (confirmed by grep). This is a
+  real architectural gap, not a guess: the schema declares `status:
+  'delivered'` and an `actualDelivery` field, but nothing wires a delivery to
+  inventory. Fixing that would mean deciding real business rules (partial
+  receipt handling, over/delivery tolerance, whether a separate goods-
+  received record is needed) that this session was told not to invent, so it
+  is **flagged below as its own decision item**, not silently implemented.
+- Because those three sources are the *only* mutators, and because no
+  periodic inventory snapshot is stored anywhere, **historical quantity at
+  any past instant can be validly reconstructed**: take a product's current
+  quantity and reverse every one of those three event types that happened
+  after that instant. This is exact arithmetic over real records, not an
+  estimate. What genuinely isn't available is **historical cost** —
+  `Product.buyingPrice` is a single mutable current value with no price-
+  history table — so both ends of the reconstruction are valued at *today's*
+  buying price. This is the one real limitation, and it's returned by the API
+  and shown directly in the report UI rather than hidden.
+
+Implementation, following the requested `COGS / Average Inventory` formula
+with the strongest data that exists:
+
+- **`GET /api/inventory-reports`** (`view_inventory_reports` permission,
+  already existed in `rbac.ts`, granted to admin+manager only — matches how
+  every other report route in this app is gated):
+  - `endingInventoryValue` = current on-hand quantity × current buying price,
+    summed over active products (optionally filtered by category).
+  - `beginningInventoryValue` = the same, using each product's quantity
+    reconstructed as of the period's start (reversing sales/adjustments/
+    restocked-returns dated after that instant).
+  - `averageInventoryValue` = `(beginning + ending) / 2`.
+  - `cogs` = gross cost of items sold in the period, **net of** the cost of
+    items that were both returned and physically restocked in that same
+    period — looked up from the *original sale's* recorded buying price
+    (not today's), which is the actually-correct historical cost for that
+    unit.
+  - `turnoverRatio` = `cogs / averageInventoryValue`, returned as `null`
+    (never a fabricated `0` or `NaN`) when average inventory is `0` — e.g. a
+    brand-new store with no stock history yet.
+  - Reconstructed quantities are floored at `0` as a defensive guard against
+    ever displaying a nonsensical negative currency figure if some future
+    data inconsistency existed outside the three tracked mutation paths; this
+    doesn't fabricate a number, it only prevents an impossible one from
+    rendering.
+  - Real category breakdown (replacing the 5 hardcoded fake rows), same
+    methodology grouped by `categoryId`.
+  - `limitations: string[]` in the response spells out the current-cost-basis
+    caveat and the purchase-order gap in plain language; the frontend renders
+    both directly instead of presenting the numbers as unqualified fact.
+- **`GET /api/inventory-reports/movements`** (same permission) — merges
+  Sales, approved Stock Adjustments, and restocked Returns into one
+  chronologically-sorted, typed feed (`SALE` / `ADJUSTMENT` / `RETURN`,
+  `quantityChange` signed +/-, product/reference/performer per entry),
+  read-only over the source collections (nothing is ever written back).
+  `PURCHASE` and `OTHER` are real values in the type union (for forward
+  compatibility once/if a receiving workflow is decided) but are never
+  populated today, for the same reason given above — including them would
+  mean showing a stock increase that never actually happened to
+  `Product.stockQuantity`, which would make the feed not reconcile with real
+  stock and actively mislead rather than inform. A `notes[]` field explains
+  this in the same response rather than silently omitting purchase orders
+  with no explanation. Supports type/search/product filtering and pagination.
+- **Real frontend**: `dashboard/inventory-reports/page.tsx` rewritten — real
+  metric cards, a visible limitations panel, a real category table, and a
+  paginated/filterable movement feed with a distinct badge per movement type
+  and a note explaining the purchase-order gap. CSV export now exports real
+  numbers instead of hardcoded ones.
+- **6 new tests** (`inventory-reports-route.test.ts`), including one that
+  hand-verifies the exact reconstructed-average-inventory arithmetic (a
+  known starting quantity, one sale reversed, asserting the exact beginning/
+  ending/average/turnover numbers), one confirming per-product
+  `minStockLevel` (not a hardcoded threshold) drives low/out-of-stock counts,
+  one confirming unrestocked return items are excluded from the movement
+  feed, one confirming type filtering skips querying collections that were
+  filtered out entirely, and a permission-denial check for a cashier.
+
+**Flagged as requiring a decision (not implemented, per direction not to
+invent business rules):** wiring Purchase Order delivery to actually
+increase `Product.stockQuantity`. The schema already has the vocabulary for
+it (`status: 'delivered'`, `actualDelivery`), but no endpoint exists to reach
+that status, and building one raises real questions this session can't
+answer alone: should partial delivery (receiving less than the ordered
+quantity) be supported, is over-delivery allowed, and should there be a
+distinct goods-received record for audit purposes separate from the PO
+document itself? Until decided, purchase orders remain procurement paperwork
+only and are correctly excluded from both the movement feed and the COGS/
+turnover numbers above (including them would fabricate stock events that
+never happened).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+23/23 suites / 193/193 tests.
+
+**Backup & Restore — architecture investigated and documented before any
+storage mechanism was chosen, per explicit direction:**
+
+`dashboard/backup/page.tsx` and `api/backup/route.ts` were both 100% fake:
+`GET` returned two hardcoded 2024 backup entries, `POST {action:'create'}`
+returned a fabricated `"2.4 GB"` size after doing no work at all, and `POST
+{action:'restore'}` returned `"Backup restored successfully"` while touching
+nothing — and all of it, including the fake restore, was gated only by
+`withAuth` (any authenticated role, cashier included), not even the
+`backup_restore` permission `rbac.ts` already declares for this exact page.
+This is worse than most mock functionality found so far: it actively told an
+admin their data was backed up or restored when neither happened.
+
+Investigated deployment architecture first, as directed:
+
+- **Single Next.js service, no separate backend.** Every backend endpoint in
+  this repo is a `src/app/api/**` route handler in the same Next.js app —
+  there is no standalone API service to consider separately for this feature.
+- **`MONGODB_URI` is a `mongodb+srv://...@cluster.mongodb.net` string**
+  (`.env.example`) — MongoDB **Atlas** (managed, cloud-hosted), not a
+  self-hosted Mongo instance running on Railway.
+- **No object storage is configured anywhere in this stack** (no S3/R2/GCS
+  credentials or SDK anywhere in the codebase or `.env.example` — Cloudinary
+  is image-upload only, unrelated). There is nowhere to durably store a
+  generated backup file server-side even if one were produced.
+- **Railway's web service filesystem is ephemeral** — anything written to
+  local disk does not survive a redeploy/restart and isn't shared if the
+  service ever scales to multiple instances. A "list of backup files on
+  disk" (the shape the old mock implied) would look real until the next
+  deploy silently erased it — this is exactly the kind of fake durability the
+  direction warned against.
+- **`mongodump`/`mongorestore` (MongoDB Database Tools) are not present in
+  this app's runtime.** They're not part of Next.js's Node base image and
+  nothing in this repo's build config installs them. Shelling out to them
+  from a route handler would fail with "command not found" in production;
+  making that work would require adding a Nixpacks/Dockerfile step to the
+  deployment image — an infrastructure change, not an application code
+  change, and outside what this session can safely make unilaterally.
+
+Recommended production architecture (documented, not silently substituted):
+
+1. **Primary path — MongoDB Atlas Cloud Backups.** Atlas clusters on M10+
+   tiers include continuous, point-in-time-recoverable snapshots configured
+   entirely on the Atlas side — zero application code. This is the standard,
+   low-risk way to get real disaster-recovery backups for this database. If
+   the current cluster is on a free/shared tier (M0/M2/M5), Cloud Backups
+   aren't available there; enabling this needs an Atlas tier upgrade, which
+   is a billing decision for the account owner, not something this session
+   can enable.
+2. **Complementary path — implemented now.** An on-demand, admin-only export
+   that reads every collection through the app's existing server-side
+   Mongoose connection and streams it directly to the requesting admin's
+   browser as a downloadable JSON file. Needs no new infrastructure, no new
+   credentials, and writes nothing to server-side disk — the HTTP response
+   *is* the backup, so there's nothing left behind to secure or clean up.
+   This is the "application-level backup/export without external
+   infrastructure" the direction said to implement if it could be done
+   safely, and it can.
+3. **Deliberately not implemented — self-service restore.** Overwriting live
+   production data from an uploaded file, with no server-side structural
+   validation, no dry run, and no automatic pre-restore snapshot, is exactly
+   the kind of destructive, hard-to-reverse action this project's standing
+   rules say never to build without explicit sign-off. It has been left out
+   entirely rather than faked (as the old mock did) or half-built. A real
+   restore should be performed directly against Atlas — either its own
+   point-in-time restore (if Cloud Backups are enabled) or an administrator
+   running `mongorestore` with proper precautions — never as a one-click
+   in-app action. **Flagged as a decision item**: if real in-app restore is
+   ever wanted, it needs an explicit decision on safeguards (confirmation
+   flow, a staging/dry-run target, who is authorized) before any code is
+   written for it.
+4. **Deliberately not implemented — a byte-identical `mongodump` archive.**
+   Possible in principle by shelling out to the MongoDB Database Tools, but
+   only after they're added to the deployment image (see the Nixpacks point
+   above). The JSON export in (2) is today's safe substitute; a real BSON
+   dump needs the infrastructure change first, not an application code
+   change.
+
+What's implemented:
+
+- **`GET /api/backup/export`** (`backup_restore` permission — the one
+  `rbac.ts` already declares for this page, granted to admin only; not
+  invented) streams one JSON file with every model registered in
+  `src/models/index.ts` as a named array, read via `.find().lean()` and
+  written to the response stream one collection at a time (so the full
+  multi-collection export is never held in memory at once, matching this
+  codebase's existing `.find().lean()` idiom rather than introducing cursor-
+  based streaming nothing else in the app uses). A new model added later
+  must be added to the route's explicit list — documented in-line as a
+  deliberate simplicity/testability trade-off over enumerating every raw
+  MongoDB collection generically.
+- **Hashed passwords and encrypted MFA secrets are included exactly as
+  stored** (bcrypt hashes / AES-256-GCM ciphertext — never plaintext, since
+  nothing in this codebase stores them any other way) because a backup that
+  couldn't restore login capability wouldn't be a real backup. Called out
+  explicitly in both the exported file's own metadata field and the page UI,
+  so whoever holds the file treats it with the same care as direct database
+  access. `MONGODB_URI` and `MFA_ENCRYPTION_KEY` are environment
+  configuration, never database documents, so they are never part of the
+  export by construction.
+- **Every export is logged** (`DATABASE_EXPORTED`, severity `warning`) with
+  the exporting admin's identity — a full database export is a sensitive,
+  high-privilege action and needed an audit trail like every other
+  sensitive action in this app.
+- **Real frontend**: `dashboard/backup/page.tsx` rewritten — a real "Export
+  Full Backup" button wired to the route above, the architecture notes and
+  restore guidance from this section rendered directly in the page (not
+  hidden in a doc nobody reads), and the fake schedule cards, fake storage
+  stats, and fake restore-upload UI removed entirely rather than left
+  pointing at nothing. Nav label changed from "Backup & Restore" to "Backup &
+  Export" to stop advertising a capability that doesn't exist.
+- **4 new tests** (`backup-export-route.test.ts`): every registered
+  collection appears in the exported JSON (including ones with zero
+  documents), the activity log entry is written with the correct actor and
+  severity, and both a manager and a cashier are rejected with 403 (only the
+  `backup_restore`-holding admin role may export).
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+24/24 suites / 197/197 tests.
+
+**General audit sweep (Phase H)** — dispatched a fresh, read-only review
+covering every module not already touched by Phases A-G (branches,
+online/WhatsApp orders and messages, receipts, notifications, roles,
+expenses, employees, customers, ai-assistant/predictions, barcode, users)
+plus a systematic re-check of every `'use server'` file for missing auth,
+unescaped regex, and aggregation ObjectId casting. All findings verified by
+reading the actual code before fixing (not on the report's word alone), then
+fixed and committed in priority order:
+
+- [x] **CRITICAL — checkout price tampering.** `createSale` computed every
+  line item's total from client-supplied `item.price`, never validated
+  against `product.sellingPrice`, and there is no discount/price-override UI
+  anywhere in the app. Any authenticated cashier (or a raw POST to
+  `/api/pos/sales`) could submit an arbitrary price and get a completed sale
+  recorded, stock decremented, and loyalty points awarded at a fabricated
+  total. **Fixed** — price and cost now always come from the product record.
+  3 new tests.
+- [x] **CRITICAL — Paystack secret key leak.** `getBranches`/`getBranchById`
+  had no auth check at all and returned the full `Branch` document,
+  including `settings.paystackSecretKey` in plaintext; an identical
+  duplicate lived in `lib/actions/employees.ts`. **Fixed** — both admin-gated
+  (matching the existing `manage_branches`/`backup_restore`-style admin-only
+  intent) and now explicitly exclude the secret key even from the admin
+  response, since this is a listing/lookup helper, not the Settings screen
+  that legitimately needs it (which reads it directly and is unaffected).
+  The duplicate in `employees.ts` was deleted; its one caller now imports
+  the canonical version. Also found and removed a second duplicate:
+  `lib/actions/inventory.ts` had its own unauthenticated `getSuppliers()`
+  (leaking `outstandingDebt`/`paymentTerms`), separate from the
+  already-secured version in `suppliers.ts` — same fix pattern. 4 new tests.
+- [x] **HIGH — more unauthenticated read-only Server Actions.** Same bug
+  class as earlier phases, found in code not yet swept: `inventory.ts`
+  (`getProducts`/`getProductById`/`getCategories`/`getLowStockProducts`/
+  `getExpiringProducts` — now require any authenticated session, matching
+  `view_products` held by every role), `expenses.ts`
+  (`getExpenses`/`getExpenseById`/`getExpenseSummary` — now require
+  manager/admin, matching `view_expenses`), `customers.ts`
+  (`getCustomers`/`getCustomerById`/`getTopCustomers`/
+  `getCustomerPurchaseHistory` — now require any authenticated session,
+  matching `view_customers` held by every role), `orders.ts` (`getOrders` —
+  now requires manager/admin, matching its own status-update functions and
+  the nav-restricted pages that call it), and `lib/whatsapp.ts`
+  (`getWhatsAppMessages`/`getWhatsAppMessageStats` — now require
+  manager/admin, matching the nav-restricted WhatsApp Messages page). All
+  were reachable with **zero session at all**, not just the wrong role,
+  because each is imported directly into a `'use client'` page, bypassing
+  the properly-secured `/api/...` route that exists for the same data. 17
+  new tests.
+- [x] **MEDIUM — Employees list showed blank/zeroed data for every row.**
+  `dashboard/employees/page.tsx` read `employee.name`/`email`/`totalSales`/
+  `salesCount`, none of which exist on the `Employee` schema — name/email
+  live on the populated `userId` sub-document, sales figures under
+  `performance.totalSales`/`totalTransactions` (the sibling detail page
+  already gets this right). Also fixed "Top Performer" reading
+  `employees[0]` (sorted by creation date) instead of the employee with the
+  actual highest sales. **Fixed.**
+- [x] **MEDIUM — "Total Employees" KPI counted deactivated staff.**
+  `deleteEmployee` sets `User.isActive = false` on termination but never
+  changes the role, and the dashboard-stats query never filtered on
+  `isActive` — so the card labeled "Active staff" counted terminated
+  employees forever. **Fixed** — added the missing filter. 1 new test.
+- [x] **MEDIUM — Notification "mark as read" always 404'd, silently.**
+  The button called `PUT /api/notifications/[id]/read`, which doesn't exist
+  (the real route is `/api/notifications/[id]`) — every click 404'd, but
+  because the UI updated optimistically without checking the response, the
+  checkmark disappeared as if it had worked. **Fixed** — corrected the URL
+  and made both mark-as-read handlers verify success before updating local
+  state.
+- [x] **LOW — "Total Sessions Today" duplicated "Active Users."** Both KPI
+  tiles on `active-users` read the exact same `activeUsers.length` (users
+  active in the last 5 minutes), so the second tile could never show a
+  distinct number. Investigated whether a real, unambiguous "sessions today"
+  figure exists before fixing (per direction not to invent metrics): since
+  `api/user-activity/heartbeat` creates exactly one `UserActivity` document
+  per login session (`sessionStart` set once, at creation) and a
+  `cleanupOldSessions` static already treats each document as a discrete
+  session, counting documents whose `sessionStart` falls today is the
+  schema's own existing concept of "session," not a guessed definition.
+  **Fixed** — added this count to the active-users API response.
+- [x] **LOW — margin display divides by zero.** `dashboard/barcode`'s
+  margin calculation divided by `product.buyingPrice` with no zero check;
+  the schema allows `buyingPrice: 0` (e.g. donated/free stock), which
+  produced `+Infinity%`/`+NaN%`. **Fixed** — shows "N/A" when cost is zero.
+- [x] **LOW — misleading empty-vs-error states.** Employees, Expenses,
+  Online Orders, WhatsApp Orders, and Notifications all caught fetch
+  failures with only a `console.error`, showing the identical "No X found"
+  empty state for a genuine failure as for an actually-empty list, with no
+  way to retell the two apart or retry short of a full reload. **Fixed** —
+  brought in line with the error-state/Retry pattern already used by
+  sibling pages (customers, suppliers, users, roles).
+- Verified clean, no fix needed: regex-injection escaping (every `$regex`
+  site already wrapped), aggregation `ObjectId` casting (only 5 files
+  aggregate; none mismatch on ObjectId fields), no remaining
+  TODO/FIXME/HACK comments anywhere in `src`, and the `roles`/
+  `ai-assistant`/`ai-predictions`/`barcode`-lookup/`users` pages all read
+  correctly against their real schemas with proper auth already in place.
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+33/33 suites / 233/233 tests.

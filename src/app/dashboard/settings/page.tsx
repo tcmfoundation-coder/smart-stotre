@@ -6,6 +6,7 @@ import { getDashboardRoleConfig } from '@/lib/dashboard-role';
 import { Save, Store, Bell, Shield, CreditCard, Globe, AlertCircle, CheckCircle, RefreshCw, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
+import { TwoFactorSettings } from '@/components/settings/TwoFactorSettings';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
@@ -33,7 +34,6 @@ export default function SettingsPage() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
-    tfaEnabled: false,
   });
 
   const [loading, setLoading] = useState(true);
@@ -462,23 +462,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800 opacity-60">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Two-Factor Authentication</h4>
-                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Not available yet — coming in a future update.</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-not-allowed" title="Two-factor authentication is not available yet">
-                      <input
-                        type="checkbox"
-                        name="tfaEnabled"
-                        checked={false}
-                        disabled
-                        readOnly
-                        className="sr-only peer"
-                      />
-                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 rounded-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5"></div>
-                    </label>
-                  </div>
+                  <TwoFactorSettings />
                 </div>
               )}
 

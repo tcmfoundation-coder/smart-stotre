@@ -14,11 +14,16 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { data: session } = useSession();
   const role = (session?.user?.role as string | undefined) || 'cashier';
   const roleConfig = getDashboardRoleConfig(role);
   const canManageEmployees = roleConfig.canManageEmployees;
+  const topPerformer = employees.reduce((best, e) => {
+    if (!best) return e;
+    return (e.performance?.totalSales || 0) > (best.performance?.totalSales || 0) ? e : best;
+  }, null as (typeof employees)[number] | null);
 
   useEffect(() => {
     loadEmployees();
@@ -27,10 +32,12 @@ export default function EmployeesPage() {
   const loadEmployees = async (search?: string) => {
     try {
       setLoading(true);
+      setError(false);
       const data = await getEmployees(search ? { search } : undefined);
       setEmployees(data);
-    } catch (error) {
-      console.error('Error loading employees:', error);
+    } catch (err) {
+      console.error('Error loading employees:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -102,7 +109,7 @@ export default function EmployeesPage() {
               <div>
                 <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Top Performer</p>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white truncate max-w-[150px]">
-                  {employees[0]?.name || 'N/A'}
+                  {topPerformer?.userId?.name || 'N/A'}
                 </h3>
                 <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-2">Highest sales</p>
               </div>
@@ -154,6 +161,17 @@ export default function EmployeesPage() {
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
               <p className="mt-4 text-sm font-semibold text-slate-400">Loading employees...</p>
             </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <Users className="h-16 w-16 text-red-400 mx-auto mb-4" />
+              <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">Failed to load employees</p>
+              <button
+                onClick={() => loadEmployees(searchQuery || undefined)}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold"
+              >
+                Retry
+              </button>
+            </div>
           ) : employees.length === 0 ? (
             <div className="p-12 text-center">
               <Users className="h-16 w-16 text-slate-400 mx-auto mb-4" />
@@ -181,11 +199,11 @@ export default function EmployeesPage() {
                     <td className="py-6 px-8">
                       <div className="flex items-center space-x-4">
                         <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-blue-600 font-black shadow-sm border border-slate-200 dark:border-slate-700">
-                          {(employee.name ?? 'E').charAt(0).toUpperCase()}
+                          {(employee.userId?.name ?? 'E').charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{employee.name ?? '—'}</p>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">{employee.email ?? '—'}</p>
+                          <p className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{employee.userId?.name ?? '—'}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">{employee.userId?.email ?? '—'}</p>
                         </div>
                       </div>
                     </td>
@@ -199,8 +217,8 @@ export default function EmployeesPage() {
                     </td>
                     <td className="py-6 px-8">
                       <div className="flex flex-col">
-                        <span className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(employee.totalSales || 0)}</span>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{employee.salesCount || 0} Transactions</p>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(employee.performance?.totalSales || 0)}</span>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{employee.performance?.totalTransactions || 0} Transactions</p>
                       </div>
                     </td>
                     <td className="py-6 px-8 text-xs font-bold text-slate-500 dark:text-slate-400">

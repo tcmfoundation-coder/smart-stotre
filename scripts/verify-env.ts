@@ -11,14 +11,16 @@ const requiredVars = [
 
 const optionalVars = [
   'ALLOWED_ORIGINS',
-  'GOOGLE_AI_API_KEY',
+  'MFA_ENCRYPTION_KEY',
+  'NVIDIA_API_KEY',
+  'NVIDIA_BASE_URL',
+  'NVIDIA_AI_MODEL',
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET',
   'PAYSTACK_PUBLIC_KEY',
   'PAYSTACK_SECRET_KEY',
-  'OPENAI_API_KEY',
-  'WHATSAPP_API_KEY',
+  'WHATSAPP_ACCESS_TOKEN',
   'WHATSAPP_PHONE_NUMBER_ID',
 ];
 
@@ -88,6 +90,22 @@ if (allowedOrigins) {
   }
 } else {
   console.log('⚠️  ALLOWED_ORIGINS: Not set (using default)');
+}
+
+// Check MFA_ENCRYPTION_KEY shape (must decode to exactly 32 bytes, or 2FA
+// setup/verification will fail with a clear runtime error - see
+// src/lib/mfa-crypto.ts)
+const mfaKey = process.env.MFA_ENCRYPTION_KEY;
+if (mfaKey) {
+  const decodedLength = Buffer.from(mfaKey, 'base64').length;
+  if (decodedLength !== 32) {
+    console.log(`❌ MFA_ENCRYPTION_KEY: Must decode to exactly 32 bytes (got ${decodedLength})`);
+    missingRequired.push('MFA_ENCRYPTION_KEY (invalid length)');
+  } else {
+    console.log('✅ MFA_ENCRYPTION_KEY: Valid length');
+  }
+} else {
+  console.log('⚠️  MFA_ENCRYPTION_KEY: Not set (2FA will be unavailable)');
 }
 
 // Check MongoDB URI

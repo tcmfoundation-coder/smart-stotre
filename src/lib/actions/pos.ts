@@ -63,7 +63,10 @@ export async function createSale(data: {
   items: Array<{
     productId: string;
     quantity: number;
-    price: number;
+    // Accepted for backward compatibility with the cart payload, but never
+    // trusted for pricing - see below, price always comes from the
+    // product record itself, not the caller.
+    price?: number;
   }>;
   paymentMethod: 'cash' | 'card' | 'transfer' | 'paystack';
   cashReceived?: number;
@@ -95,7 +98,13 @@ export async function createSale(data: {
       throw new Error(`Insufficient stock for ${product.name}`);
     }
 
-    const itemTotal = item.price * item.quantity;
+    // Price always comes from the product record, never the caller - this
+    // action is independently network-callable (same reasoning as
+    // cashierId/branchId above), and there is no discount/price-override UI
+    // anywhere in the app, so a client-supplied price has no legitimate use
+    // and would otherwise let a sale be recorded, stock decremented, and
+    // loyalty points awarded at an arbitrary fabricated total.
+    const itemTotal = product.sellingPrice * item.quantity;
     subtotal += itemTotal;
 
     saleItems.push({
@@ -104,7 +113,7 @@ export async function createSale(data: {
       sku: product.sku,
       quantity: item.quantity,
       buyingPrice: product.buyingPrice,
-      sellingPrice: item.price,
+      sellingPrice: product.sellingPrice,
       discount: 0,
       total: itemTotal,
     });
@@ -282,8 +291,8 @@ export async function createSale(data: {
     total,
     paymentMethod: data.paymentMethod,
     pointsEarned,
-    branchId: data.branchId,
-    cashierId: data.cashierId,
+    branchId: authUser.branchId || data.branchId,
+    cashierId: authUser.id,
   });
 
   // Send WhatsApp thank you message if customer phone is available
@@ -318,6 +327,7 @@ export async function createSale(data: {
 }
 
 export async function getSaleById(id: string) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {
@@ -333,6 +343,7 @@ export async function getSaleById(id: string) {
 }
 
 export async function getRecentSales(limit: number = 10) {
+  await requireAuth();
   const connection = await connectDB();
 
   if (!connection) {

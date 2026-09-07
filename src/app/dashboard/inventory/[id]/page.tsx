@@ -1,7 +1,8 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getProductById, updateProduct, getCategories, getSuppliers } from '@/lib/actions/inventory';
+import { getProductById, updateProduct, getCategories } from '@/lib/actions/inventory';
+import { getSuppliers } from '@/lib/actions/suppliers';
 import { ArrowLeft, Package, Edit, Save, X, TrendingUp, AlertTriangle, Calendar, MapPin, Box, DollarSign, BarChart3 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import Link from 'next/link';

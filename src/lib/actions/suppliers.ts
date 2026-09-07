@@ -4,11 +4,14 @@ import connectDB from '@/lib/mongodb';
 import { Supplier } from '@/models';
 import { revalidatePath } from 'next/cache';
 import { escapeRegex } from '@/lib/utils';
-import { requireAdmin, requireManagerOrAdmin } from '@/lib/security';
+import { requireManagerOrAdmin } from '@/lib/security';
 
 export async function getSuppliers(filters?: {
   search?: string;
 }) {
+  // Security check: exposes outstanding debt/payment terms - managers and admins only
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -33,6 +36,9 @@ export async function getSuppliers(filters?: {
 }
 
 export async function getSupplierById(id: string) {
+  // Security check: exposes outstanding debt/payment terms - managers and admins only
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {
@@ -45,8 +51,8 @@ export async function getSupplierById(id: string) {
 }
 
 export async function createSupplier(data: any) {
-  // Security check: Only admins can create suppliers
-  await requireAdmin();
+  // Security check: rbac.ts grants manage_suppliers to managers and admins
+  await requireManagerOrAdmin();
 
   const connection = await connectDB();
 
@@ -61,8 +67,8 @@ export async function createSupplier(data: any) {
 }
 
 export async function updateSupplier(id: string, data: any) {
-  // Security check: Only admins can update suppliers
-  await requireAdmin();
+  // Security check: rbac.ts grants manage_suppliers to managers and admins
+  await requireManagerOrAdmin();
 
   const connection = await connectDB();
 
@@ -81,8 +87,9 @@ export async function updateSupplier(id: string, data: any) {
 }
 
 export async function deleteSupplier(id: string) {
-  // Security check: Only admins can delete suppliers
-  await requireAdmin();
+  // Security check: rbac.ts grants manage_suppliers (one bundled permission,
+  // no separate delete permission unlike products) to managers and admins
+  await requireManagerOrAdmin();
 
   const connection = await connectDB();
 
@@ -97,6 +104,8 @@ export async function deleteSupplier(id: string) {
 }
 
 export async function updateSupplierDebt(id: string, amount: number, operation: 'add' | 'subtract') {
+  await requireManagerOrAdmin();
+
   const connection = await connectDB();
 
   if (!connection) {

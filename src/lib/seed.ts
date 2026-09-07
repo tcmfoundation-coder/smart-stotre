@@ -20,6 +20,17 @@ function randomPick<T>(arr: T[]): T {
 }
 
 export async function seedDatabase() {
+  // This wipes every collection below before reseeding demo data - a
+  // one-line accident (running `npm run seed` against a production
+  // MONGODB_URI, e.g. from a Railway shell) would destroy real production
+  // data with no prompt and no undo. Refuse unless explicitly overridden.
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+    throw new Error(
+      'Refusing to run seedDatabase() with NODE_ENV=production: this deletes all data in every ' +
+      'collection. If you really intend to seed a production database, set ALLOW_PRODUCTION_SEED=true.'
+    );
+  }
+
   await connectDB();
 
   console.log('🌱 Starting comprehensive database seed...');

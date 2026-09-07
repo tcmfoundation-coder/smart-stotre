@@ -1,7 +1,8 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard-header';
-import { createEmployee, getBranches } from '@/lib/actions/employees';
+import { createEmployee } from '@/lib/actions/employees';
+import { getBranches } from '@/lib/actions/branches';
 import { ArrowLeft, Save, User, Phone, Mail, Briefcase, Building2, Calendar, DollarSign, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';

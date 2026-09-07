@@ -310,7 +310,9 @@ export default function BarcodeScannerPage() {
                   <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Margin (%)</p>
                     <p className="text-xs font-black text-emerald-500 mt-1">
-                      +{Math.round(((product.sellingPrice - product.buyingPrice) / product.buyingPrice) * 100)}%
+                      {product.buyingPrice > 0
+                        ? `+${Math.round(((product.sellingPrice - product.buyingPrice) / product.buyingPrice) * 100)}%`
+                        : 'N/A'}
                     </p>
                   </div>
                 </div>

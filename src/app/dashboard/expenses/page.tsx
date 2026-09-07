@@ -17,6 +17,7 @@ export default function ExpensesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [editingExpense, setEditingExpense] = useState<ExpenseRecord | undefined>(undefined);
@@ -27,13 +28,15 @@ export default function ExpensesPage() {
   const loadExpenses = async (search?: string, category?: string) => {
     try {
       setLoading(true);
+      setError(false);
       const data = await getExpenses({
         search: search || undefined,
         category: category || undefined,
       });
       setExpenses(data);
-    } catch (error) {
-      console.error('Error loading expenses:', error);
+    } catch (err) {
+      console.error('Error loading expenses:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -178,6 +181,17 @@ export default function ExpensesPage() {
             <div className="p-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
               <p className="mt-4 text-sm font-semibold text-slate-400">Loading expenses...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <Wallet className="h-16 w-16 text-red-400 mx-auto mb-4" />
+              <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">Failed to load expenses</p>
+              <button
+                onClick={() => loadExpenses(searchQuery || undefined, categoryFilter || undefined)}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold"
+              >
+                Retry
+              </button>
             </div>
           ) : expenses.length === 0 ? (
             <div className="p-12 text-center">

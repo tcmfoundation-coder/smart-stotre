@@ -14,6 +14,7 @@ export interface ICustomer extends Document {
   favoriteProducts: mongoose.Types.ObjectId[];
   favoriteCategories: mongoose.Types.ObjectId[];
   notes?: string;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -79,6 +80,10 @@ const CustomerSchema = new Schema<ICustomer>(
     notes: {
       type: String,
       trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {
