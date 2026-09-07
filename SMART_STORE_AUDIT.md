@@ -1397,3 +1397,103 @@ What's implemented:
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 24/24 suites / 197/197 tests.
+
+**General audit sweep (Phase H)** — dispatched a fresh, read-only review
+covering every module not already touched by Phases A-G (branches,
+online/WhatsApp orders and messages, receipts, notifications, roles,
+expenses, employees, customers, ai-assistant/predictions, barcode, users)
+plus a systematic re-check of every `'use server'` file for missing auth,
+unescaped regex, and aggregation ObjectId casting. All findings verified by
+reading the actual code before fixing (not on the report's word alone), then
+fixed and committed in priority order:
+
+- [x] **CRITICAL — checkout price tampering.** `createSale` computed every
+  line item's total from client-supplied `item.price`, never validated
+  against `product.sellingPrice`, and there is no discount/price-override UI
+  anywhere in the app. Any authenticated cashier (or a raw POST to
+  `/api/pos/sales`) could submit an arbitrary price and get a completed sale
+  recorded, stock decremented, and loyalty points awarded at a fabricated
+  total. **Fixed** — price and cost now always come from the product record.
+  3 new tests.
+- [x] **CRITICAL — Paystack secret key leak.** `getBranches`/`getBranchById`
+  had no auth check at all and returned the full `Branch` document,
+  including `settings.paystackSecretKey` in plaintext; an identical
+  duplicate lived in `lib/actions/employees.ts`. **Fixed** — both admin-gated
+  (matching the existing `manage_branches`/`backup_restore`-style admin-only
+  intent) and now explicitly exclude the secret key even from the admin
+  response, since this is a listing/lookup helper, not the Settings screen
+  that legitimately needs it (which reads it directly and is unaffected).
+  The duplicate in `employees.ts` was deleted; its one caller now imports
+  the canonical version. Also found and removed a second duplicate:
+  `lib/actions/inventory.ts` had its own unauthenticated `getSuppliers()`
+  (leaking `outstandingDebt`/`paymentTerms`), separate from the
+  already-secured version in `suppliers.ts` — same fix pattern. 4 new tests.
+- [x] **HIGH — more unauthenticated read-only Server Actions.** Same bug
+  class as earlier phases, found in code not yet swept: `inventory.ts`
+  (`getProducts`/`getProductById`/`getCategories`/`getLowStockProducts`/
+  `getExpiringProducts` — now require any authenticated session, matching
+  `view_products` held by every role), `expenses.ts`
+  (`getExpenses`/`getExpenseById`/`getExpenseSummary` — now require
+  manager/admin, matching `view_expenses`), `customers.ts`
+  (`getCustomers`/`getCustomerById`/`getTopCustomers`/
+  `getCustomerPurchaseHistory` — now require any authenticated session,
+  matching `view_customers` held by every role), `orders.ts` (`getOrders` —
+  now requires manager/admin, matching its own status-update functions and
+  the nav-restricted pages that call it), and `lib/whatsapp.ts`
+  (`getWhatsAppMessages`/`getWhatsAppMessageStats` — now require
+  manager/admin, matching the nav-restricted WhatsApp Messages page). All
+  were reachable with **zero session at all**, not just the wrong role,
+  because each is imported directly into a `'use client'` page, bypassing
+  the properly-secured `/api/...` route that exists for the same data. 17
+  new tests.
+- [x] **MEDIUM — Employees list showed blank/zeroed data for every row.**
+  `dashboard/employees/page.tsx` read `employee.name`/`email`/`totalSales`/
+  `salesCount`, none of which exist on the `Employee` schema — name/email
+  live on the populated `userId` sub-document, sales figures under
+  `performance.totalSales`/`totalTransactions` (the sibling detail page
+  already gets this right). Also fixed "Top Performer" reading
+  `employees[0]` (sorted by creation date) instead of the employee with the
+  actual highest sales. **Fixed.**
+- [x] **MEDIUM — "Total Employees" KPI counted deactivated staff.**
+  `deleteEmployee` sets `User.isActive = false` on termination but never
+  changes the role, and the dashboard-stats query never filtered on
+  `isActive` — so the card labeled "Active staff" counted terminated
+  employees forever. **Fixed** — added the missing filter. 1 new test.
+- [x] **MEDIUM — Notification "mark as read" always 404'd, silently.**
+  The button called `PUT /api/notifications/[id]/read`, which doesn't exist
+  (the real route is `/api/notifications/[id]`) — every click 404'd, but
+  because the UI updated optimistically without checking the response, the
+  checkmark disappeared as if it had worked. **Fixed** — corrected the URL
+  and made both mark-as-read handlers verify success before updating local
+  state.
+- [x] **LOW — "Total Sessions Today" duplicated "Active Users."** Both KPI
+  tiles on `active-users` read the exact same `activeUsers.length` (users
+  active in the last 5 minutes), so the second tile could never show a
+  distinct number. Investigated whether a real, unambiguous "sessions today"
+  figure exists before fixing (per direction not to invent metrics): since
+  `api/user-activity/heartbeat` creates exactly one `UserActivity` document
+  per login session (`sessionStart` set once, at creation) and a
+  `cleanupOldSessions` static already treats each document as a discrete
+  session, counting documents whose `sessionStart` falls today is the
+  schema's own existing concept of "session," not a guessed definition.
+  **Fixed** — added this count to the active-users API response.
+- [x] **LOW — margin display divides by zero.** `dashboard/barcode`'s
+  margin calculation divided by `product.buyingPrice` with no zero check;
+  the schema allows `buyingPrice: 0` (e.g. donated/free stock), which
+  produced `+Infinity%`/`+NaN%`. **Fixed** — shows "N/A" when cost is zero.
+- [x] **LOW — misleading empty-vs-error states.** Employees, Expenses,
+  Online Orders, WhatsApp Orders, and Notifications all caught fetch
+  failures with only a `console.error`, showing the identical "No X found"
+  empty state for a genuine failure as for an actually-empty list, with no
+  way to retell the two apart or retry short of a full reload. **Fixed** —
+  brought in line with the error-state/Retry pattern already used by
+  sibling pages (customers, suppliers, users, roles).
+- Verified clean, no fix needed: regex-injection escaping (every `$regex`
+  site already wrapped), aggregation `ObjectId` casting (only 5 files
+  aggregate; none mismatch on ObjectId fields), no remaining
+  TODO/FIXME/HACK comments anywhere in `src`, and the `roles`/
+  `ai-assistant`/`ai-predictions`/`barcode`-lookup/`users` pages all read
+  correctly against their real schemas with proper auth already in place.
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+33/33 suites / 233/233 tests.
