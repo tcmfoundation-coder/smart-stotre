@@ -35,6 +35,7 @@ export default function ActiveUsersPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [activeUsers, setActiveUsers] = useState<UserActivityData[]>([]);
+  const [sessionsToday, setSessionsToday] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -61,6 +62,7 @@ export default function ActiveUsersPage() {
 
       if (data.success) {
         setActiveUsers(data.data);
+        setSessionsToday(data.sessionsToday ?? 0);
         setLastRefresh(new Date());
         setError('');
       } else {
@@ -155,7 +157,7 @@ export default function ActiveUsersPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Sessions Today</p>
-              <p className="text-3xl font-bold text-foreground mt-2">{activeUsers.length}</p>
+              <p className="text-3xl font-bold text-foreground mt-2">{sessionsToday}</p>
             </div>
             <div className="h-12 w-12 bg-green-500/10 rounded-xl flex items-center justify-center">
               <Activity className="h-6 w-6 text-green-500" />

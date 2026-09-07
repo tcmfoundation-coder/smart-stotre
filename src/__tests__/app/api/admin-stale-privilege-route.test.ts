@@ -21,7 +21,7 @@ jest.mock('@/models/User', () => ({
 
 jest.mock('@/models', () => ({
   Role: { findOne: jest.fn() },
-  UserActivity: { getActiveUsers: jest.fn() },
+  UserActivity: { getActiveUsers: jest.fn(), countDocuments: jest.fn().mockResolvedValue(0) },
 }));
 
 // These two routes previously trusted session.user.role (the JWT claim) directly
@@ -74,6 +74,7 @@ describe('stale-privilege fix: admin routes re-verify role against the DB', () =
       select: jest.fn().mockResolvedValue({ role: 'admin', isActive: true }),
     });
     (UserActivity.getActiveUsers as jest.Mock).mockResolvedValue([]);
+    (UserActivity.countDocuments as jest.Mock).mockResolvedValue(4);
 
     const request = new NextRequest('http://localhost/api/user-activity/active');
     const response = await activeUsersGET(request);
@@ -81,5 +82,8 @@ describe('stale-privilege fix: admin routes re-verify role against the DB', () =
 
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
+    // Sessions-today is a separate count (documents whose session started
+    // today) from active-now, not a duplicate of the active-users list.
+    expect(payload.sessionsToday).toBe(4);
   });
 });

@@ -14,10 +14,19 @@ export async function GET(request: NextRequest) {
       // Get active users
       const activeUsers = await UserActivity.getActiveUsers(minutesThreshold);
 
+      // Distinct from "active now" - one UserActivity document is created
+      // per login session (see api/user-activity/heartbeat), so counting
+      // documents whose session started today gives a real, separate
+      // "sessions today" figure instead of reusing the active-now count.
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const sessionsToday = await UserActivity.countDocuments({ sessionStart: { $gte: startOfToday } });
+
       return NextResponse.json({
         success: true,
         data: activeUsers,
-        count: activeUsers.length
+        count: activeUsers.length,
+        sessionsToday
       });
     } catch (error: any) {
       console.error('Get active users error:', error);
