@@ -151,11 +151,35 @@ no seeded database in this sandbox)
 ## 3. Broken pages
 
 **Fully hardcoded / no real backend at all:**
-- [ ] `dashboard/financial-reports` — literal metrics/breakdown arrays; "Custom Range"
-  button has no handler; the real `useFinancialReports` hook exists but targets a
-  `/api/financial-reports` endpoint that doesn't exist and is never actually used here.
-- [ ] `dashboard/inventory-reports` — literal metrics arrays; filters are cosmetic
-  (don't refetch); Export button has no handler.
+- [x] `dashboard/financial-reports` — was: literal metrics/breakdown arrays;
+  "Custom Range" button had no handler; the real `useFinancialReports` hook
+  already existed but targeted a `/api/financial-reports` endpoint that didn't
+  exist and was never used by the page (the page had its own hardcoded data
+  instead). **Fixed** — built the real route: revenue/profit (cost-based, same
+  per-sale calc as R-4)/expenses/margin for the selected range, with real
+  period-over-period change percentages (vs. an equal-length preceding period);
+  expense breakdown from real `Expense.category` data; revenue-by-category via a
+  `Sale`→`Product`→`Category` aggregation. Wired the page to the hook (loading/
+  error states, no more hardcoded arrays), implemented a working Custom Range
+  date picker (start/end, matches the hook's existing `startDate`/`endDate`
+  params), and made Export generate a CSV from the real fetched data instead of
+  hardcoded literals. 4 new passing tests, including one asserting the actual
+  profit-margin arithmetic. Did not touch `dashboard/inventory-reports` — see
+  below, it needs a decision `financial-reports` didn't.
+- [!] `dashboard/inventory-reports` — literal metrics arrays; filters are
+  cosmetic (don't refetch); Export button has no handler. **Not fixed — needs a
+  decision, unlike `financial-reports`.** There's no pre-declared hook contract
+  to build against (no `useInventoryReports` exists), and two of its four
+  metrics need a business definition this pass has no mandate to invent:
+  "Inventory Turnover" (needs a defined formula — COGS ÷ average inventory over
+  what period, annualized or not?) and "Recent Stock Movements" (there's no
+  single stock-movement ledger — a real version would have to merge `Sale`
+  (stock out), `PurchaseOrder` deliveries (stock in), and `StockAdjustment`
+  (either) into one feed, which is itself a design choice). "Total Inventory
+  Value"/"Low Stock"/"Out of Stock"/"Category Performance" totals are
+  unambiguous and could be wired for real today — deliberately didn't do a
+  partial fix, since a page half-real/half-fake risks reading as fully
+  trustworthy once any of it is real.
 - [ ] `dashboard/shift-summary` — mock object built in a `useEffect`, explicitly
   commented as a placeholder; Print/Export buttons have no handler.
 - [ ] `dashboard/receipt-history` — literal `receipts` array; **duplicates** the real,
@@ -537,7 +561,8 @@ the unmodified code; this batch introduces no test regressions.
 | ~~`api/promotions` (list/create)~~ | E/F | **Fixed** — real model + full CRUD now backs the frontend's existing expectations. |
 | `dashboard/reports` "View" button | E | Labeled placeholder (`toast.info`), at least honestly stated. |
 | `dashboard/backup` stat tiles + schedule panel | E | Hardcoded; no cron/schedule exists anywhere. |
-| `dashboard/financial-reports`, `inventory-reports` | E | Fully hardcoded metrics presented as live. |
+| ~~`dashboard/financial-reports`~~ | E | **Fixed** — real `/api/financial-reports` backend, real Custom Range, real CSV export. |
+| `dashboard/inventory-reports` | E | Fully hardcoded; needs a decision on turnover formula + stock-movement source (see §3). |
 | ~~`dashboard/employees` list Delete button~~ | E | **Fixed** — wired to the real `deleteEmployee` action. |
 | ~~Sales analytics 30%-flat profit~~ | F | **Fixed** — real per-sale cost-based profit (R-4). |
 | ~~AI sales prediction $10 flat price~~ | F | **Fixed** — derived from real sales history (R-5). |
@@ -709,6 +734,14 @@ credential this sandbox doesn't have. Isolating them here rather than faking the
   dead UI, because `POST /api/stock-adjustments` always auto-approves and applies
   the stock change immediately — there's no code path that ever produces a
   `pending` record for those buttons to act on.
+
+- Financial Reports: real `/api/financial-reports` backend (cost-based
+  profit/margin, real period-over-period change %, real expense breakdown, real
+  revenue-by-category via a `Sale`→`Product`→`Category` aggregation), a working
+  Custom Range date picker, and a real CSV export replacing the entirely
+  hardcoded page. 4 new tests. `inventory-reports` deliberately left alone —
+  needs a decision on turnover-rate definition and unifying 3 different
+  collections into one stock-movement feed, not a targeted fix.
 
 **Still open, in priority order per the working plan:** the remaining mock/fake
 features in §9 (Backup, Financial/Inventory Reports pages themselves, Returns,
