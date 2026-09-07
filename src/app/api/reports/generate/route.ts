@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { withAuth } from '@/lib/api-auth';
+import { hasPermission, UserRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import { handleApiError } from '@/lib/error-handler';
 import { Report } from '@/models';
 import { Sale, Product, Customer, Expense } from '@/models';
+import { REPORT_TYPE_PERMISSIONS, ReportType } from '../report-permissions';
 
 export async function POST(request: NextRequest) {
   return withAuth(async (req, user) => {
     try {
       await connectDB();
-      
+
       const data = await request.json();
       const { type, dateRange, startDate, endDate } = data;
-      
+
       // Validate report type
       const validTypes = ['sales', 'inventory', 'customers', 'financial'];
       if (!validTypes.includes(type)) {
@@ -22,7 +24,19 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      
+
+      // Each report type is gated by the same permission that already
+      // guards its dedicated report page (view_sales_reports etc. in
+      // rbac.ts) - without this, this generic endpoint let any
+      // authenticated role (cashier included) generate a "financial"
+      // report and read real revenue/expense/profit figures.
+      if (!hasPermission(user.role as UserRole, REPORT_TYPE_PERMISSIONS[type as ReportType])) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden - Insufficient permissions' },
+          { status: 403 }
+        );
+      }
+
       // Calculate date range
       let start: Date, end: Date;
       const now = new Date();
