@@ -2,10 +2,230 @@
 
 Statuses: `[ ]` not started · `[-]` in progress · `[x]` completed · `[!]` blocked
 
-Scope of this pass: full-repo discovery (227 TS/TSX files, 44 API routes, 45 dashboard
-pages, 21 models, 11 server actions, 44 components). This is a **findings log**, not yet
-a fix log — see the bottom of this file for what's already fixed vs. what's pending
-prioritization.
+---
+
+## PRODUCTION READINESS STATUS
+
+Current state as of the end of "Pass 4: finalization" below. This section is a
+categorized index into the detailed narrative that follows (each phase/pass
+section has the full evidence and reasoning); it does not replace it. The six
+categories below are kept strictly separate, per direction — nothing appears
+in more than one.
+
+**Verification baseline as of this status**: `tsc --noEmit` exits 0 · `npm run
+build` succeeds · `npx jest` passes **35/35 suites, 239/239 tests**.
+
+### FIXED
+
+Real bugs found and corrected, or fake/mock functionality replaced with a
+real implementation (both mean the same thing here: code changed, tested,
+and shipped on this branch).
+
+- **Security — checkout price tampering**: `createSale` trusted a
+  client-supplied `item.price`; now always derives price/cost from the
+  product record.
+- **Security — Paystack secret key leak**: `getBranches`/`getBranchById` had
+  no auth and returned `settings.paystackSecretKey` in plaintext; a
+  byte-identical duplicate lived in `employees.ts`. Both secured
+  (admin-only, secret excluded even from the admin response); duplicate
+  removed.
+- **Security — a dozen unauthenticated `'use server'` read functions**
+  (inventory, expenses, customers, orders, WhatsApp messages) reachable with
+  zero session at all via direct client-side calls, bypassing the properly
+  secured API routes for the same data. All now require the matching
+  permission from `rbac.ts`.
+- **Security — `/api/reports` and `/api/dashboard/stats` permission
+  mismatches**: both were gated only by "any authenticated user," letting a
+  cashier generate/view/delete financial reports or read store-wide
+  revenue and other cashiers' transactions. Both now scope by the caller's
+  real role/permissions.
+- **Security — public registration eliminated**: `/register` was a fully
+  public page offering an Admin role option; its backend always required an
+  admin session, making it a confusing, redundant duplicate of the real
+  admin-only Create User flow. Removed outright; `/register` now redirects
+  to `/login`.
+- **Security — customer hard-delete**: `deleteCustomer` used a real
+  `findByIdAndDelete`, unlike every sibling entity's soft-delete, risking
+  orphaned `Sale`/`Loyalty`/`Transaction`/`WhatsAppMessage` references.
+  Switched to soft-delete (additive `isActive` field).
+- **Duplicated implementations removed**: `getSuppliers` (inventory.ts vs.
+  suppliers.ts), `getBranches` (branches.ts vs. employees.ts), and the
+  `inventory/categories` vs. `categories` pages — one canonical
+  implementation kept in each case, callers repointed.
+- **Mock/fake features replaced with real implementations**: Categories
+  page, Products page (schema field-name mismatch broke it entirely),
+  Activity Logs, Financial Reports, PurchaseOrder approve endpoint, Stock
+  Adjustment pending/approve workflow, Returns/refund workflow, Shift
+  open/close workflow, TOTP 2FA, Inventory Reports (turnover + movement
+  feed), Backup/export, Reports Center. Each is documented in its own
+  section below with the evidence used to design it.
+- **Correctness/data-integrity bugs**: Employees list read non-existent
+  schema fields (blank rows); "Total Employees" KPI counted deactivated
+  staff; notification mark-as-read called a route that doesn't exist and
+  lied about success; "Total Sessions Today" duplicated "Active Users";
+  a margin calculation divided by zero for free/donated stock; 5 pages
+  showed an identical empty-state for a genuine failure as for an
+  actually-empty list; the dashboard home page had a dead "Export Log"
+  button and fabricated fallback data for low-stock/expiring alerts.
+- **Deployment safety**: `.env` was not gitignored; the destructive
+  `npm run seed` script had no guard against running against a production
+  database; `.env.example`/`scripts/verify-env.ts` referenced a WhatsApp
+  variable name the code doesn't actually read, and checked two AI env
+  vars (`OPENAI_API_KEY`, `GOOGLE_AI_API_KEY`) that appear nowhere in the
+  codebase while never checking the real `NVIDIA_*` ones or
+  `MFA_ENCRYPTION_KEY` at all.
+- **2FA configuration error masked in production**: a missing
+  `MFA_ENCRYPTION_KEY` threw a plain `Error`, which `handleApiError`
+  genericizes to "an unexpected error occurred" in production, hiding
+  the one message an admin needs to fix their deployment. Now thrown as an
+  operational `AppError` so the real message survives in every
+  environment — the underlying "never fall back to an insecure key"
+  behavior was already correct and is unchanged.
+
+### VERIFIED
+
+Checked carefully and found to already be correct — no change made.
+
+- Regex-injection escaping (`escapeRegex()`) on every `$regex` query site,
+  rechecked across all 6 routes a (stale) audit report claimed were unescaped.
+- Notification actions (`markAsRead`, `deleteNotification`, `markAllAsRead`)
+  already apply a proper per-role visibility filter to every mutation, not
+  just reads — no IDOR present.
+- Aggregation pipelines' `ObjectId` casting (only `predictSales` needed a
+  fix, done in an earlier phase; nothing else matches on an uncast
+  ObjectId field).
+- Every `href` in `src/config/navigation.ts`, and every static in-page
+  dashboard link, resolves to a real page — no broken navigation found.
+- `next.config.js` and `src/lib/mongodb.ts`: no production-only or
+  module-load-time crash risks; `MONGODB_URI` degrades gracefully when unset.
+- `lib/actions/ai.ts`'s NVIDIA/OpenAI-compatible client is already
+  constructed lazily (inside a function), not at module load time.
+- No `NEXT_PUBLIC_*` variables exist anywhere in the codebase — nothing
+  server-only is exposed to the client bundle.
+- Stock Adjustment creation already produces `status: 'pending'`, not an
+  auto-approved mutation — the pending/approve workflow built in Phase B is
+  intact.
+- No remaining `TODO`/`FIXME`/`HACK` comments anywhere in `src`.
+- A dispatched final-verification agent's report was **independently
+  re-checked claim-by-claim against the real branch** after the agent
+  itself flagged that it had run inside a stale git worktree missing this
+  branch's commits; every claim beyond the one genuine finding (customer
+  hard-delete, listed under FIXED) was confirmed to already be fixed on
+  the actual branch.
+
+### REQUIRES PRODUCT DECISION
+
+Nothing further can be done here without the client choosing a direction —
+proposals are written, code is not.
+
+- **Purchase Order receiving workflow** — full architecture investigation
+  and a proposed `GoodsReceipt` model/workflow are documented below
+  ("Purchase Order receiving — architecture investigation and proposal").
+  Needs a decision on: approving the dedicated-record approach at all,
+  the over-delivery-requires-approval policy (vs. a numeric tolerance,
+  which would need the client to supply the actual tolerance value), and
+  whether `partially_received` should be a new PO status or left implicit.
+- **Database restore** — a full technical proposal is documented below
+  ("Database restore — technical proposal"), with a recommendation
+  *against* building it as a self-service in-app feature. Needs the
+  client to decide whether to accept that recommendation (Atlas Cloud
+  Backups + controlled ops restore + the existing export) or commission
+  the in-app version despite its risks.
+- **Report Viewer** (`dashboard/reports`' "coming soon" button) — an
+  honestly-labeled placeholder, not a fake success. Needs a decision on
+  what "viewing" a generated report should actually show before it's built.
+- **Race-condition hardening** (`Product.findById` → mutate → `.save()` in
+  `createSale`, `updateStock`, and Stock Adjustment approval) — a real,
+  pre-existing characteristic of every already-shipped stock-mutating
+  flow, not a new regression. Fixing it means touching multiple
+  already-tested flows; whether that's worth doing now, or paired with a
+  load-testing pass to first confirm it's a practical (not just
+  theoretical) risk at this store's actual transaction volume, is a
+  prioritization call for the client. See Recommended Future Work.
+
+### REQUIRES ENVIRONMENT CONFIGURATION
+
+Code is done and correct; these need a value set in Railway before the
+corresponding feature works in production. Full detail, generation
+commands, and grouping in `DEPLOYMENT.md`.
+
+- `MONGODB_URI`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` — the app is
+  non-functional without all three (does not crash without them, but
+  cannot authenticate or persist data).
+- `MFA_ENCRYPTION_KEY` — 2FA is unavailable (with a clear error, not a
+  silent failure) until this is set.
+- `ALLOWED_ORIGINS` — should be set explicitly to the real production
+  origin(s) rather than left on its development default.
+- `NVIDIA_API_KEY` (+ optionally `NVIDIA_BASE_URL`/`NVIDIA_AI_MODEL`) — AI
+  features (Business Insights, AI Predictions) return a clear
+  "not configured" error without it.
+- `CLOUDINARY_CLOUD_NAME`/`CLOUDINARY_API_KEY`/`CLOUDINARY_API_SECRET` —
+  product image uploads fail without these.
+- `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` — real WhatsApp
+  delivery; without both, the app runs in an already-labeled demo mode
+  (recorded as sent, never actually delivered).
+
+### INTENTIONALLY NOT IMPLEMENTED
+
+Deliberately not built, with the reasoning already investigated — not
+oversights.
+
+- **Self-service database restore** — recommended against by default (see
+  the technical proposal below); a destructive-by-design feature whose
+  failure mode is silent, irreversible data loss. MongoDB Atlas Cloud
+  Backups + controlled operational restore procedures + the existing
+  export are the recommended layered alternative.
+- **Live Paystack payment processing** — `PAYSTACK_PUBLIC_KEY`/
+  `PAYSTACK_SECRET_KEY` are read/written in Settings, but no code anywhere
+  in this repo makes a real Paystack API call. Checkout's `paymentMethod:
+  'paystack'` is recorded as a label only. Treat this as not-yet-built,
+  not merely unconfigured — setting real keys today would have no effect.
+- **Public self-registration** — eliminated entirely per explicit
+  direction; an Admin (or any) account can only ever be created by an
+  existing authenticated admin, through `/dashboard/users`.
+- **Redis-backed caching** — `redis` is a listed dependency with a working
+  client wrapper (`src/lib/redis.ts`) and cache helper (`src/lib/cache.ts`),
+  but confirmed by grep to have zero real callers anywhere in the
+  application. Nothing needs to be provisioned for it in production today.
+- **Purchase Order receiving / `GoodsReceipt`** — proposed, not built (see
+  REQUIRES PRODUCT DECISION above); today, approving a PO never affects
+  `Product.stockQuantity`, and there is no route or UI action that can
+  reach the schema's own `delivered`/`cancelled` PO statuses.
+- **Atomic stock-quantity updates** — the existing `findById` → mutate →
+  `.save()` pattern was deliberately not rewritten to `$inc`/
+  `findOneAndUpdate` across already-shipped flows during this finalization
+  pass, to avoid touching multiple already-tested code paths on a
+  theoretical (not observed) race window. See Recommended Future Work.
+
+### RECOMMENDED FUTURE WORK
+
+Not required for production readiness as scoped by this engagement, but
+worth planning for.
+
+- Retrofit atomic `$inc`/`findOneAndUpdate` stock mutations in `createSale`,
+  `updateStock`, and Stock Adjustment approval, to close the theoretical
+  concurrent-request race window on `Product.stockQuantity` — ideally
+  paired with real load data showing whether it's a practical risk at this
+  store's actual concurrent-checkout volume.
+- Build the proposed `GoodsReceipt`-based PO receiving workflow, once the
+  product decisions above are made.
+- Decide on and, if commissioned, build database restore per the technical
+  proposal's requirements (dry-run, checksum verification, replace-only,
+  multi-step confirmation, etc.) — or formally close this out by adopting
+  the Atlas-backups recommendation instead.
+- Real Paystack integration, if/when the client wants live payment
+  processing rather than a payment-method label.
+- A real report-content viewer for the Reports Center, once the client
+  decides what "viewing" a report should show.
+- Wire the existing (currently unused) Redis cache helper if a future
+  performance need justifies it — the infrastructure is already present,
+  just not connected to anything.
+
+---
+
+Scope of the original pass 1: full-repo discovery (227 TS/TSX files, 44 API routes, 45
+dashboard pages, 21 models, 11 server actions, 44 components). What follows is the
+complete, chronological narrative and evidence for everything summarized above.
 
 ---
 
