@@ -5,7 +5,6 @@ import { handleApiError } from '@/lib/error-handler';
 import { StockAdjustment } from '@/models';
 import { Product } from '@/models';
 import { escapeRegex } from '@/lib/utils';
-import { logActivity } from '@/lib/activity-log';
 
 export async function GET(request: NextRequest) {
   return withManagerOrAdmin(async (req, user) => {
@@ -67,44 +66,34 @@ export async function POST(request: NextRequest) {
         );
       }
       
+      // A requested-time estimate only, shown to reviewers before they decide -
+      // the real before/after stock is captured at approval time, since stock
+      // can change between the request and the review (see [id]/approve).
       const previousStock = product.stockQuantity || 0;
-      const newStock = data.adjustmentType === 'increase' 
-        ? previousStock + data.quantity 
+      const proposedStock = data.adjustmentType === 'increase'
+        ? previousStock + data.quantity
         : previousStock - data.quantity;
-      
-      if (newStock < 0) {
+
+      if (proposedStock < 0) {
         return NextResponse.json(
           { success: false, error: 'Insufficient stock for decrease adjustment' },
           { status: 400 }
         );
       }
-      
-      // Update product stock
-      product.stockQuantity = newStock;
-      await product.save();
-      
-      // Create stock adjustment record
+
+      // Create stock adjustment record - pending until reviewed. Stock is not
+      // touched here; see [id]/approve, which applies the change for real.
       const adjustment = await StockAdjustment.create({
         productId: data.productId,
         productName: product.name,
         adjustmentType: data.adjustmentType,
         quantity: data.quantity,
         previousStock,
-        newStock,
+        newStock: proposedStock,
         reason: data.reason,
         performedBy: user.name || 'Unknown',
         performedById: user.id,
-        status: 'approved',
-      });
-
-      logActivity({
-        action: 'STOCK_ADJUSTMENT',
-        description: `${user.name || 'Unknown'} ${data.adjustmentType === 'increase' ? 'increased' : 'decreased'} stock for "${product.name}" by ${data.quantity}`,
-        userId: user.id,
-        userName: user.name || 'Unknown',
-        userRole: user.role || 'unknown',
-        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-        severity: 'warning',
+        status: 'pending',
       });
 
       return NextResponse.json({

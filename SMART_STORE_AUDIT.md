@@ -205,11 +205,19 @@ no seeded database in this sandbox)
   data through the sidebar, not a fake duplicate.
 
 **Duplicate/competing implementations:**
-- [ ] `dashboard/categories` (sidebar-linked) vs. `dashboard/inventory/categories`
+- [x] `dashboard/categories` (sidebar-linked) vs. `dashboard/inventory/categories`
   (reachable only via a button inside Inventory) — two separately-coded category CRUD
-  UIs for the same `Category` model. Not merged (needs a product decision on which
-  one to keep) — but `inventory/categories`' own Edit button was separately broken
-  (see §4) and has been fixed to at least work correctly within its own page.
+  UIs for the same `Category` model. **Resolved** — compared both: `categories` has
+  search, a description field (shared `CategoryForm` dialog), and uses the app's
+  standard hook/API pattern (`useCategories` → `/api/categories`); `inventory/categories`
+  only had a bare name field via a one-off inline modal calling server actions
+  directly. Picked `dashboard/categories` as canonical, repointed the Inventory
+  page's "Categories" button at it, and replaced `inventory/categories/page.tsx`
+  with a server-side `redirect()` so bookmarked/direct links still land correctly.
+  Removed the now-fully-dead `createCategory`/`updateCategory`/`deleteCategory`
+  server actions from `lib/actions/inventory.ts` (verified `/api/categories` has
+  its own independent DB calls, nothing else depended on them) — `getCategories`
+  stays, still used by the product create/edit forms' category dropdown.
 
 ---
 
@@ -410,19 +418,47 @@ no seeded database in this sandbox)
   `useUpdatePurchaseOrder`, `useDeletePurchaseOrder` exist in the hook file but
   are never called from any page (confirmed via grep), so building routes for
   them now would be speculative, not a fix for a reachable bug.
-- [!] **`StockAdjustment` approve/reject — needs a decision, not fixed.** The
-  frontend has real, wired Approve/Reject buttons
-  (`useApproveStockAdjustment`/`useRejectStockAdjustment`) for adjustments with
-  `status: 'pending'` (the schema's own default) — but `POST
-  /api/stock-adjustments` **always** creates records with `status: 'approved'`
-  and applies the stock change immediately and unconditionally in the same
-  request. So today, no adjustment is ever actually `pending` — the Approve/Reject
-  buttons are currently unreachable dead UI, not just "missing a route." Building
-  the missing `[id]/approve`/`[id]/reject` routes wouldn't fix anything on their
-  own; making them reachable would mean changing stock adjustments from
-  "immediate effect" to "request now, adjust stock only on approval" — a real
-  inventory-workflow change, not a targeted fix. Flagging for a decision rather
-  than guessing at intended behavior.
+- [x] **`StockAdjustment` approve/reject — investigated, evidence supports the
+  pending workflow, implemented.** Full investigation before touching any code:
+  - The frontend has real, wired Approve/Reject buttons
+    (`useApproveStockAdjustment`/`useRejectStockAdjustment`), gated on
+    `adjustment.status === 'pending'`, plus a status filter with
+    Pending/Approved/Rejected options — all fully built, not stubs.
+  - The schema's own default is `status: 'pending'`.
+  - `rbac.ts` defines `APPROVE_STOCK_ADJUSTMENTS` as a **separate permission**
+    from `STOCK_ADJUSTMENTS` (create) — granted to the same two roles
+    (admin+manager) as `stock_adjustments`, which is the **exact same
+    create/approve permission split** already used by `PurchaseOrder`
+    (`create_purchase_orders`/`approve_purchase_orders`, also admin+manager) —
+    a real, already-working approval workflow elsewhere in this codebase.
+  - The only thing contradicting a pending-approval design was `POST
+    /api/stock-adjustments` itself, which hardcoded `status: 'approved'` and
+    applied the stock change immediately and unconditionally — inconsistent
+    with everything else listed above, and looking like a shortcut rather than
+    the intended design.
+
+  This is the same create/approve permission pattern as the already-working
+  Purchase Order workflow, not a new invention, so implemented it to match:
+  - `POST /api/stock-adjustments` now creates `status: 'pending'` records and
+    does **not** touch product stock. It still validates the requested change
+    against current stock as early feedback, but the record itself is a
+    request, not an applied change.
+  - Added `POST /api/stock-adjustments/[id]/approve` (`approve_stock_adjustments`
+    permission, only valid from `pending`): re-reads the **live** product
+    quantity at approval time (stock may have moved between request and review
+    — e.g. a sale happened) and applies the delta against that, not the stale
+    estimate captured at request time; overwrites the record's
+    `previousStock`/`newStock` with what actually happened; blocks the approval
+    if it would drive stock negative. Logs a `STOCK_ADJUSTMENT` activity-log
+    entry here (moved from creation time, since the real stock change now
+    happens at approval, not request).
+  - Added `POST /api/stock-adjustments/[id]/reject` (same permission, only
+    valid from `pending`): marks the record rejected, never touches stock.
+  - Added `reviewedBy`/`reviewedById`/`reviewedAt` fields to the
+    `StockAdjustment` schema (additive) so there's a real audit trail of who
+    approved/rejected a request and when — the schema had no such fields before.
+  - 8 new passing tests, including one specifically asserting approval uses the
+    live stock quantity rather than the stale request-time estimate.
 - [ ] No route backing `Promotion` beyond the mock list/create.
 
 ---
@@ -752,3 +788,19 @@ fixed, since it's not a build error and needs no product decision beyond "should
 this be populated," which hasn't been asked yet), and the 472 pre-existing lint
 warnings (mostly `no-explicit-any`) intentionally left alone as out of scope for a
 mass pass.
+
+---
+
+## Pass 3: closing decision-dependent gaps, continued audit
+
+Direction for this pass: implement everything not requiring a business decision;
+for previously-flagged decision-dependent items, follow the explicit direction
+given (baseline policies for Returns, an explicit Shift model, a real TOTP 2FA
+design, a defensible turnover formula, a real backup architecture) rather than
+inventing rules; investigate Stock Adjustments properly before deciding whether
+to implement or leave its dead UI; keep auditing for anything not yet found.
+
+- **Categories consolidation** — see §3 "Duplicate/competing implementations,"
+  now resolved.
+- **StockAdjustment approve/reject** — see §6 "Missing endpoints," now
+  implemented based on strong architectural evidence (documented in full there).
