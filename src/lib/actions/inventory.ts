@@ -141,27 +141,48 @@ export async function updateStock(id: string, quantity: number, operation: 'add'
   await requireManagerOrAdmin();
 
   const db = await connectDB();
-  
+
   if (!db) {
     throw new Error('Database not connected');
   }
 
-  const product = await Product.findById(id);
+  // A negative or zero quantity is never legitimate, and left unchecked it
+  // would flip the guard below (e.g. 'subtract' with a negative quantity
+  // would increase stock while bypassing the insufficient-stock check).
+  // Mongoose's `min: 0` schema validator on Product does not run on
+  // $inc-based atomic updates, so this has to be enforced here explicitly.
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new Error('quantity must be a positive whole number');
+  }
+
+  // A plain findById -> mutate -> save() here would let two concurrent calls
+  // both read the same stockQuantity and each apply their own delta on top
+  // of it, silently losing one of the two updates (or letting a 'subtract'
+  // pass its pre-check against a now-stale quantity and drive stock
+  // negative). The atomic update below applies the delta as part of the same
+  // operation that reads current stock, and for 'subtract' only succeeds if
+  // enough stock is actually still present at that moment.
+  const delta = operation === 'add' ? quantity : -quantity;
+  const updateQuery: Record<string, unknown> = { _id: id };
+  if (operation === 'subtract') {
+    updateQuery.stockQuantity = { $gte: quantity };
+  }
+
+  const product = await Product.findOneAndUpdate(
+    updateQuery,
+    { $inc: { stockQuantity: delta } },
+    { new: true }
+  );
 
   if (!product) {
-    throw new Error('Product not found');
-  }
-
-  if (operation === 'add') {
-    product.stockQuantity += quantity;
-  } else {
-    if (product.stockQuantity < quantity) {
-      throw new Error('Insufficient stock');
+    // Distinguish "no such product" from "insufficient stock" for a useful
+    // error message, the same way the original pre-check did.
+    const exists = await Product.findById(id).select('_id');
+    if (!exists) {
+      throw new Error('Product not found');
     }
-    product.stockQuantity -= quantity;
+    throw new Error('Insufficient stock');
   }
-
-  await product.save();
 
   // Check if stock is low and create notification
   if (product.stockQuantity <= product.minStockLevel) {

@@ -27,6 +27,7 @@ import {
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { toast } from 'sonner';
 import { getDashboardRoleConfig } from '@/lib/dashboard-role';
 import { getDashboardCards, UserRole } from '@/lib/rbac';
 import { useDashboardStats, useSalesData, useLowStockAlerts, useExpiringItems } from '@/hooks/useDashboard';
@@ -71,21 +72,38 @@ export default function DashboardPage() {
   const { data: lowStockItems, isLoading: lowStockLoading } = useLowStockAlerts();
   const { data: expiringItems, isLoading: expiringLoading } = useExpiringItems();
 
-  // Mock data for alerts - in production, this would come from the API
-  const mockLowStockItems = [
-    { id: '1', name: 'Coca-Cola 50cl', quantity: 2, severity: 'high' as const },
-    { id: '2', name: 'Indomie Chicken', quantity: 5, severity: 'medium' as const },
-    { id: '3', name: 'Bread Sliced', quantity: 8, severity: 'low' as const },
-  ];
+  const displayLowStockItems = lowStockItems ?? [];
+  const displayExpiringItems = expiringItems ?? [];
 
-  const mockExpiringItems = [
-    { id: '1', name: 'Fresh Milk 1L', quantity: 3, severity: 'high' as const },
-    { id: '2', name: 'Yogurt Pack', quantity: 7, severity: 'medium' as const },
-    { id: '3', name: 'Cheese Slices', quantity: 12, severity: 'low' as const },
-  ];
+  const handleExportTransactionLog = () => {
+    const transactions = stats?.recentTransactions ?? [];
+    if (transactions.length === 0) {
+      toast.info('No recent transactions to export yet');
+      return;
+    }
 
-  const displayLowStockItems = lowStockItems ?? mockLowStockItems;
-  const displayExpiringItems = expiringItems ?? mockExpiringItems;
+    let csv = 'Transaction ID,Customer,Authorized By,Net Amount,Method,Timestamp\n';
+    transactions.forEach((transaction: any) => {
+      const row = [
+        transaction.saleNumber ?? 'N/A',
+        transaction.customerName ?? 'Walk-in Customer',
+        transaction.cashierId?.name ?? 'Automated',
+        transaction.total ?? 0,
+        transaction.paymentMethod ?? 'Unknown',
+        transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : 'Unknown',
+      ];
+      csv += row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transaction_log_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Transaction log exported successfully');
+  };
 
   return (
     <div className="min-h-screen transition-colors duration-300">
@@ -403,7 +421,10 @@ export default function DashboardPage() {
                 <h3 className="text-xl font-bold text-foreground tracking-tight">Recent Transactions</h3>
                 <p className="text-sm font-medium text-muted-foreground mt-1">Real-time update from all terminals</p>
               </div>
-              <button className="px-6 py-3 bg-secondary text-muted-foreground font-bold rounded-xl hover:bg-primary hover:text-primary-foreground transition-all text-sm uppercase tracking-wider hover:scale-105 active:scale-95">
+              <button
+                onClick={handleExportTransactionLog}
+                className="px-6 py-3 bg-secondary text-muted-foreground font-bold rounded-xl hover:bg-primary hover:text-primary-foreground transition-all text-sm uppercase tracking-wider hover:scale-105 active:scale-95"
+              >
                 Export Log
               </button>
             </div>

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import mongoose from 'mongoose';
 import { POST, GET } from '@/app/api/returns/route';
 import { auth } from '@/lib/auth';
 import User from '@/models/User';
@@ -28,6 +29,45 @@ jest.mock('@/models/ActivityLog', () => ({
   __esModule: true,
   default: { create: jest.fn().mockResolvedValue(undefined) },
 }));
+
+jest.mock('mongoose', () => {
+  const actual = jest.requireActual('mongoose');
+  return { ...actual, startSession: jest.fn() };
+});
+
+// Chainable+thenable query stand-in: session()/sort()/limit()/lean() each
+// return the same object, which also resolves to `result` directly however
+// deep the (real) call chain goes - matching every shape used by this route.
+interface ChainableQuery<T> {
+  session: jest.Mock;
+  sort: jest.Mock;
+  limit: jest.Mock;
+  lean: jest.Mock;
+  then: (resolve: (value: T) => unknown, reject?: (reason: unknown) => unknown) => Promise<unknown>;
+}
+
+function chainable<T>(result: T): ChainableQuery<T> {
+  const query = {
+    session: jest.fn(),
+    sort: jest.fn(),
+    limit: jest.fn(),
+    lean: jest.fn(),
+    then: (resolve: (value: T) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(result).then(resolve, reject),
+  } as ChainableQuery<T>;
+  query.session.mockReturnValue(query);
+  query.sort.mockReturnValue(query);
+  query.limit.mockReturnValue(query);
+  query.lean.mockReturnValue(query);
+  return query;
+}
+
+function mockTransactionalSession() {
+  (mongoose.startSession as jest.Mock).mockResolvedValue({
+    withTransaction: (fn: () => Promise<unknown>) => fn(),
+    endSession: jest.fn().mockResolvedValue(undefined),
+  });
+}
 
 function mockSession(role: string) {
   (auth as jest.Mock).mockResolvedValue({
@@ -59,6 +99,19 @@ function makeSale(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function mockCreatedReturn() {
+  (Return.create as jest.Mock).mockImplementation(async (docs: unknown[]) => [
+    {
+      ...(docs[0] as Record<string, unknown>),
+      toObject() {
+        return { ...(docs[0] as Record<string, unknown>) };
+      },
+      _id: { toString: () => 'ret-1' },
+      createdAt: new Date(),
+    },
+  ]);
+}
+
 function makePostRequest(body: unknown) {
   return new NextRequest('http://localhost/api/returns', {
     method: 'POST',
@@ -67,19 +120,18 @@ function makePostRequest(body: unknown) {
 }
 
 describe('POST /api/returns', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockTransactionalSession();
+  });
 
   it('rejects roles without process_returns is impossible - all roles have it, so verify a real create instead', async () => {
     // process_returns is granted to admin/manager/cashier - this asserts a
     // cashier (the least-privileged holder) can actually process a return.
     mockSession('cashier');
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale());
-    (Return.find as jest.Mock).mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
-    (Return.create as jest.Mock).mockResolvedValue({
-      toObject: () => ({}),
-      _id: { toString: () => 'ret-1' },
-      createdAt: new Date(),
-    });
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale()));
+    (Return.find as jest.Mock).mockReturnValue(chainable([]));
+    mockCreatedReturn();
 
     const response = await POST(
       makePostRequest({
@@ -96,13 +148,9 @@ describe('POST /api/returns', () => {
 
   it('caps refund at the original sale price and quantity (partial return)', async () => {
     mockSession('cashier');
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale());
-    (Return.find as jest.Mock).mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
-    (Return.create as jest.Mock).mockResolvedValue({
-      toObject: () => ({}),
-      _id: { toString: () => 'ret-1' },
-      createdAt: new Date(),
-    });
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale()));
+    (Return.find as jest.Mock).mockReturnValue(chainable([]));
+    mockCreatedReturn();
 
     await POST(
       makePostRequest({
@@ -112,7 +160,7 @@ describe('POST /api/returns', () => {
       })
     );
 
-    const createCall = (Return.create as jest.Mock).mock.calls[0][0];
+    const createCall = (Return.create as jest.Mock).mock.calls[0][0][0];
     // 2 of 4 units at $50/unit (200 total / 4 qty) = $100
     expect(createCall.totalRefund).toBe(100);
     expect(createCall.items[0].unitRefundPrice).toBe(50);
@@ -121,13 +169,9 @@ describe('POST /api/returns', () => {
 
   it('restocks inventory only for items marked restock', async () => {
     mockSession('cashier');
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale());
-    (Return.find as jest.Mock).mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
-    (Return.create as jest.Mock).mockResolvedValue({
-      toObject: () => ({}),
-      _id: { toString: () => 'ret-1' },
-      createdAt: new Date(),
-    });
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale()));
+    (Return.find as jest.Mock).mockReturnValue(chainable([]));
+    mockCreatedReturn();
 
     await POST(
       makePostRequest({
@@ -142,8 +186,8 @@ describe('POST /api/returns', () => {
 
   it('rejects returning more than was originally sold', async () => {
     mockSession('cashier');
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale());
-    (Return.find as jest.Mock).mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale()));
+    (Return.find as jest.Mock).mockReturnValue(chainable([]));
 
     const response = await POST(
       makePostRequest({
@@ -161,13 +205,11 @@ describe('POST /api/returns', () => {
 
   it('accounts for quantity already returned in prior partial returns', async () => {
     mockSession('cashier');
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale());
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale()));
     // 3 of the 4 units were already returned in an earlier return.
-    (Return.find as jest.Mock).mockReturnValue({
-      lean: jest.fn().mockResolvedValue([
-        { totalRefund: 150, items: [{ productId: { toString: () => 'prod-1' }, quantity: 3 }] },
-      ]),
-    });
+    (Return.find as jest.Mock).mockReturnValue(
+      chainable([{ totalRefund: 150, items: [{ productId: { toString: () => 'prod-1' }, quantity: 3 }] }])
+    );
 
     const response = await POST(
       makePostRequest({
@@ -182,12 +224,38 @@ describe('POST /api/returns', () => {
     expect(payload.error).toMatch(/only 1 remaining returnable/);
   });
 
+  it('never double-refunds/double-restocks when a concurrent return for the same sale has already consumed the returnable quantity', async () => {
+    // Simulates the race this transaction closes: by the time this request's
+    // own transaction actually reads prior returns, a concurrent return has
+    // already committed one for 3 of the 4 units - re-reading fresh state
+    // inside the transaction (rather than trusting a value read before it
+    // started) is what makes this rejection possible instead of a
+    // double-application.
+    mockSession('cashier');
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale()));
+    (Return.find as jest.Mock).mockReturnValue(
+      chainable([{ totalRefund: 150, items: [{ productId: { toString: () => 'prod-1' }, quantity: 3 }] }])
+    );
+
+    const response = await POST(
+      makePostRequest({
+        saleId: 'sale-1',
+        items: [{ productId: 'prod-1', quantity: 2, reason: 'Damaged' }],
+        refundMethod: 'cash',
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(Return.create).not.toHaveBeenCalled();
+    expect(Product.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
   it('rejects a refund that would exceed the amount originally paid', async () => {
     mockSession('cashier');
     // Sale total is 200, but somehow the requested items would refund more
     // than that (guards against a corrupted/negative-total edge case).
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale({ total: 50 }));
-    (Return.find as jest.Mock).mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale({ total: 50 })));
+    (Return.find as jest.Mock).mockReturnValue(chainable([]));
 
     const response = await POST(
       makePostRequest({
@@ -204,7 +272,7 @@ describe('POST /api/returns', () => {
 
   it('rejects a return against a non-completed sale', async () => {
     mockSession('cashier');
-    (Sale.findById as jest.Mock).mockResolvedValue(makeSale({ status: 'pending' }));
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(makeSale({ status: 'pending' })));
 
     const response = await POST(
       makePostRequest({
@@ -221,13 +289,9 @@ describe('POST /api/returns', () => {
   it('never mutates the original sale record', async () => {
     mockSession('cashier');
     const sale = makeSale();
-    (Sale.findById as jest.Mock).mockResolvedValue(sale);
-    (Return.find as jest.Mock).mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
-    (Return.create as jest.Mock).mockResolvedValue({
-      toObject: () => ({}),
-      _id: { toString: () => 'ret-1' },
-      createdAt: new Date(),
-    });
+    (Sale.findById as jest.Mock).mockReturnValue(chainable(sale));
+    (Return.find as jest.Mock).mockReturnValue(chainable([]));
+    mockCreatedReturn();
 
     await POST(
       makePostRequest({
@@ -249,13 +313,9 @@ describe('GET /api/returns', () => {
 
   it('lists returns for an authorized role', async () => {
     mockSession('manager');
-    (Return.find as jest.Mock).mockReturnValue({
-      sort: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      lean: jest.fn().mockResolvedValue([
-        { _id: { toString: () => 'ret-1' }, returnNumber: 'RET-1', createdAt: new Date() },
-      ]),
-    });
+    (Return.find as jest.Mock).mockReturnValue(
+      chainable([{ _id: { toString: () => 'ret-1' }, returnNumber: 'RET-1', createdAt: new Date() }])
+    );
 
     const request = new NextRequest('http://localhost/api/returns');
     const response = await GET(request);

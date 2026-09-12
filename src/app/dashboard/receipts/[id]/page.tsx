@@ -10,14 +10,14 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
 
   if (!sale) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Sale not found</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Sale not found</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Digital Receipt" userRole="cashier" />
       
       <main className="p-8">

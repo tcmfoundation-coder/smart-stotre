@@ -19,7 +19,7 @@ export interface PurchaseOrder {
   supplierName: string;
   items: PurchaseOrderItem[];
   totalAmount: number;
-  status: 'pending' | 'approved' | 'delivered' | 'cancelled';
+  status: 'pending' | 'approved' | 'partially_received' | 'delivered' | 'cancelled';
   orderDate: string;
   expectedDelivery?: string;
   actualDelivery?: string;

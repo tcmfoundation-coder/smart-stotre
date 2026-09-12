@@ -3,7 +3,7 @@ import { GET as getInventoryReports } from '@/app/api/inventory-reports/route';
 import { GET as getMovements } from '@/app/api/inventory-reports/movements/route';
 import { auth } from '@/lib/auth';
 import User from '@/models/User';
-import { Product, Sale, StockAdjustment, Return } from '@/models';
+import { Product, Sale, StockAdjustment, Return, GoodsReceipt } from '@/models';
 
 jest.mock('@/lib/auth', () => ({
   auth: jest.fn(),
@@ -24,6 +24,7 @@ jest.mock('@/models', () => ({
   Sale: { find: jest.fn() },
   StockAdjustment: { find: jest.fn() },
   Return: { find: jest.fn() },
+  GoodsReceipt: { find: jest.fn() },
 }));
 
 function mockSession(role: string) {
@@ -70,6 +71,7 @@ describe('GET /api/inventory-reports', () => {
 
     leanFind(StockAdjustment.find as jest.Mock, []);
     leanFind(Return.find as jest.Mock, []);
+    leanFind(GoodsReceipt.find as jest.Mock, []);
 
     const request = new NextRequest('http://localhost/api/inventory-reports?dateRange=month');
     const response = await getInventoryReports(request);
@@ -82,6 +84,39 @@ describe('GET /api/inventory-reports', () => {
     expect(payload.data.metrics.cogs).toBe(1000);
     expect(payload.data.metrics.turnoverRatio).toBeCloseTo(1000 / 4500);
     expect(payload.data.limitations.length).toBeGreaterThan(0);
+  });
+
+  it('reverses a goods-receipt-driven stock increase when reconstructing beginning inventory', async () => {
+    mockSession('manager');
+
+    // Current on-hand: 40 units at buyingPrice 100 => ending value 4000.
+    leanFind(Product.find as jest.Mock, [
+      { _id: { toString: () => productId }, name: 'Widget', categoryId: { _id: { toString: () => categoryId }, name: 'Gadgets' }, buyingPrice: 100, stockQuantity: 40, minStockLevel: 10 },
+    ]);
+    (Sale.find as jest.Mock)
+      .mockReturnValueOnce({ select: jest.fn().mockReturnThis(), lean: jest.fn().mockResolvedValue([]) })
+      .mockReturnValueOnce({ select: jest.fn().mockReturnThis(), lean: jest.fn().mockResolvedValue([]) });
+    leanFind(StockAdjustment.find as jest.Mock, []);
+    leanFind(Return.find as jest.Mock, []);
+
+    // A goods receipt applied 15 units to this product after `start`, within
+    // the period - reversing it should make beginning inventory 15 units lower.
+    leanFind(GoodsReceipt.find as jest.Mock, [
+      {
+        status: 'completed',
+        receivedAt: new Date(),
+        items: [{ productId: { toString: () => productId }, acceptedQuantity: 15, overDeliveryQuantity: 0 }],
+      },
+    ]);
+
+    const request = new NextRequest('http://localhost/api/inventory-reports?dateRange=month');
+    const response = await getInventoryReports(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    // Ending value: 40 * 100 = 4000. Beginning value: (40-15) * 100 = 2500.
+    expect(payload.data.metrics.totalInventoryValue).toBe(4000);
+    expect(payload.data.metrics.averageInventoryValue).toBe(3250);
   });
 
   it('flags low stock and out of stock counts using each product\'s own minStockLevel', async () => {
@@ -97,6 +132,7 @@ describe('GET /api/inventory-reports', () => {
       .mockReturnValueOnce({ select: jest.fn().mockReturnThis(), lean: jest.fn().mockResolvedValue([]) });
     leanFind(StockAdjustment.find as jest.Mock, []);
     leanFind(Return.find as jest.Mock, []);
+    leanFind(GoodsReceipt.find as jest.Mock, []);
 
     const request = new NextRequest('http://localhost/api/inventory-reports?dateRange=month');
     const response = await getInventoryReports(request);
@@ -167,6 +203,10 @@ describe('GET /api/inventory-reports/movements', () => {
         },
       ]),
     });
+    (GoodsReceipt.find as jest.Mock).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
+    });
 
     const request = new NextRequest('http://localhost/api/inventory-reports/movements?dateRange=month');
     const response = await getMovements(request);
@@ -179,7 +219,7 @@ describe('GET /api/inventory-reports/movements', () => {
     expect(movements[0].quantityChange).toBe(-5);
     expect(movements[1].quantityChange).toBe(8);
     expect(movements[2].quantityChange).toBe(2);
-    expect(payload.data.notes.length).toBeGreaterThan(0);
+    expect(payload.data.notes).toEqual([]);
   });
 
   it('excludes returned items that were not restocked', async () => {
@@ -205,6 +245,10 @@ describe('GET /api/inventory-reports/movements', () => {
           items: [{ productId: { toString: () => productId }, productName: 'Widget', sku: 'WID-1', quantity: 2, restocked: false }],
         },
       ]),
+    });
+    (GoodsReceipt.find as jest.Mock).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
     });
 
     const request = new NextRequest('http://localhost/api/inventory-reports/movements?dateRange=month');
@@ -252,5 +296,64 @@ describe('GET /api/inventory-reports/movements', () => {
     expect(payload.data.movements[0].quantityChange).toBe(-3);
     expect(Sale.find).not.toHaveBeenCalled();
     expect(Return.find).not.toHaveBeenCalled();
+    expect(GoodsReceipt.find).not.toHaveBeenCalled();
+  });
+
+  it('includes accepted goods-receipt quantities and approved over-delivery as separate PURCHASE entries', async () => {
+    mockSession('manager');
+
+    (Sale.find as jest.Mock).mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    (StockAdjustment.find as jest.Mock).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    (Return.find as jest.Mock).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
+    });
+
+    const receivedAt = new Date();
+    const overageDecisionAt = new Date(receivedAt.getTime() + 1000);
+    // First call (accepted-at-receipt query) and second call (approved-overage
+    // query) both hit GoodsReceipt.find, in that order.
+    (GoodsReceipt.find as jest.Mock)
+      .mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockResolvedValue([
+          {
+            _id: { toString: () => 'gr-1' },
+            receiptNumber: 'GR-1',
+            receivedAt,
+            receivedBy: 'Manager Mo',
+            items: [{ productId: { toString: () => productId }, productName: 'Widget', sku: 'WID-1', acceptedQuantity: 40 }],
+          },
+        ]),
+      })
+      .mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockResolvedValue([
+          {
+            _id: { toString: () => 'gr-1' },
+            receiptNumber: 'GR-1',
+            overageDecisionAt,
+            overageDecisionBy: 'Admin Amy',
+            items: [{ productId: { toString: () => productId }, productName: 'Widget', sku: 'WID-1', overDeliveryQuantity: 10 }],
+          },
+        ]),
+      });
+
+    const request = new NextRequest('http://localhost/api/inventory-reports/movements?dateRange=month&type=PURCHASE');
+    const response = await getMovements(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    const movements = payload.data.movements;
+    expect(movements).toHaveLength(2);
+    expect(movements.map((m: { quantityChange: number }) => m.quantityChange).sort()).toEqual([10, 40]);
+    expect(movements.every((m: { type: string }) => m.type === 'PURCHASE')).toBe(true);
   });
 });

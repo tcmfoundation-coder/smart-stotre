@@ -19,7 +19,7 @@ jest.mock('@/models/User', () => ({
 }));
 
 jest.mock('@/models', () => ({
-  PurchaseOrder: { findById: jest.fn() },
+  PurchaseOrder: { findById: jest.fn(), findOneAndUpdate: jest.fn() },
 }));
 
 function mockSession(role: string) {
@@ -54,6 +54,7 @@ describe('POST /api/purchase-orders/[id]/approve', () => {
 
   it('returns 404 when the order does not exist', async () => {
     mockSession('manager');
+    (PurchaseOrder.findOneAndUpdate as jest.Mock).mockResolvedValue(null);
     (PurchaseOrder.findById as jest.Mock).mockResolvedValue(null);
 
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: 'po-1' }) });
@@ -65,10 +66,9 @@ describe('POST /api/purchase-orders/[id]/approve', () => {
 
   it('rejects approving an order that is not pending', async () => {
     mockSession('manager');
-    (PurchaseOrder.findById as jest.Mock).mockResolvedValue({
-      status: 'approved',
-      save: jest.fn(),
-    });
+    // The compare-and-swap doesn't match a non-pending order.
+    (PurchaseOrder.findOneAndUpdate as jest.Mock).mockResolvedValue(null);
+    (PurchaseOrder.findById as jest.Mock).mockResolvedValue({ status: 'approved' });
 
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: 'po-1' }) });
     const payload = await response.json();
@@ -80,12 +80,11 @@ describe('POST /api/purchase-orders/[id]/approve', () => {
   it('approves a pending order for a manager', async () => {
     mockSession('manager');
     const order = {
-      status: 'pending',
-      save: jest.fn().mockResolvedValue(undefined),
+      status: 'approved',
       toObject: jest.fn().mockReturnValue({ status: 'approved' }),
       _id: { toString: () => 'po-1' },
     };
-    (PurchaseOrder.findById as jest.Mock).mockResolvedValue(order);
+    (PurchaseOrder.findOneAndUpdate as jest.Mock).mockResolvedValue(order);
 
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: 'po-1' }) });
     const payload = await response.json();
@@ -93,6 +92,31 @@ describe('POST /api/purchase-orders/[id]/approve', () => {
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
     expect(order.status).toBe('approved');
-    expect(order.save).toHaveBeenCalledTimes(1);
+    expect(PurchaseOrder.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'po-1', status: 'pending' },
+      { status: 'approved' },
+      { new: true }
+    );
+  });
+
+  it('never double-approves when a second concurrent call arrives after the first already succeeded', async () => {
+    mockSession('manager');
+    // First call: the compare-and-swap matches and flips status.
+    (PurchaseOrder.findOneAndUpdate as jest.Mock).mockResolvedValueOnce({
+      status: 'approved',
+      toObject: () => ({ status: 'approved' }),
+      _id: { toString: () => 'po-1' },
+    });
+    const first = await POST(makeRequest(), { params: Promise.resolve({ id: 'po-1' }) });
+    expect(first.status).toBe(200);
+
+    // Second, concurrent/retried call: the compare-and-swap no longer matches.
+    (PurchaseOrder.findOneAndUpdate as jest.Mock).mockResolvedValueOnce(null);
+    (PurchaseOrder.findById as jest.Mock).mockResolvedValue({ status: 'approved' });
+    const second = await POST(makeRequest(), { params: Promise.resolve({ id: 'po-1' }) });
+    const secondPayload = await second.json();
+
+    expect(second.status).toBe(400);
+    expect(secondPayload.success).toBe(false);
   });
 });

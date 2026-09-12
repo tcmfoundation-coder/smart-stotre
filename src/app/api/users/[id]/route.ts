@@ -3,6 +3,7 @@ import { withAdmin } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
+import { logActivity } from '@/lib/activity-log';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -64,6 +65,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         );
       }
 
+      const roleChanged = typeof rest.role === 'string' && rest.role !== undefined;
+      logActivity({
+        action: roleChanged ? 'USER_ROLE_CHANGED' : 'USER_UPDATED',
+        description: roleChanged
+          ? `${user.name || 'Unknown'} changed the role of "${userDoc.name}" (${userDoc.email}) to "${userDoc.role}"`
+          : `${user.name || 'Unknown'} updated user "${userDoc.name}" (${userDoc.email})`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: roleChanged ? 'warning' : 'info',
+      });
+
       return NextResponse.json({
         success: true,
         data: { ...userDoc, status: userDoc.isActive ? 'active' : 'inactive' }
@@ -89,14 +103,24 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
         { isActive: false },
         { new: true }
       ).select('-password');
-      
+
       if (!userDoc) {
         return NextResponse.json(
           { success: false, error: 'User not found' },
           { status: 404 }
         );
       }
-      
+
+      logActivity({
+        action: 'USER_DEACTIVATED',
+        description: `${user.name || 'Unknown'} deactivated user "${userDoc.name}" (${userDoc.email})`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: 'warning',
+      });
+
       return NextResponse.json({
         success: true,
         data: userDoc

@@ -249,7 +249,7 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
                   {(userName || userRole).charAt(0).toUpperCase()}
                 </motion.div>
                 <motion.div 
-                  className="absolute -bottom-1 -right-1 h-4 w-4 bg-emerald-500 border-2 border-card rounded-full"
+                  className="absolute -bottom-1 -right-1 h-4 w-4 bg-success border-2 border-card rounded-full"
                   animate={{ 
                     scale: [1, 1.2, 1],
                     opacity: [1, 0.7, 1]

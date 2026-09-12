@@ -22,7 +22,7 @@ export function EmptyState({
   const variantStyles = {
     default: 'text-muted-foreground/30',
     error: 'text-destructive/30',
-    success: 'text-emerald-500/30'
+    success: 'text-success/30'
   };
 
   return (

@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
 import { escapeRegex } from '@/lib/utils';
+import { logActivity } from '@/lib/activity-log';
 
 export async function GET(request: NextRequest) {
   return withAdmin(async (req, user) => {
@@ -85,6 +86,16 @@ export async function POST(request: NextRequest) {
       // Remove password from response
       const userResponse = newUser.toObject();
       delete (userResponse as any).password;
+
+      logActivity({
+        action: 'USER_CREATED',
+        description: `${user.name || 'Unknown'} created user "${newUser.name}" (${newUser.email}) with role "${newUser.role}"`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: 'warning',
+      });
 
       return NextResponse.json({
         success: true,

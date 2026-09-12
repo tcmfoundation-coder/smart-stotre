@@ -98,20 +98,20 @@ export default function AIAssistantPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="AI Business Assistant" userRole="admin" />
-      
+
       <main className="p-6">
         <div className="max-w-4xl mx-auto">
           {/* Quick Questions */}
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Questions</h3>
+            <h3 className="text-sm font-medium text-foreground mb-3">Quick Questions</h3>
             <div className="flex flex-wrap gap-2">
               {quickQuestions.map((question) => (
                 <button
                   key={question}
                   onClick={() => handleQuickQuestion(question)}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm text-gray-700"
+                  className="px-4 py-2 bg-card border border-border rounded-lg hover:bg-accent text-sm text-foreground"
                 >
                   {question}
                 </button>
@@ -120,7 +120,7 @@ export default function AIAssistantPage() {
           </div>
 
           {/* Chat Container */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
             {/* Messages */}
             <div className="h-[500px] overflow-y-auto p-6 space-y-4">
               {messages.map((message, index) => (
@@ -131,14 +131,14 @@ export default function AIAssistantPage() {
                   <div
                     className={`max-w-[80%] rounded-lg p-4 ${
                       message.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-900'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-foreground'
                     }`}
                   >
                     {message.role === 'assistant' && (
                       <div className="flex items-center space-x-2 mb-2">
-                        <Sparkles className="h-4 w-4 text-blue-600" />
-                        <span className="text-xs font-medium text-blue-600">AI Assistant</span>
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-medium text-primary">AI Assistant</span>
                       </div>
                     )}
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -150,11 +150,11 @@ export default function AIAssistantPage() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-lg p-4">
+                  <div className="bg-muted rounded-lg p-4">
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                     </div>
                   </div>
                 </div>
@@ -162,7 +162,7 @@ export default function AIAssistantPage() {
             </div>
 
             {/* Input */}
-            <div className="border-t border-gray-200 dark:border-slate-800 p-6 bg-white dark:bg-slate-900">
+            <div className="border-t border-border p-6 bg-card">
               <div className="flex items-center space-x-4">
                 <input
                   type="text"
@@ -170,13 +170,13 @@ export default function AIAssistantPage() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend(input)}
                   placeholder="Ask about your business..."
-                  className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none placeholder:text-slate-400"
+                  className="flex-1 px-6 py-4 bg-input-background border-none rounded-2xl focus:ring-2 focus:ring-ring transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
                   disabled={loading}
                 />
                 <button
                   onClick={() => handleSend(input)}
                   disabled={loading || !input.trim()}
-                  className="px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-200 dark:shadow-none transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-2"
+                  className="px-8 py-4 bg-primary text-primary-foreground rounded-2xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-2"
                 >
                   <Send className="h-5 w-5" />
                   <span className="font-bold">Send</span>
@@ -185,7 +185,7 @@ export default function AIAssistantPage() {
                   <button
                     onClick={handleRetry}
                     disabled={loading}
-                    className="px-6 py-4 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 shadow-lg shadow-orange-200 dark:shadow-none transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-2"
+                    className="px-6 py-4 bg-warning text-warning-foreground rounded-2xl hover:bg-warning/90 shadow-lg shadow-warning/20 transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-2"
                     title="Retry last message"
                   >
                     <RefreshCw className="h-5 w-5" />
@@ -198,30 +198,30 @@ export default function AIAssistantPage() {
 
           {/* Info Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-4">
               <div className="flex items-center space-x-3">
-                <TrendingUp className="h-8 w-8 text-green-600" />
+                <TrendingUp className="h-8 w-8 text-success" />
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Sales Analysis</p>
-                  <p className="text-xs text-gray-500">Track performance trends</p>
+                  <p className="text-sm font-medium text-foreground">Sales Analysis</p>
+                  <p className="text-xs text-muted-foreground">Track performance trends</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-4">
               <div className="flex items-center space-x-3">
-                <AlertTriangle className="h-8 w-8 text-orange-600" />
+                <AlertTriangle className="h-8 w-8 text-warning" />
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Inventory Alerts</p>
-                  <p className="text-xs text-gray-500">Low stock & expiry warnings</p>
+                  <p className="text-sm font-medium text-foreground">Inventory Alerts</p>
+                  <p className="text-xs text-muted-foreground">Low stock & expiry warnings</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-4">
               <div className="flex items-center space-x-3">
-                <DollarSign className="h-8 w-8 text-blue-600" />
+                <DollarSign className="h-8 w-8 text-primary" />
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Profit Insights</p>
-                  <p className="text-xs text-gray-500">Revenue & expense analysis</p>
+                  <p className="text-sm font-medium text-foreground">Profit Insights</p>
+                  <p className="text-xs text-muted-foreground">Revenue & expense analysis</p>
                 </div>
               </div>
             </div>

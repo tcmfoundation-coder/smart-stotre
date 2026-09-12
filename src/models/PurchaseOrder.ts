@@ -14,7 +14,7 @@ export interface IPurchaseOrder extends Document {
   supplierName: string;
   items: IPurchaseOrderItem[];
   totalAmount: number;
-  status: 'pending' | 'approved' | 'delivered' | 'cancelled';
+  status: 'pending' | 'approved' | 'partially_received' | 'delivered' | 'cancelled';
   orderDate: Date;
   expectedDelivery?: Date;
   actualDelivery?: Date;
@@ -85,7 +85,7 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>(
     },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'delivered', 'cancelled'],
+      enum: ['pending', 'approved', 'partially_received', 'delivered', 'cancelled'],
       default: 'pending',
     },
     orderDate: {

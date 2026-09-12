@@ -89,7 +89,7 @@ export default function ActivityLogsPage() {
       case 'critical': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
       case 'warning': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
       case 'info': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-      default: return 'bg-gray-100 text-gray-700';
+      default: return 'bg-secondary text-secondary-foreground';
     }
   };
 
@@ -126,10 +126,23 @@ export default function ActivityLogsPage() {
             >
               <option value="all">All Actions</option>
               <option value="USER_LOGIN">User Login</option>
+              <option value="USER_CREATED">User Created</option>
+              <option value="USER_UPDATED">User Updated</option>
+              <option value="USER_ROLE_CHANGED">User Role Changed</option>
+              <option value="USER_DEACTIVATED">User Deactivated</option>
+              <option value="ROLE_CREATED">Role Created</option>
+              <option value="ROLE_UPDATED">Role Updated</option>
+              <option value="ROLE_DELETED">Role Deleted</option>
               <option value="PRODUCT_CREATED">Product Created</option>
-              <option value="STOCK_ADJUSTMENT">Stock Adjustment</option>
+              <option value="STOCK_ADJUSTMENT">Stock Adjustment Approved</option>
+              <option value="STOCK_ADJUSTMENT_REJECTED">Stock Adjustment Rejected</option>
               <option value="SALE_COMPLETED">Sale Completed</option>
               <option value="RETURN_PROCESSED">Return Processed</option>
+              <option value="PURCHASE_ORDER_CREATED">Purchase Order Created</option>
+              <option value="PURCHASE_ORDER_APPROVED">Purchase Order Approved</option>
+              <option value="GOODS_RECEIPT_CREATED">Goods Receipt Created</option>
+              <option value="GOODS_RECEIPT_OVERAGE_APPROVED">Over-Delivery Approved</option>
+              <option value="GOODS_RECEIPT_OVERAGE_REJECTED">Over-Delivery Rejected</option>
               <option value="DATABASE_EXPORTED">Database Exported</option>
             </select>
             <select

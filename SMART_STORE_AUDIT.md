@@ -2,10 +2,357 @@
 
 Statuses: `[ ]` not started · `[-]` in progress · `[x]` completed · `[!]` blocked
 
-Scope of this pass: full-repo discovery (227 TS/TSX files, 44 API routes, 45 dashboard
-pages, 21 models, 11 server actions, 44 components). This is a **findings log**, not yet
-a fix log — see the bottom of this file for what's already fixed vs. what's pending
-prioritization.
+---
+
+## PRODUCTION READINESS STATUS
+
+Current state as of the end of "Pass 6: production-hardening and consistency"
+below. This section is a categorized index into the detailed narrative that
+follows (each phase/pass section has the full evidence and reasoning); it
+does not replace it. The categories below are kept strictly separate, per
+direction — nothing appears in more than one.
+
+**Verification baseline as of this status**: `tsc --noEmit` exits 0 · `npm run
+build` succeeds · `npx jest` passes **42/42 suites, 320/320 tests** (updated
+after Pass 6 — production-hardening: race-condition fixes, inventory
+mutation audit, financial-integrity fixes, activity-log coverage, and a
+role-name-collision guard).
+
+### FIXED
+
+Real bugs found and corrected, or fake/mock functionality replaced with a
+real implementation (both mean the same thing here: code changed, tested,
+and shipped on this branch).
+
+- **Security — checkout price tampering**: `createSale` trusted a
+  client-supplied `item.price`; now always derives price/cost from the
+  product record.
+- **Security — Paystack secret key leak**: `getBranches`/`getBranchById` had
+  no auth and returned `settings.paystackSecretKey` in plaintext; a
+  byte-identical duplicate lived in `employees.ts`. Both secured
+  (admin-only, secret excluded even from the admin response); duplicate
+  removed.
+- **Security — a dozen unauthenticated `'use server'` read functions**
+  (inventory, expenses, customers, orders, WhatsApp messages) reachable with
+  zero session at all via direct client-side calls, bypassing the properly
+  secured API routes for the same data. All now require the matching
+  permission from `rbac.ts`.
+- **Security — `/api/reports` and `/api/dashboard/stats` permission
+  mismatches**: both were gated only by "any authenticated user," letting a
+  cashier generate/view/delete financial reports or read store-wide
+  revenue and other cashiers' transactions. Both now scope by the caller's
+  real role/permissions.
+- **Security — public registration eliminated**: `/register` was a fully
+  public page offering an Admin role option; its backend always required an
+  admin session, making it a confusing, redundant duplicate of the real
+  admin-only Create User flow. Removed outright; `/register` now redirects
+  to `/login`.
+- **Security — customer hard-delete**: `deleteCustomer` used a real
+  `findByIdAndDelete`, unlike every sibling entity's soft-delete, risking
+  orphaned `Sale`/`Loyalty`/`Transaction`/`WhatsAppMessage` references.
+  Switched to soft-delete (additive `isActive` field).
+- **Duplicated implementations removed**: `getSuppliers` (inventory.ts vs.
+  suppliers.ts), `getBranches` (branches.ts vs. employees.ts), and the
+  `inventory/categories` vs. `categories` pages — one canonical
+  implementation kept in each case, callers repointed.
+- **Mock/fake features replaced with real implementations**: Categories
+  page, Products page (schema field-name mismatch broke it entirely),
+  Activity Logs, Financial Reports, PurchaseOrder approve endpoint, Stock
+  Adjustment pending/approve workflow, Returns/refund workflow, Shift
+  open/close workflow, TOTP 2FA, Inventory Reports (turnover + movement
+  feed), Backup/export, Reports Center. Each is documented in its own
+  section below with the evidence used to design it.
+- **Correctness/data-integrity bugs**: Employees list read non-existent
+  schema fields (blank rows); "Total Employees" KPI counted deactivated
+  staff; notification mark-as-read called a route that doesn't exist and
+  lied about success; "Total Sessions Today" duplicated "Active Users";
+  a margin calculation divided by zero for free/donated stock; 5 pages
+  showed an identical empty-state for a genuine failure as for an
+  actually-empty list; the dashboard home page had a dead "Export Log"
+  button and fabricated fallback data for low-stock/expiring alerts.
+- **Deployment safety**: `.env` was not gitignored; the destructive
+  `npm run seed` script had no guard against running against a production
+  database; `.env.example`/`scripts/verify-env.ts` referenced a WhatsApp
+  variable name the code doesn't actually read, and checked two AI env
+  vars (`OPENAI_API_KEY`, `GOOGLE_AI_API_KEY`) that appear nowhere in the
+  codebase while never checking the real `NVIDIA_*` ones or
+  `MFA_ENCRYPTION_KEY` at all.
+- **2FA configuration error masked in production**: a missing
+  `MFA_ENCRYPTION_KEY` threw a plain `Error`, which `handleApiError`
+  genericizes to "an unexpected error occurred" in production, hiding
+  the one message an admin needs to fix their deployment. Now thrown as an
+  operational `AppError` so the real message survives in every
+  environment — the underlying "never fall back to an insecure key"
+  behavior was already correct and is unchanged.
+- **Purchase Order receiving implemented (Pass 5)**: approving a PO
+  previously never affected `Product.stockQuantity` at all, and there was
+  no route or UI action reaching the schema's own `delivered`/`cancelled`
+  statuses. Built the full `GoodsReceipt` workflow proposed below (partial
+  receiving, over-delivery held for approval, idempotent + transactional
+  inventory application, PO status now driven by actual received
+  quantities). Full detail in "Pass 5: Purchase Order receiving —
+  implementation" at the end of this document.
+- **Race conditions in every remaining `findById` → mutate → `.save()` stock
+  mutation (Pass 6)**: `createSale`, `updateStock`, and Stock Adjustment
+  approval all had a real lost-update race (two concurrent requests could
+  each read the same stock/status and both proceed, causing incorrect
+  decrements, duplicate application, or a bypassed insufficient-stock
+  check). All now use atomic guarded `$inc`/`findOneAndUpdate` updates
+  (single document) or a real MongoDB transaction (when a status flip and a
+  stock change must succeed or fail together). The Returns route had the
+  same class of race between reading prior returns and creating a new one
+  (could double-refund/double-restock under concurrent returns on the same
+  sale) — now wrapped in a transaction that re-validates fresh state.
+  PurchaseOrder approve and Stock Adjustment reject had a duplicate-
+  processing race on their own status field (no stock effect, but still a
+  correctness/audit-trail concern) — now atomic compare-and-swap. Full
+  detail in "Pass 6: production-hardening and consistency" below.
+- **`createSale` never validated item quantities**: a client-supplied
+  negative or zero `quantity` would flip the atomic stock guard (any
+  non-negative stock satisfies "at least a negative number") and could
+  *increase* stock while *decreasing* the sale's own total. `updateStock`
+  had the identical gap. Both now reject non-positive/non-integer
+  quantities before touching the database. The Returns route was missing
+  an integer check on the same kind of input (a fractional quantity would
+  have produced fractional stock).
+- **`updateSupplierDebt` had the same race and validation gaps as the stock
+  mutations** (`findById` → mutate → `.save()`, no positivity check on
+  `amount`) on a financial field (`Supplier.outstandingDebt`). Fixed the
+  same way: atomic guarded `$inc`, explicit `amount` validation.
+- **Dashboard "Total Profit" omitted cost of goods sold entirely**:
+  `getDashboardStats()` computed `totalProfit = monthlyRevenue -
+  totalExpenses`, silently overstating profit by the full COGS for the
+  period — a materially different number from `/api/financial-reports`'s
+  correct `revenue - cost - expenses` for the same month. Fixed to subtract
+  COGS. (This function has no current UI caller — see "dead but reachable
+  server actions" below — so the wrong number was never actually displayed,
+  but the formula itself was wrong and is now fixed regardless.)
+- **`getDashboardStats`/`getSalesData` had no authentication check at all**:
+  both `'use server'` exports could be called directly over the network by
+  anyone, unauthenticated, returning real revenue/profit/customer-count
+  data. Both now require an authenticated session, matching the real
+  `/api/dashboard/stats` route's own requirement.
+- **A custom "Role" rename could silently mass-reassign real users'
+  `admin`/`manager`/`cashier` role**: `PUT /api/roles/[id]` cascades a
+  rename into `User.updateMany({role: oldName}, {role: newName})`, and
+  `updateMany` skips Mongoose's schema validators by default — so renaming
+  an unrelated custom role that happened to collide with one of the three
+  real RBAC role names could reassign every real user holding that role,
+  with no confirmation and no audit trail. Added a guard blocking any
+  custom role from being named or renamed to/from a reserved system role
+  name, plus `runValidators: true` on the cascade as defense in depth.
+- **Missing activity-log coverage for security-sensitive mutations**: user
+  creation, user update/role-change/deactivation, custom role
+  create/update/delete, Stock Adjustment rejection, and Purchase Order
+  create/approve performed no audit logging at all. All now call
+  `logActivity()` with new action strings, added to the Activity Logs
+  page's filter dropdown.
+
+### VERIFIED
+
+Checked carefully and found to already be correct — no change made.
+
+- Regex-injection escaping (`escapeRegex()`) on every `$regex` query site,
+  rechecked across all 6 routes a (stale) audit report claimed were unescaped.
+- Notification actions (`markAsRead`, `deleteNotification`, `markAllAsRead`)
+  already apply a proper per-role visibility filter to every mutation, not
+  just reads — no IDOR present.
+- Aggregation pipelines' `ObjectId` casting (only `predictSales` needed a
+  fix, done in an earlier phase; nothing else matches on an uncast
+  ObjectId field).
+- Every `href` in `src/config/navigation.ts`, and every static in-page
+  dashboard link, resolves to a real page — no broken navigation found.
+- `next.config.js` and `src/lib/mongodb.ts`: no production-only or
+  module-load-time crash risks; `MONGODB_URI` degrades gracefully when unset.
+- `lib/actions/ai.ts`'s NVIDIA/OpenAI-compatible client is already
+  constructed lazily (inside a function), not at module load time.
+- No `NEXT_PUBLIC_*` variables exist anywhere in the codebase — nothing
+  server-only is exposed to the client bundle.
+- Stock Adjustment creation already produces `status: 'pending'`, not an
+  auto-approved mutation — the pending/approve workflow built in Phase B is
+  intact.
+- No remaining `TODO`/`FIXME`/`HACK` comments anywhere in `src`.
+- A dispatched final-verification agent's report was **independently
+  re-checked claim-by-claim against the real branch** after the agent
+  itself flagged that it had run inside a stale git worktree missing this
+  branch's commits; every claim beyond the one genuine finding (customer
+  hard-delete, listed under FIXED) was confirmed to already be fixed on
+  the actual branch.
+- **Inventory mutation map (Pass 6)**: every place `Product.stockQuantity`
+  can change was enumerated by grep (`stockQuantity [-+]=` and `$inc.*
+  stockQuantity`) — exactly four real sources (Sales, Returns, Goods
+  Receipts, Stock Adjustment approval) plus one unreachable dead-code path
+  (`updateStock`, see Future Hardening). All four real sources are now
+  atomic/transactional (Returns and Goods Receipts already were; Sales and
+  Stock Adjustments were fixed in this pass), authorized via the existing
+  RBAC permissions, and produce a corresponding business record (Sale,
+  Return, GoodsReceipt, StockAdjustment) that the inventory-movement feed
+  and turnover reconstruction both already read from — there is no path
+  that changes stock without a matching audit-traceable record.
+- **Financial definitions already consistent where they're actually
+  displayed**: `createSale` already derives price from `Product.sellingPrice`
+  server-side (never the client); Returns already caps total refund at the
+  sale's own paid total; `/api/financial-reports` and `/api/sales/analytics`
+  both correctly compute profit as revenue minus COGS (from
+  `Sale.items.buyingPrice`) minus (for financial-reports) operating
+  expenses, and `/dashboard/sales` reads from the correct
+  `/api/sales/analytics` endpoint, not the flawed dead `getDashboardStats`
+  formula described under FIXED.
+- Every other `'use server'` action file (`ai.ts`, `branches.ts`,
+  `customers.ts`, `employees.ts`, `expenses.ts`, `orders.ts`,
+  `suppliers.ts`, and `notifications.ts`'s own `requireRequester()` +
+  per-role visibility filter pattern) already calls the correct
+  `require*`/session check as the first line of every exported function —
+  `dashboard.ts` (fixed above) was the only file missing this.
+- `User.password` is hashed via a `pre('save')` bcrypt hook — never stored
+  or returned in plaintext; the manual `delete userResponse.password` in
+  `POST /api/users` is defense in depth on top of an already-safe model,
+  not compensating for a real leak.
+- Discounts are not a live feature: `createSale`'s `discount` is hardcoded
+  to `0`, never read from client input, so there is no discount-manipulation
+  surface to close despite the `apply_discounts` permission existing in RBAC.
+
+### REQUIRES PRODUCT DECISION
+
+Nothing further can be done here without the client choosing a direction —
+proposals are written, code is not.
+
+- **Custom "Roles & Permissions" are entirely decorative — they do not
+  affect real authorization** (found in Pass 6). `/dashboard/roles` lets an
+  admin create a custom role and toggle specific permission checkboxes for
+  it, and persists that to a `Role` collection — but the actual
+  authorization system (`src/lib/rbac.ts`'s `ROLE_PERMISSIONS`,
+  `hasPermission()`, every `withPermission()` check) is a hardcoded map
+  keyed on the fixed 3-value `User.role` enum (`admin`/`manager`/`cashier`)
+  and never reads the `Role` collection at all. An admin toggling
+  permission checkboxes for a custom role has no effect on what any user
+  can actually do — confirmed by grep: nothing outside `src/app/api/roles/*`
+  ever reads `Role.permissions`. This is a genuine trust problem (an admin
+  could reasonably believe they've restricted access when they haven't),
+  but fixing it properly means replacing `rbac.ts`'s hardcoded model with a
+  database-driven one and auditing every permission check site — a real
+  architectural redesign, not a bug fix, so nothing has been changed here
+  beyond the safety guard described under FIXED (preventing a custom role
+  from colliding with a real role name). Needs a decision: keep the
+  hardcoded 3-role model and either remove or clearly label the custom-role
+  UI as not-yet-functional, or commission the DB-driven redesign.
+
+### REQUIRES ENVIRONMENT CONFIGURATION
+
+Code is done and correct; these need a value set in Railway before the
+corresponding feature works in production. Full detail, generation
+commands, and grouping in `DEPLOYMENT.md`.
+
+- `MONGODB_URI`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` — the app is
+  non-functional without all three (does not crash without them, but
+  cannot authenticate or persist data).
+- `MFA_ENCRYPTION_KEY` — 2FA is unavailable (with a clear error, not a
+  silent failure) until this is set.
+- `ALLOWED_ORIGINS` — should be set explicitly to the real production
+  origin(s) rather than left on its development default.
+- `NVIDIA_API_KEY` (+ optionally `NVIDIA_BASE_URL`/`NVIDIA_AI_MODEL`) — AI
+  features (Business Insights, AI Predictions) return a clear
+  "not configured" error without it.
+- `CLOUDINARY_CLOUD_NAME`/`CLOUDINARY_API_KEY`/`CLOUDINARY_API_SECRET` —
+  product image uploads fail without these.
+- `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` — real WhatsApp
+  delivery; without both, the app runs in an already-labeled demo mode
+  (recorded as sent, never actually delivered).
+
+### INTENTIONALLY NOT IMPLEMENTED
+
+Deliberately not built, with the reasoning already investigated — not
+oversights.
+
+- **Self-service database restore** — decided against: the client
+  confirmed the recommendation in this document (see the technical
+  proposal below) and directed that no self-service restore be built. A
+  destructive-by-design feature whose failure mode is silent, irreversible
+  data loss. MongoDB Atlas Cloud Backups + controlled operational restore
+  procedures + the existing `GET /api/backup/export` are the adopted
+  disaster-recovery strategy.
+- **Report Viewer** (`dashboard/reports`' "coming soon" button) — the
+  client directed that no viewer be built until the exact reports it
+  should display are defined; the honestly-labeled "coming soon" state
+  stays as-is rather than a fake/stub viewer.
+- **Live Paystack payment processing** — `PAYSTACK_PUBLIC_KEY`/
+  `PAYSTACK_SECRET_KEY` are read/written in Settings, but no code anywhere
+  in this repo makes a real Paystack API call. Checkout's `paymentMethod:
+  'paystack'` is recorded as a label only. Treat this as not-yet-built,
+  not merely unconfigured — setting real keys today would have no effect.
+- **Public self-registration** — eliminated entirely per explicit
+  direction; an Admin (or any) account can only ever be created by an
+  existing authenticated admin, through `/dashboard/users`.
+- **Redis-backed caching** — `redis` is a listed dependency with a working
+  client wrapper (`src/lib/redis.ts`) and cache helper (`src/lib/cache.ts`),
+  but confirmed by grep to have zero real callers anywhere in the
+  application. Nothing needs to be provisioned for it in production today.
+
+### FUTURE HARDENING
+
+Not required for production readiness as scoped by this engagement, but
+worth planning for.
+
+- **`Customer.totalSpent`/`loyaltyPoints`/`purchaseCount` still use
+  `findById` → mutate → `.save()`** inside `createSale` (investigated in
+  Pass 6, deliberately not fixed now). Two concurrent sales to the *same*
+  customer could lose one update. Left alone because the impact is
+  informational (loyalty math drift, not stock/payment correctness) and a
+  correct fix needs an atomic `$inc` for the scalars plus an atomic
+  `$addToSet` for the `favoriteProducts` array — a real change, not a
+  one-line guard, and lower priority than the inventory/financial fixes
+  actually made in this pass.
+- **Shift close (`POST /api/shifts/[id]/close`) has the same
+  check-then-mutate pattern** (investigated in Pass 6, deliberately not
+  fixed now). A double-close race exists in theory, but `computeLiveShiftStats`
+  is a pure read of Sale/Return records, so a second close just
+  recomputes and overwrites with equally-valid (often identical) numbers —
+  no double-counting or financial corruption results either way. Worth a
+  compare-and-swap for consistency with the other approve/reject routes if
+  this area is revisited, but not a real integrity risk today.
+- **Dead-but-reachable `'use server'` functions**: `updateStock`
+  (`lib/actions/inventory.ts`), `updateSupplierDebt`
+  (`lib/actions/suppliers.ts`), and `getDashboardStats`/`getSalesData`
+  (`lib/actions/dashboard.ts`) have no UI caller anywhere in the app today,
+  but remain independently network-callable (Next.js server actions are
+  callable regardless of whether a page imports them) — all four already
+  had their race/auth/validation gaps fixed in Pass 6 rather than left
+  exploitable, but consider either wiring them up to real UI or removing
+  them outright so there is no unused surface to keep auditing.
+- **Custom "Roles & Permissions" architecture mismatch** — see the matching
+  entry under Requires Product Decision. If the client decides to keep the
+  hardcoded 3-role model, the custom-role UI should be relabeled or removed
+  rather than left implying it does something it doesn't.
+- If a future in-app database restore is ever reconsidered despite the
+  standing recommendation against it, the technical proposal's
+  requirements (dry-run, checksum verification, replace-only, multi-step
+  confirmation, etc.) are the minimum bar before writing any of it.
+- Real Paystack integration, if/when the client wants live payment
+  processing rather than a payment-method label.
+- A real report-content viewer for the Reports Center, once the client
+  decides what "viewing" a report should show.
+- Wire the existing (currently unused) Redis cache helper if a future
+  performance need justifies it — the infrastructure is already present,
+  just not connected to anything.
+- `Product.buyingPrice` does not automatically update from Purchase
+  Order/Goods Receipt unit costs (investigated in Pass 6) — it stays a
+  single manually-edited value, and COGS at sale time uses whatever
+  `buyingPrice` was current then. This is the existing, pre-GoodsReceipt
+  behavior, not a regression; implementing real inventory costing (weighted
+  average or most-recent-cost) would be a genuine accounting-policy
+  decision, not a bug fix.
+- Purchase Order `supplierId`/`supplierName` are still trusted from the
+  client as denormalized display fields at creation time (unlike
+  `totalAmount`/line totals, which are now recomputed server-side in Pass
+  6) — a mismatched `supplierName` would only affect that PO's own display,
+  never inventory or financial correctness, so it was left as-is rather
+  than adding a Supplier lookup for a cosmetic-only field.
+
+---
+
+Scope of the original pass 1: full-repo discovery (227 TS/TSX files, 44 API routes, 45
+dashboard pages, 21 models, 11 server actions, 44 components). What follows is the
+complete, chronological narrative and evidence for everything summarized above.
 
 ---
 
@@ -1497,3 +1844,1126 @@ fixed and committed in priority order:
 
 Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
 33/33 suites / 233/233 tests.
+
+## Pass 4: finalization — final verification, PO receiving proposal, restore proposal, production readiness
+
+Direction for this pass: one more read-only verification sweep (no new features
+unless they're clearly bug fixes); investigate and *propose* (not implement) a
+Purchase Order receiving workflow and a database restore design; eliminate the
+public-registration ambiguity; keep the 2FA implementation as-is but make its
+configuration error surface properly; produce real production deployment
+documentation; and finish with a status report categorized as FIXED / VERIFIED /
+REQUIRES PRODUCT DECISION / REQUIRES ENVIRONMENT CONFIGURATION / INTENTIONALLY
+NOT IMPLEMENTED / RECOMMENDED FUTURE WORK.
+
+**Final read-only security/regression sweep.** Dispatched a fresh audit agent
+covering every category the client named explicitly (auth bypasses,
+unauthenticated actions, client-supplied financial values, sensitive data
+exposure, permission mismatches, DB integrity, race conditions, broken nav,
+dead buttons, broken forms, empty/error states, duplicated implementations,
+inconsistent schema fields, env-var assumptions, production-only failures).
+**That agent's own report flagged, correctly, that it had run inside a stale
+git worktree checked out at the merge-base rather than the tip of this
+branch** — meaning almost every one of its ~26 "findings" was a rediscovery
+of a bug already fixed earlier in this engagement, not a real regression.
+Rather than trust that report, every claim in it was independently
+re-verified directly against the actual branch tip by reading the real,
+current files:
+- Checkout price tampering, the Paystack secret leak, the `/api/reports`
+  permission gating, the real backup export route, the real Financial
+  Reports page, the Stock Adjustment approve/reject workflow, the
+  `api/customers/[id]`/`api/suppliers/[id]` routes, the employees list field
+  names, and the notification IDOR/`markAllAsRead` scoping (`buildVisibilityFilter`
+  already applies to every mutating notification action) — all confirmed
+  **already fixed and present** on the real branch; the agent's worktree
+  simply didn't have those commits.
+- Regex-escaping was independently re-checked on all 6 routes the stale
+  report named (`users`, `purchase-orders`, `categories`, `roles`,
+  `products`, `stock-adjustments`) — every one already wraps its search term
+  in `escapeRegex()`.
+- Nav integrity was independently re-verified by extracting every `href` in
+  `src/config/navigation.ts` and confirming a matching `page.tsx` exists for
+  each — no broken links found.
+- [x] **One genuine, new finding survived this cross-check**: `deleteCustomer`
+  (`lib/actions/customers.ts`) used a real hard `Customer.findByIdAndDelete`,
+  unlike every sibling delete (`deleteProduct`/`deleteBranch`/`deleteSupplier`/
+  `deleteCategory`), which all soft-delete via `isActive: false`. A hard
+  delete here would orphan `Sale.customerId`/`Loyalty.customerId`/
+  `Transaction.customerId`/`WhatsAppMessage.customerId` references,
+  permanently losing which customer a historical sale was for. **Fixed** —
+  added the missing `isActive` field to the `Customer` schema (additive) and
+  switched to soft-delete; `getCustomers` now matches `isActive: { $ne: false }`
+  rather than an exact-equality `isActive: true`, since pre-existing customer
+  documents have no value at all for a field just added to the schema and an
+  exact match would have hidden every one of them. 2 new tests.
+- **Race conditions** (`Product.findById` → mutate → `.save()`, used by
+  `createSale`, `updateStock`, and the Stock Adjustment approval route):
+  confirmed as a real, pre-existing characteristic, not a new regression —
+  it is the same read-modify-write pattern used consistently by every
+  already-shipped, already-tested stock-mutating flow in this codebase.
+  Rewriting these to atomic `findOneAndUpdate`/`$inc` operations would touch
+  multiple already-tested, already-shipped flows for a race window that
+  requires two genuinely concurrent requests against the exact same product
+  to manifest — **deliberately not done in this pass** (would be exactly the
+  kind of unrequested architectural change the client asked not to make
+  during finalization). Logged under Recommended Future Work below, not
+  silently ignored.
+- Also found and fixed while re-verifying environment-variable handling (see
+  MFA below): a `.env`/`.gitignore` gap, an unguarded destructive seed
+  script, and two stale/wrong variable names in `.env.example` and
+  `scripts/verify-env.ts` (`WHATSAPP_API_KEY` vs. the code's actual
+  `WHATSAPP_ACCESS_TOKEN`, and an unused `OPENAI_API_KEY`/`GOOGLE_AI_API_KEY`
+  pair standing in for the real `NVIDIA_*` variables) — see the Deployment
+  Safety section below for the full list.
+
+Verified: `tsc --noEmit` exits 0, `npm run build` succeeds, `npx jest` passes
+35/35 suites / 239/239 tests (grew from 33/233 over the course of this pass
+as fixes above were tested).
+
+---
+
+### Purchase Order receiving — architecture investigation and proposal (IMPLEMENTED — see "Pass 5" at the end of this document)
+
+Investigated the existing architecture in full before proposing anything, per
+direction. This section documents what existed at the time (kept for
+historical record and design rationale), then proposes a receiving workflow
+addressing partial receipts, over-delivery, and a dedicated goods-receipt
+record. The client approved this proposal and it has since been built
+exactly as described below (the `partially_received` PO status, the
+over-delivery-requires-approval policy, and the dedicated `GoodsReceipt`
+record were all adopted as proposed) — see "Pass 5: Purchase Order
+receiving — implementation" for the as-built details, files, and tests.
+
+#### Current PO lifecycle (as it exists today)
+
+- **Model** (`src/models/PurchaseOrder.ts`): `orderNumber`, `supplierId` +
+  `supplierName` (denormalized), `items: [{ productId, productName,
+  quantity, unitPrice, total }]`, `totalAmount`, `status: 'pending' |
+  'approved' | 'delivered' | 'cancelled'`, `orderDate`, `expectedDelivery`,
+  `actualDelivery`, `createdBy`/`createdById`.
+- **Routes**: `POST /api/purchase-orders` (create, `create_purchase_orders`
+  permission) and `POST /api/purchase-orders/[id]/approve`
+  (`approve_purchase_orders` permission, `pending` → `approved`). **There is
+  no route or UI action anywhere that transitions a PO to `delivered` or
+  `cancelled`** — those two enum values are declared in the schema but
+  structurally unreachable today.
+- **Inventory relationship — the key fact driving this whole proposal**:
+  confirmed by grep, `Product.stockQuantity` is mutated in exactly three
+  places in the entire codebase — sales (decrement), approved Stock
+  Adjustments (apply the reviewed delta), and restocked Returns (increment).
+  **Approving a Purchase Order never touches `Product.stockQuantity`.**
+  A PO today is procurement paperwork only; nothing currently represents
+  "this order's goods physically arrived."
+- **RBAC** (`src/lib/rbac.ts`): `create_purchase_orders` and
+  `approve_purchase_orders` are separate permissions, both granted to admin
+  **and** manager identically (no role distinction between who can create
+  vs. approve a PO). `manage_inventory` is a third, separate permission,
+  also granted to admin and manager identically.
+- **Comparable, already-shipped precedent #1 — Stock Adjustment** (`src/models/StockAdjustment.ts`):
+  `status: 'pending' | 'approved' | 'rejected'`, `performedBy`/`performedById`
+  (who requested it), `reviewedBy`/`reviewedById`/`reviewedAt` (who
+  actioned it). The approval route re-reads the **live** product quantity
+  at approval time and applies the delta then — not at request time — to
+  avoid approving against a stale stock snapshot.
+- **Comparable, already-shipped precedent #2 — Returns** (`src/models/Return.ts`):
+  a `Return` record references its `Sale` by id and is **never** used to
+  mutate the original `Sale` document; "how much of this sale has already
+  been returned" is computed on demand by summing every prior `Return`
+  record for that sale, so partial returns compose correctly without ever
+  touching the original record. This is the exact shape of problem
+  "partial PO receipts" is, one level up the supply chain.
+- **Audit logging**: `logActivity()` (`src/lib/activity-log.ts`) is a
+  best-effort, free-form-`action`-string logger already used for
+  `STOCK_ADJUSTMENT`, `RETURN_PROCESSED`, `SALE_COMPLETED`, `DATABASE_EXPORTED`,
+  etc. — adding a new action name costs nothing structurally.
+
+#### Proposed receiving workflow
+
+**1. A dedicated `GoodsReceipt` model — not fields bolted onto `PurchaseOrder`.**
+This matches the client's stated preference and mirrors the Return-vs-Sale
+precedent above exactly: the PO's own `items[].quantity`/`unitPrice` are
+**never mutated**; each physical delivery creates one new, immutable
+`GoodsReceipt` record, and "received so far" / "remaining" are **computed**
+by summing every `GoodsReceipt` tied to that PO — never stored redundantly
+on the PO itself, so the two can never drift out of sync.
+
+```ts
+interface IGoodsReceiptItem {
+  productId: ObjectId;
+  productName: string;         // denormalized, same convention as PO/Sale/Return items
+  sku: string;
+  orderedQuantity: number;     // this line's ordered qty, denormalized from the PO at receipt time (display/audit only)
+  quantityReceived: number;    // what this specific delivery brought for this line
+  unitCost: number;            // denormalized from the PO item's unitPrice
+  condition?: 'good' | 'damaged' | 'rejected';  // optional; lets a damaged partial delivery be recorded without inflating sellable stock
+}
+
+interface IGoodsReceipt extends Document {
+  receiptNumber: string;                  // GRN-<timestamp>, same convention as saleNumber/returnNumber
+  purchaseOrderId: ObjectId;              // ref only - the PO document is never written to
+  orderNumber: string;                    // denormalized
+  supplierId: ObjectId;
+  supplierName: string;
+  items: IGoodsReceiptItem[];
+  status: 'completed' | 'pending_approval' | 'rejected';   // see over-delivery below
+  receivedBy: string;
+  receivedById: ObjectId;
+  approvedBy?: string;                    // only set if an over-delivery required approval
+  approvedById?: ObjectId;
+  approvedAt?: Date;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+**2. Partial receipts** — computed exactly like Returns compute "already
+returned": for a given PO, sum `quantityReceived` across every
+non-`rejected` `GoodsReceipt` referencing it, grouped by `productId`. That
+gives `receivedQuantity` per line; `remainingQuantity = orderedQuantity -
+receivedQuantity`. The example in the brief:
+
+```
+PO = 100 units
+Delivery 1 = 40  →  GoodsReceipt #1 (quantityReceived: 40)
+Delivery 2 = 60  →  GoodsReceipt #2 (quantityReceived: 60)
+Ordered: 100 / Received: 100 / Remaining: 0
+```
+falls directly out of this without any special-case code — it's the same
+summation whether there were 1, 2, or 10 deliveries.
+
+**3. Over-delivery — recommend explicit approval, not a tolerance setting.**
+The brief asks for either a configurable tolerance or an explicit-approval
+mechanism. Recommending **approval**, not tolerance, for one concrete
+reason: a numeric tolerance (5%? 10 units? per-product or system-wide?) is
+itself an undisclosed business rule this session was told not to invent,
+whereas "require a manager/admin to approve anything that would push
+received-to-date past ordered-to-date" needs no new configuration surface
+and mirrors a workflow already shipped and tested for Stock Adjustments. Concretely:
+for each line in an incoming receipt, if `quantityReceived >
+remainingQuantity`, the whole `GoodsReceipt` is created with
+`status: 'pending_approval'` and **does not touch `Product.stockQuantity`
+at all** until an admin/manager explicitly approves it (mirroring the Stock
+Adjustment approve route's pattern of re-reading live quantity at approval
+time, not at submission time) or rejects it (no stock effect, ever). A
+receipt with no over-delivered lines is `status: 'completed'` immediately —
+a single-step process, matching how Returns work today for the same reason
+(no separate "approve a receipt" RBAC permission exists to justify a
+universal two-step flow the way one already exists for POs/Stock
+Adjustments). If the client later wants a numeric tolerance instead of
+"any overage needs approval," that tolerance value is exactly the kind of
+number this session won't invent — it would need to come from them.
+
+**4. Applying the stock effect.** When a `GoodsReceipt` (or the approved
+portion of one) is finalized, `Product.stockQuantity` increases by
+`quantityReceived` for each `condition !== 'rejected'` line — recommend
+doing this via `Product.findByIdAndUpdate(productId, { $inc: { stockQuantity:
+qty } })` rather than the codebase's more common `findById` → mutate →
+`.save()` pattern, specifically because this is new code with no existing
+call sites to stay consistent with, and `$inc` is atomic at the database
+level (closes the exact class of race condition noted in the read-only audit
+above, without having to touch any already-shipped code to get there).
+
+**5. PO status.** Recommend the PO's own `status` auto-transitions to
+`delivered` once every line's `receivedQuantity >= orderedQuantity` (a
+direct, mechanical reading of the enum's own already-declared intent, not a
+new rule) — and recommend adding a `partially_received` status value for the
+in-between state, since the current enum has no way to represent "some, but
+not all, of this order has arrived" and the client's own example explicitly
+wants that state visible. Whether `partially_received` is the right label,
+versus just leaving `status: 'approved'` until 100% received and relying on
+the computed received/remaining figures for visibility, is a small
+naming/UX call for the client, not an architectural one.
+
+**6. Permissions.** Recommend gating "record a receipt" behind the existing
+`manage_inventory` permission (already held identically by admin and
+manager, and semantically the closest fit — receiving directly changes
+inventory levels), and gating "approve an over-delivery" behind the existing
+`approve_purchase_orders` permission (closest existing precedent for
+elevated authority specifically over a PO's lifecycle). Both are **existing,
+already-granted permissions** — this proposal introduces no new RBAC entries
+unless the client would rather split "receive" into its own permission the
+way create/approve are split for POs and Stock Adjustments, which is their
+call to make, not an assumption to bake in silently.
+
+**7. Audit logging.** `GOODS_RECEIVED` on every receipt (whether
+`completed` or `pending_approval`), `GOODS_RECEIPT_APPROVED` /
+`GOODS_RECEIPT_REJECTED` on the resolution of an over-delivery — same
+`logActivity()` call already used for every other lifecycle event in this
+app, just two new action-name strings.
+
+**8. Immediate follow-on benefit, not built now**: once `GoodsReceipt`
+exists, the Inventory Reports movement feed (Phase F above) gains a real
+`PURCHASE` movement type sourced from actual receipt records — resolving
+the gap flagged in that section, where purchase orders were excluded from
+the feed specifically because nothing represented a real stock-affecting
+receiving event. Not implemented as part of this proposal; noted so the two
+pieces of work are understood to connect.
+
+**Nothing above has been implemented.** No new model, route, or UI exists
+yet for any of this — it is a design for the client to approve, adjust, or
+reject before any code is written.
+
+---
+
+### Database restore — technical proposal (decision made: NOT building self-service restore)
+
+**Client decision**: do not build self-service restore; adopt MongoDB Atlas
+Cloud Backups + controlled operational restore as the disaster-recovery
+strategy, alongside the existing application-level export. Nothing further
+is planned here unless this decision is explicitly revisited. The proposal
+below is kept for the record and as the requirements a future in-app
+restore would need to meet if ever reconsidered.
+
+The existing `GET /api/backup/export` (admin-only, streams a live JSON
+snapshot of every collection, nothing stored server-side) remains the
+recommended and sufficient application-level export mechanism. This section
+is the original proposal for what a *restore* feature would need.
+
+**Recommended default: do not build self-service restore into the web
+application at all**, for one structural reason that doesn't depend on how
+carefully it's engineered: a restore endpoint's entire purpose is to
+overwrite live data from a file, which means its failure mode — a stale
+backup, a malformed upload, a wrong-environment mix-up — is silent,
+irreversible data loss, on the one feature category where "irreversible" is
+the whole risk this project's own standing rules exist to prevent. The safer
+production posture is the layered one already partly in place:
+
+1. **MongoDB Atlas Cloud Backups** (M10+ cluster tier) for real,
+   automated, point-in-time-recoverable backups, configured entirely on the
+   Atlas side — zero application code, and Atlas's own restore tooling is
+   already built, tested, and maintained by people whose job is exactly
+   this.
+2. **Controlled operational restore procedures** — an admin or DBA running
+   `mongorestore` directly against a chosen export, outside the web app,
+   when Atlas's own point-in-time restore isn't the right tool (e.g.
+   restoring into a fresh environment for testing).
+3. **The existing application-level export** for portability — moving data
+   out of Atlas, seeding a staging environment, or handing a client their
+   own data on request.
+
+**If, despite that recommendation, an in-app restore is ever commissioned**,
+here is what it would need — every one of these is a real design question,
+not a checkbox:
+
+- **Authentication & authorization**: admin-only (`backup_restore`,
+  already exists and already gates the export route) is necessary but not
+  sufficient on its own for an operation this destructive — recommend
+  requiring a **fresh re-authentication** (password and/or 2FA code, not
+  just an existing session) immediately before the restore call, the same
+  reasoning already applied to 2FA disable.
+- **Backup validation**: the uploaded file must be parsed and structurally
+  validated (every expected top-level collection key present, no unexpected
+  keys, no malformed documents) *before* any write begins — reject
+  malformed input outright rather than importing whatever parses.
+- **Schema/version validation**: the export format needs its own version
+  marker (e.g. `formatVersion: 1` in the export's metadata, already close to
+  free to add to the existing export route) so a restore can refuse an
+  incompatible or unrecognized export instead of guessing.
+- **Dry-run validation**: a mode that reports what a restore *would* do
+  (collection counts, a diff summary against current data) without writing
+  anything — the only way an admin can sanity-check a restore before
+  committing to it.
+- **Transaction strategy**: MongoDB multi-document transactions (available
+  since this is presumably a replica-set-backed Atlas cluster, which
+  `mongodb+srv://` connection strings always are) so a restore either fully
+  applies or fully rolls back — never leaves the database in a half-restored
+  state if it fails partway through a 20-collection import.
+- **Rollback strategy**: given a transaction can still fail to buy full
+  safety at Atlas-scale collection sizes (transaction time/size limits), the
+  practical rollback plan is "take a fresh export immediately before
+  starting the restore" as a mandatory, automatic first step of the restore
+  flow itself — not a manual precaution an admin might forget.
+- **Destructive-operation confirmation**: a multi-step confirmation (type
+  the exact word "RESTORE" or the target environment's name, not just an
+  OK/Cancel dialog) — matching the weight of the action, not a POST request
+  that can happen accidentally.
+- **Audit logging**: `logActivity()` before and after, with the export's own
+  metadata (its `generatedAt` timestamp, uploading admin's identity,
+  collection counts) — a restore is exactly the kind of event that must be
+  traceable after the fact.
+- **Rate limiting**: this is inherently a rare, deliberate action — a strict
+  limit (e.g. 1 per hour) mostly guards against a compromised admin session
+  being used to repeatedly attempt destructive imports.
+- **Backup integrity verification**: a checksum (e.g. SHA-256) computed at
+  export time and included in the export's own metadata, verified before
+  any restore begins, so a truncated or corrupted file is rejected outright
+  rather than partially imported.
+- **Protection against malicious backup files**: the restore path is,
+  structurally, "parse untrusted JSON and write its contents into the
+  database" — needs strict schema validation per collection (reject any
+  field not in that collection's own Mongoose schema, cap array/string
+  lengths, reject unexpected types) so a crafted file can't inject
+  unexpected fields or oversized payloads.
+- **Maximum backup size**: an explicit cap (matching or slightly above the
+  export route's own realistic output size) enforced before parsing begins,
+  not discovered by the server running out of memory mid-parse.
+- **Replace vs. merge**: recommend **replace-only** — a restore that merges
+  with live data has to resolve conflicting `_id`s, unique-index collisions
+  (emails, SKUs, barcodes, phone numbers), and ordering between the two data
+  sets, each of which is a real business-rule decision with no obviously
+  correct default. Replace (this collection's contents become exactly what's
+  in the export) is unambiguous; merge is not, and shouldn't be guessed at.
+- **Should this be an application feature at all**: given everything above,
+  restated plainly — no, not as a self-service button in the admin UI.
+  If the client wants an in-app path anyway despite this recommendation,
+  the design above is the minimum bar before any code should be written for
+  it; this session has not written any of it.
+
+---
+
+### Production readiness documentation
+
+See the new `DEPLOYMENT.md` at the repo root for the full required/optional
+environment variable reference (grouped by app startup, authentication, 2FA,
+database, Redis, and optional integrations) and the recommended deployment
+sequence. Summary of what changed to get there is in the "Deployment safety"
+notes above and in `DEPLOYMENT.md` itself.
+
+---
+
+## Pass 5: Purchase Order receiving — implementation
+
+The client approved the `GoodsReceipt` proposal above and directed that it
+be implemented now, as production-quality, with inventory integrity as the
+explicit priority. No new environment variables or configuration are
+required — this is pure application code against the existing database.
+
+**Core invariant preserved throughout**: a Purchase Order represents what
+was *ordered*. A `GoodsReceipt` represents what was actually *received*.
+Creating a PO never touches inventory. Only an approved/applied
+`GoodsReceipt` increases `Product.stockQuantity`, and each received unit is
+applied exactly once.
+
+### Model
+
+- **`src/models/GoodsReceipt.ts`** (new) — `receiptNumber`, `purchaseOrderId`
+  (ref, authoritative), `orderNumber`/`supplierId`/`supplierName`
+  (denormalized display fields, matching the existing PO/Return/StockAdjustment
+  convention — the PO's own `items[].quantity` is never duplicated or
+  mutated), `items: [{ productId, productName, sku, orderedQuantity,
+  receivedQuantity, rejectedQuantity, acceptedQuantity,
+  overDeliveryQuantity, reason }]`, `status: 'completed' |
+  'pending_approval' | 'rejected'`, `receivedBy`/`receivedById`/
+  `receivedAt`, `overageDecisionBy`/`overageDecisionById`/
+  `overageDecisionAt`, `notes`, and a unique `idempotencyKey` (client-
+  generated, `crypto.randomUUID()`) that de-duplicates a retried/
+  double-submitted creation request at the database level.
+- **`src/models/PurchaseOrder.ts`** — additive `'partially_received'` value
+  added to the `status` enum (`'pending' | 'approved' |
+  'partially_received' | 'delivered' | 'cancelled'`); no other schema
+  change. `'delivered'`/`'cancelled'` already existed but were previously
+  unreachable dead enum values (no route ever set them) — `'delivered'` is
+  now reached by receiving; `'cancelled'` remains reachable only by future
+  business rules not built in this pass, and is correctly treated as a
+  dead end for receiving (see RBAC/business-rules below).
+- **`src/models/index.ts`** — `GoodsReceipt` registered as the 25th model.
+
+**Received/remaining is never stored as a counter.** Following the same
+append-only-record pattern already proven twice in this codebase (`Return`
+never mutates `Sale`; `Shift` computes live stats from `Sale`/`Return`
+queries), `src/lib/goods-receipts.ts` computes each PO line's
+applied/remaining quantity by summing every prior `GoodsReceipt` for that PO
+live, on every read. This is also why a `GoodsReceipt` has no edit/update
+route at all — the only two things that ever happen to one are its one-time
+creation and its one-time over-delivery approve/reject decision, both
+idempotency-protected; there is nothing else to mutate.
+
+### The accepted / over-delivery split
+
+Every submitted line is split with one formula:
+
+```
+netToStock         = receivedQuantity - rejectedQuantity
+acceptedQuantity   = min(netToStock, remainingOrderedAtSubmission)
+overDeliveryQuantity = max(0, netToStock - remainingOrderedAtSubmission)
+```
+
+`acceptedQuantity` is applied to `Product.stockQuantity` immediately and
+unconditionally — the routine, in-order portion of a delivery is never held
+hostage by an over-delivery decision on the same receipt.
+`overDeliveryQuantity` is held on the receipt (`status: 'pending_approval'`)
+until an authorized user explicitly approves or rejects it; only approval
+adds it to stock. Rejecting an over-delivery has no effect on stock beyond
+whatever was already accepted. This directly implements the client's
+requirement to distinguish ordered / accepted / over-delivered / rejected
+rather than silently accepting an over-delivery.
+
+By construction, any line with `overDeliveryQuantity > 0` already has
+`remainingQuantity === 0` the moment the receipt is created (the accepted
+portion exactly consumed what remained). This means approving or rejecting
+an over-delivery can only ever change stock, never the PO's own status —
+verified explicitly in the approve-overage test (`PurchaseOrder.findByIdAndUpdate`
+is asserted not to be called).
+
+### PO status
+
+`src/lib/goods-receipts.ts`'s `deriveNextPurchaseOrderStatus()` sets the PO's
+status purely from actual applied quantities, never from a button click: all
+lines fully applied → `delivered`; some but not all → `partially_received`;
+none → unchanged. A `cancelled` PO is never auto-reopened by this function.
+Receiving is only permitted when the PO's current status is `approved` or
+`partially_received` (`RECEIVABLE_PO_STATUSES`) — a `pending` (not yet
+approved) or `cancelled` PO is rejected with a clear 400 before any other
+validation runs.
+
+### API routes (all new)
+
+- **`POST /api/purchase-orders/[id]/goods-receipts`** — creates a receipt.
+  Gated by `manage_inventory` (existing permission, already granted
+  identically to admin+manager — no new permission invented). Runs inside a
+  real MongoDB multi-document transaction (`mongoose.startSession()` +
+  `session.withTransaction()`) — **the first use of a transaction anywhere
+  in this codebase**, a deliberate, narrowly-scoped exception justified
+  specifically by the client's explicit requirement for "the strongest
+  transaction/atomic-update strategy supported by the current MongoDB
+  deployment" (the `mongodb+srv://` Atlas connection string confirms a
+  replica set, so transactions are supported in production). Inside the
+  transaction: re-check the idempotency key, re-read prior receipts and the
+  live PO, validate every submitted quantity, compute the accepted/
+  over-delivery split per line, insert the `GoodsReceipt`, atomically
+  `$inc` `Product.stockQuantity` for each accepted quantity, and update the
+  PO's status — all as one atomic unit, so two concurrent receiving
+  requests against the same PO cannot each read a stale "remaining" value
+  and jointly over-apply stock. A duplicate-key error on the unique
+  `idempotencyKey` index (a genuine insert race between two concurrent
+  requests carrying the same key) is caught and resolved to the winning
+  document instead of surfacing as an error or double-applying inventory.
+- **`GET /api/purchase-orders/[id]/goods-receipts`** — read-only lookup for
+  the receiving UI: ordered/applied/remaining/pending-over-delivery per
+  line (computed live, no session/transaction needed), plus the full
+  receipt history for that PO. Gated the same way as the existing PO list
+  endpoint (`withManagerOrAdmin`).
+- **`POST /api/goods-receipts/[id]/approve-overage`** — authorizes the
+  over-delivered portion of a receipt. Gated by `approve_purchase_orders`
+  (existing permission, reusing the same admin/manager split already
+  established for PO approval). Atomic compare-and-swap via
+  `findOneAndUpdate({ _id, status: 'pending_approval' }, ...)`: only a
+  receipt still awaiting a decision matches, so a concurrent or retried
+  approval call that loses the race matches zero documents rather than
+  double-applying the over-delivery — verified by a dedicated test that
+  fires the route twice and confirms the second call is rejected with a
+  clear 400 and never touches `Product.stockQuantity` a second time. Runs
+  inside its own transaction for the same reason as creation.
+- **`POST /api/goods-receipts/[id]/reject-overage`** — same permission and
+  compare-and-swap pattern; never touches stock (the over-delivered
+  quantity was never applied while pending).
+
+No generic edit/update route exists for `GoodsReceipt` at all — this alone
+satisfies "cannot modify approved receipts" / "cannot force inventory
+application" without any extra authorization code, mirroring `Return`'s
+immutability.
+
+### Inventory Reports / movement feed integration
+
+- **`src/app/api/inventory-reports/movements/route.ts`** — now also queries
+  `GoodsReceipt` and emits up to two `PURCHASE`-type movement entries per
+  receipt: the accepted quantity (dated at `receivedAt`) and, only if
+  approved, the over-delivered quantity (dated at `overageDecisionAt`). The
+  stale "purchase orders are not counted" limitation note is removed.
+- **`src/app/api/inventory-reports/route.ts`** — `reconstructQuantities()`
+  now also reverses goods-receipt-driven stock increases (both the
+  accepted-at-creation and approved-overage-at-approval events) when
+  computing historical Average Inventory, alongside the three event types
+  it already reversed (sales, approved adjustments, restocked returns).
+  Without this, Average Inventory would have silently understated
+  beginning-of-period stock for any product that received a delivery
+  during the reporting window. The now-stale "no receiving step exists"
+  limitation note is removed; the turnover limitation note is updated to
+  list goods receipts among the real movement types it's built from.
+  Financial Reports (`/api/financial-reports/route.ts`) needed **no**
+  change — COGS is correctly computed from `Sale.items.buyingPrice` at time
+  of sale, not from receiving cost; receiving inventory is a balance-sheet
+  event, not an income-statement one.
+
+### Activity logging
+
+Three new `logActivity()` action strings, added to the Activity Logs page's
+filter dropdown alongside the existing ones: `GOODS_RECEIPT_CREATED`
+(severity `warning` when the receipt includes a pending over-delivery,
+`info` otherwise), `GOODS_RECEIPT_OVERAGE_APPROVED`, and
+`GOODS_RECEIPT_OVERAGE_REJECTED` (both `warning`).
+
+### UI
+
+Built into the existing Purchase Orders page rather than a new standalone
+page, per direction:
+
+- **`src/app/dashboard/purchase-orders/page.tsx`** — a "Receive Goods"
+  button appears on any order with status `approved` or
+  `partially_received`; the status badge/filter/dialog now also handle
+  `partially_received`.
+- **`src/components/dialogs/GoodsReceiptForm.tsx`** (new) — the receiving
+  dialog: a table of ordered/previously-received/remaining/receiving-now/
+  rejected quantities per line with a live accepted-vs-over-delivery
+  preview as the user types, a receipt history section below with
+  Approve/Reject buttons for any receipt awaiting an over-delivery
+  decision, and real loading/error/empty states (no fake UI). Client-side
+  validation blocks impossible quantities (negative, non-integer, rejected
+  exceeding received) before submission, but — per the client's explicit
+  instruction not to assume frontend validation is sufficient — every one
+  of these is re-validated server-side regardless. The dialog is mounted
+  with `key={purchaseOrder._id}` from the parent so switching purchase
+  orders (or reopening one) always starts from clean state, rather than
+  resetting form state from inside a `useEffect` (which both risks wiping
+  in-progress input on an unrelated background refetch and triggers this
+  project's stricter `react-hooks/set-state-in-effect` lint rule).
+- **`src/hooks/useGoodsReceipts.ts`** (new) — the lookup query and the
+  three mutations (create, approve-overage, reject-overage), each properly
+  surfacing a server-side failure as a rejected mutation (`onError` fires
+  with the real error message) rather than the silent-success gap present
+  in a couple of this codebase's older mutation hooks (`apiPost`/`apiGet`
+  resolve `{success:false, error}` rather than throwing; not fixed
+  elsewhere in this pass since it's out of scope, but avoided in all new
+  code here).
+
+### RBAC
+
+No new permission constants. `manage_inventory` (existing, admin+manager)
+gates creating a receipt; `approve_purchase_orders` (existing,
+admin+manager) gates approving/rejecting an over-delivery — both already
+granted identically to those two roles, matching the existing
+Stock-Adjustment/PurchaseOrder permission pattern. All checks happen
+server-side in the route handlers themselves (`withPermission(...)`); the UI
+only conditionally *shows* the receiving controls, it does not gate them.
+
+### Tests
+
+Two new test files plus targeted additions to the existing inventory-reports
+suite, covering every scenario in the client's list:
+
+- **`src/__tests__/lib/goods-receipts.test.ts`** (14 tests) — the pure
+  computation functions: `splitAcceptedAndOverDelivery` (fits within
+  remaining, exceeds remaining, fully-received-line over-delivery, fully
+  rejected), `computeLineProgress` (no prior receipts, multiple partial
+  receipts summed, approved over-delivery counted, pending/rejected
+  over-delivery not counted), `deriveNextPurchaseOrderStatus` (partially
+  received, delivered, unchanged, cancelled never reopens), and
+  `RECEIVABLE_PO_STATUSES`.
+- **`src/__tests__/app/api/goods-receipts-route.test.ts`** (25 tests) —
+  full receipt, partial receipt, multiple partial receipts summing to
+  completion, a delivery exceeding remaining (over-delivery split and
+  never silently applied), authorized over-delivery approval, a second
+  concurrent approval attempt correctly rejected once no longer pending,
+  duplicate submission returning the existing receipt without creating a
+  second one, a race on the same idempotency key never double-applying
+  inventory, unauthorized receipt creation (403) and unauthorized approval
+  (403), cancelled-PO and still-pending-PO rejection, invalid quantities
+  (negative, non-integer, rejected exceeding received), a missing product,
+  a missing purchase order, a product not on the PO, the GET lookup route's
+  `canReceive`/remaining computation, and activity-log calls for every
+  create/approve/reject path.
+- **`src/__tests__/app/api/inventory-reports-route.test.ts`** — extended
+  with a test confirming a goods-receipt-driven stock increase is
+  correctly reversed when reconstructing beginning-of-period inventory, and
+  a test confirming the movements feed emits separate accepted/approved-
+  overage `PURCHASE` entries; the three pre-existing tests in this file
+  were also updated to mock the newly-added `GoodsReceipt` import so they
+  keep passing.
+
+**Final verification**: `tsc --noEmit` exits 0 · `npm run build` succeeds ·
+`npx jest` passes **37/37 suites, 280/280 tests** (up from 35/35 suites,
+239/239 tests before this pass — 2 new suites, 41 new tests, zero
+regressions, no existing test weakened or removed).
+
+---
+
+## Pass 6: production-hardening and consistency
+
+Direction for this pass, following the client's approval of the GoodsReceipt
+implementation: no new major business features; audit and fix remaining race
+conditions (starting from the ones flagged as future work in Pass 5); audit
+every inventory mutation site; verify the inventory ledger is reconstructable;
+audit financial-definition consistency; verify activity-log coverage; re-audit
+server-action/API auth boundaries; audit client-supplied financial values; a
+final UI dead-functionality sweep; verify production configuration; and
+finish with a report categorized as VERIFIED / FIXED / REQUIRES ENVIRONMENT
+CONFIGURATION / INTENTIONALLY NOT IMPLEMENTED / FUTURE HARDENING (folding the
+still-open architectural question into Requires Product Decision, since it
+needs a client choice, not just implementation time).
+
+### 1. Race conditions
+
+Grepped for every direct `stockQuantity` mutation
+(`stockQuantity\s*[-+]=` and `\$inc.*stockQuantity`) to get an exhaustive,
+not sampled, list. Exactly three non-atomic sites existed, all sharing the
+same `findById` → read → mutate in memory → `.save()` shape:
+
+- **`createSale`** (`src/lib/actions/pos.ts`): read `product.stockQuantity`,
+  check `< item.quantity`, decrement, save. Two concurrent sales for the
+  same product could both read the same starting quantity, both pass the
+  check, and both decrement from the same stale base — one decrement is
+  lost, so recorded stock ends up higher than what was actually sold. Fixed
+  by wrapping the whole per-item loop **and** the `Sale.create()` call in a
+  single MongoDB transaction (`mongoose.startSession()` +
+  `session.withTransaction()` — the same pattern already established for
+  GoodsReceipt in Pass 5), with each decrement done as an atomic
+  `Product.findOneAndUpdate({_id, stockQuantity: {$gte: quantity}}, {$inc:
+  {stockQuantity: -quantity}})`. The transaction is what makes the *whole
+  sale* all-or-nothing — previously, if item 2 of 3 was out of stock, item
+  1's decrement had already been saved with no Sale record ever created
+  (an orphaned decrement); now the entire attempt rolls back. The atomic
+  `$inc` with a guard is what actually closes the lost-update window itself.
+  Low-stock notifications were moved to after the transaction commits (they
+  were previously created mid-loop, which would have fired even on an
+  attempt that later rolled back).
+- **`updateStock`** (`src/lib/actions/inventory.ts`) — same shape, same
+  fix (atomic guarded `$inc`, no transaction needed since it only ever
+  touches one Product document and a best-effort Notification).
+- **Stock Adjustment approval** (`POST /api/stock-adjustments/[id]/approve`)
+  — two documents (the `StockAdjustment` itself and the `Product`) must
+  change together: flipping `status` to `approved` and applying the stock
+  delta. Worse, the *status* read-check-write was itself racy: two
+  concurrent approvals could both read `status: 'pending'` and both apply
+  the delta, double-counting the adjustment. Wrapped the whole
+  read-check-apply-save sequence in a transaction. This closes the
+  duplicate-approval race without needing an explicit compare-and-swap
+  filter on the status field, because MongoDB's own write-conflict
+  detection inside a transaction, combined with `withTransaction`'s
+  automatic retry on transient errors, means a second concurrent
+  transaction that loses the race gets retried from scratch — its retry
+  re-reads the now-`approved` status and correctly rejects, rather than
+  double-applying.
+
+Two more status-only fields (no stock effect either way) had the same
+duplicate-processing shape and were fixed with a lighter atomic
+compare-and-swap (`findOneAndUpdate({_id, status: 'pending'}, ...)`, no
+transaction needed since only one document changes): **Stock Adjustment
+rejection** and **Purchase Order approval**.
+
+**Returns** (`POST /api/returns`) had a related but distinct race: creation
+reads every prior `Return` for the sale to compute "already returned"/
+"already refunded," validates the new request against that, then creates
+the new `Return` and restocks. Two concurrent returns for the *same sale*
+could both read the same prior-returns total, both pass validation, and
+both proceed — over-restocking inventory and/or refunding more than the
+sale was ever paid for. Fixed by wrapping the read-validate-create-restock
+sequence in a transaction that re-reads prior returns fresh inside it, so a
+losing concurrent transaction retries against the post-commit state and
+correctly rejects.
+
+**Investigated and deliberately left alone** (documented under Future
+Hardening, not fixed): `Customer.totalSpent`/`loyaltyPoints` inside
+`createSale` (same shape, but the impact is informational loyalty-math
+drift, not stock/payment correctness — a proper fix needs an atomic `$inc`
+plus an atomic array update, a bigger change than the "smallest appropriate
+fix" this pass called for), and Shift close (same shape, but
+`computeLiveShiftStats` is a pure read of Sale/Return records, so a
+double-close just recomputes and overwrites with equally-valid numbers — no
+double-counting results either way).
+
+A **new** race/validation bug was found while fixing these, not present in
+the original list: **`createSale` never validated that `item.quantity` was
+a positive integer.** A negative quantity would flip the atomic guard
+(`stockQuantity >= -5` is trivially true for any non-negative stock) and
+the `$inc` would *increase* stock while the sale's own total went negative.
+`updateStock` had the identical gap. Both now reject non-positive/
+non-integer quantities before touching the database, and `createSale` also
+now rejects an empty `items` array (previously would have silently created
+a $0 sale record). The same audit found **`updateSupplierDebt`**
+(`src/lib/actions/suppliers.ts`) had the exact same race and validation
+gaps on a financial field (`outstandingDebt`) — fixed identically.
+
+### 2. Inventory mutation map
+
+| Mutation | Auth | Atomicity | Audit log | Movement feed | Duplicate protection | Negative-stock guard |
+|---|---|---|---|---|---|---|
+| Sale (decrease) | `requireAuth` (all 3 roles hold `create_sales`) | Transaction + atomic guarded `$inc` (fixed) | `SALE_COMPLETED` | `SALE` type | Transaction (per-request); no idempotency key on double-submit (client button-disable only — see Future Hardening) | Atomic guard |
+| Return (increase, restock) | `process_returns` (all 3 roles) | Transaction (fixed) | `RETURN_PROCESSED` | `RETURN` type | Transaction re-validates fresh state | N/A (restock only, no negative risk) |
+| Goods Receipt (increase, accepted + approved overage) | `manage_inventory` / `approve_purchase_orders` | Transaction + atomic `$inc` (Pass 5) | `GOODS_RECEIPT_CREATED` / `..._OVERAGE_APPROVED`/`..._REJECTED` | `PURCHASE` type (both accepted and overage) | Idempotency key (create) + CAS (overage decision) | N/A (increase only) |
+| Stock Adjustment approval (+/-) | `approve_stock_adjustments` | Transaction (fixed) | `STOCK_ADJUSTMENT` | `ADJUSTMENT` type | Transaction closes duplicate-approval race (fixed) | `newStock < 0` check inside the transaction |
+| `updateStock` (dead code, no UI caller) | `requireManagerOrAdmin` | Atomic guarded `$inc` (fixed) | **Not logged** (see Future Hardening) | Not in the feed (no caller, no real event to show) | Atomic guard | Atomic guard |
+
+No hidden mutation path exists: the four real, reachable sources all
+produce a corresponding business record that the movement feed and turnover
+reconstruction already read from.
+
+### 3. Inventory ledger reconstructability
+
+`reconstructQuantities()` in `/api/inventory-reports/route.ts` (built in
+Phase F, extended in Pass 5 for Goods Receipts) already implements exactly
+the formula requested: starting from current `Product.stockQuantity`, it
+reverses every Sale (add back), approved Stock Adjustment (reverse the
+signed delta), restocked Return (subtract back out), and Goods Receipt
+(subtract back out, both the accepted-at-creation and approved-overage
+events) that happened after the reconstruction point — which is
+algebraically the same as computing `opening + purchases + adjustments +
+returns - sales = expected stock` forward from an opening balance, just run
+in reverse from the current balance. Re-verified this covers all four real
+mutation sources (Section 2) with no gaps. Discrepancies between this
+reconstruction and the *actual* `Product.stockQuantity` cannot occur for
+any of the four tracked sources, because the reconstruction is deriving
+directly from the same event log those sources write — the only way that
+guarantee has a hole is `updateStock`, whose dead-code status is called out
+explicitly in Future Hardening precisely because it would corrupt the
+ledger if it were ever wired up without a corresponding record type.
+
+### 4. Financial integrity
+
+- **Sale price**: already verified in earlier passes and reconfirmed —
+  `createSale` derives `sellingPrice`/`buyingPrice` from the `Product`
+  record server-side; a client-supplied `price` field is accepted for
+  payload shape but never read.
+- **Return refund cap**: already verified — `totalAlreadyRefunded +
+  totalRefund > sale.total + 0.01` is checked before creating the Return,
+  now inside the transaction against freshly-read prior returns.
+- **Goods Receipt cost**: Goods Receipt only ever moves *quantities*; it
+  never touches `Product.buyingPrice` or any valuation field, so there is
+  no client-supplied cost value in the receiving flow to distrust. Whether
+  `buyingPrice` *should* update from purchase/receipt cost is a separate,
+  pre-existing (not introduced by GoodsReceipt) product question — see
+  Future Hardening.
+- **Profit-definition consistency — one real inconsistency found and
+  fixed**: `/api/financial-reports` and `/api/sales/analytics` both
+  correctly compute profit as revenue minus COGS (minus expenses, for
+  financial-reports specifically). The dead, uncalled `getDashboardStats()`
+  computed `totalProfit = monthlyRevenue - totalExpenses` — omitting COGS
+  entirely, which would overstate profit by the full cost of goods sold for
+  the period. Fixed to match the correct definition. Confirmed via grep
+  that this was the *only* file with a divergent formula; the live
+  `/dashboard/sales` page reads from the correct `/api/sales/analytics`
+  endpoint, not this dead function.
+- **Purchase Order `totalAmount`/line totals were trusted from the client
+  without recomputation** — found while auditing client-supplied financial
+  values (Section 6). Not a live security exploit in the same sense as
+  `createSale`'s price trust (only `create_purchase_orders`-holding staff,
+  i.e. manager/admin, can reach this route, and `totalAmount` doesn't feed
+  into any other calculation — a mismatch would only affect that PO's own
+  display), but it directly matches "never trust a client-calculated
+  financial total," so `POST /api/purchase-orders` now recomputes each
+  line's `total` (`quantity × unitPrice`) and the order's `totalAmount`
+  (`sum of line totals`) server-side, rejecting non-positive
+  quantities/negative unit prices, rather than trusting the client's
+  arithmetic.
+
+### 5. Activity-log coverage
+
+Checked every event on the client's list against an actual `logActivity()`
+call site (not assumed):
+
+| Event | Status before Pass 6 | Status after |
+|---|---|---|
+| Login | Already logged (`USER_LOGIN` in `src/lib/auth.ts`) | Unchanged |
+| Product creation | Already logged | Unchanged |
+| Stock adjustment (approve) | Already logged (`STOCK_ADJUSTMENT`) | Unchanged |
+| Stock adjustment (reject) | **Not logged** | Fixed — `STOCK_ADJUSTMENT_REJECTED` |
+| Sale completion | Already logged (`SALE_COMPLETED`) | Unchanged |
+| Goods receipt / approve / reject | Already logged (Pass 5) | Unchanged |
+| Returns/refunds | Already logged (`RETURN_PROCESSED`) | Unchanged |
+| User creation | **Not logged** | Fixed — `USER_CREATED` |
+| User modification | **Not logged** | Fixed — `USER_UPDATED` / `USER_ROLE_CHANGED` (role changes get a distinct, higher-severity action name) |
+| User deactivation | **Not logged** | Fixed — `USER_DEACTIVATED` |
+| Permission/role changes | **Not logged** | Fixed — `ROLE_CREATED` / `ROLE_UPDATED` / `ROLE_DELETED` |
+| Purchase Order create/approve | **Not logged** | Fixed — `PURCHASE_ORDER_CREATED` / `PURCHASE_ORDER_APPROVED` |
+| Backup/export | Already logged (Phase G) | Unchanged |
+
+All new action strings were added to the Activity Logs page's filter
+dropdown. No secrets, passwords, or payment credentials are included in any
+log description (spot-checked every new `logActivity()` call — each
+description only names the actor, the affected record, and non-sensitive
+identifying fields like name/email/order number).
+
+### 6. Server-action / API auth-boundary re-audit
+
+Re-grepped every `'use server'` file's exported functions against a real
+`require*()`/session check as the first statement (not assumed from an
+earlier pass) — `ai.ts`, `branches.ts`, `customers.ts`, `dashboard.ts`,
+`employees.ts`, `expenses.ts`, `inventory.ts`, `notifications.ts`,
+`orders.ts`, `pos.ts`, `suppliers.ts`. Every function in every file had a
+correct check, **except `dashboard.ts`**: `getDashboardStats()` and
+`getSalesData()` had no authentication check at all — either could be
+called directly, unauthenticated, over the network (a `'use server'` export
+is independently callable regardless of whether any page currently imports
+it — the same class of gap fixed for a dozen other functions in an earlier
+pass, apparently not caught for this file at the time), returning real
+revenue/profit/customer-count data. Both now call `requireAuth()`, matching
+the real, currently-used `/api/dashboard/stats` route's own requirement.
+
+Also re-verified the specific pattern the client asked about by name — "a
+frontend route may look protected while an imported `'use server'` function
+is independently callable" — by checking every API route that wraps a
+sibling server action or model call for a second, independent auth
+boundary rather than assuming the caller already checked. All API routes
+built in this and prior passes gate through `withPermission`/`withAdmin`/
+`withManagerOrAdmin` directly against the model layer, not through an
+already-checked server action, so there's no unchecked pass-through path
+in either direction.
+
+### 7. Client-supplied financial values
+
+Searched for client-controlled price/cost/discount/tax/total/payment/
+refund/quantity/commission/profit values across every mutation route:
+
+- **Sale**: price/cost server-derived (verified, unchanged).
+- **Return**: refund amounts computed server-side from the original sale's
+  recorded price, capped at what was actually paid (verified, unchanged).
+- **Purchase Order**: `totalAmount`/line totals were client-trusted — fixed
+  to recompute server-side (Section 4).
+- **Goods Receipt**: quantities only, already validated as non-negative
+  integers (Pass 5); no cost/price field exists on this model at all.
+- **Stock Adjustment**: `quantity` has no route-level positivity check, but
+  the Mongoose schema itself enforces `min: 1` on `.create()`, so an
+  invalid value is rejected by the model layer before ever reaching the
+  (later, separate) approval step that actually applies it to stock —
+  verified this is a real, load-bearing guarantee, not an assumption.
+- **Discount/commission**: not live features (`discount` hardcoded to `0`
+  in `createSale`; no commission field anywhere in the codebase) — nothing
+  to validate because nothing reads client input for either.
+- **Supplier debt** (`updateSupplierDebt`): `amount` had no validation at
+  all — fixed alongside its race condition (Section 1).
+
+### 8. UI dead-functionality sweep
+
+Directive B (Phase H / Pass 4) already completed an exhaustive sweep for
+dead buttons, empty handlers, fake loading/success, and placeholder data
+across every dashboard page. This pass re-checked specifically for anything
+introduced or newly discovered since then:
+
+- The Goods Receipt UI built in Pass 5 has no dead buttons or fake states —
+  every action (submit, approve, reject) calls a real mutation with real
+  loading/error/empty states.
+- **One new finding, more severe than a "dead button"**: the
+  `/dashboard/roles` page's permission checkboxes are fully functional as a
+  *form* (they persist to the database correctly) but have **zero effect
+  on real authorization** — see the "Custom Roles & Permissions are
+  entirely decorative" entry under Requires Product Decision. This isn't a
+  broken handler or a fake success message; it's a working feature that
+  does something other than what it visibly appears to do, which is a more
+  serious trust problem than the buttons-with-no-handler class of bug this
+  sweep originally targeted. Not fixed (a real redesign), but flagged
+  prominently and a narrow safety guard was added (Section 9) to close the
+  one path where it could silently do real damage.
+- No other new "coming soon," mock API call, or hardcoded dashboard value
+  was found. The Report Viewer's "coming soon" state remains, per explicit
+  direction, the one other intentionally-unfinished UI element.
+
+### 9. A bug found while cross-checking the Roles page against real RBAC
+
+While confirming the Roles page's decorative status (Section 8), found that
+`PUT /api/roles/[id]` cascades a role rename into `User.updateMany({role:
+oldName}, {role: newName})` — and `updateMany` skips Mongoose's schema
+validators unless `runValidators: true` is explicitly passed, which it
+wasn't. Since `User.role` is a strict 3-value enum, no user could ever
+legitimately hold a custom role name through any *validated* write path —
+but if a custom role happened to be named (or renamed to/from) one of the
+three real values (`admin`/`manager`/`cashier`), this bulk update would
+silently reassign every real user holding that role, completely bypassing
+the enum, with no confirmation dialog and no audit trail. Reachable only by
+an existing admin (the whole `/api/roles/*` surface is `withAdmin`-gated),
+so not a privilege-escalation path for a lower-privileged attacker, but a
+real accidental-mass-reassignment footgun for the admin performing an
+apparently-unrelated rename. Fixed with two changes: (1) a guard in both
+`POST /api/roles` and `PUT /api/roles/[id]` blocking any custom role from
+being named or renamed to/from one of the three reserved names, and (2)
+`runValidators: true` added to the cascading `updateMany` as defense in
+depth. Also added the missing `logActivity()` calls for role create/update/
+delete while in this file (Section 5).
+
+### 10. Production configuration and deployment verification
+
+Re-confirmed (no changes needed beyond the one addition below):
+`MONGODB_URI`/`NEXTAUTH_URL`/`NEXTAUTH_SECRET` remain required-for-startup
+with clear (non-crashing but non-functional) degradation when unset;
+`MFA_ENCRYPTION_KEY` still fails with a clear, non-generic operational error
+in production (verified in Pass 4, unchanged by this pass); every optional
+integration (NVIDIA AI, Cloudinary, WhatsApp) still degrades to its
+documented non-fake fallback rather than crashing or silently pretending to
+succeed; `/register` still redirects to `/login`; no `NEXT_PUBLIC_*`
+variable exists anywhere. **One addition**: `DEPLOYMENT.md` now documents
+that `MONGODB_URI` must point at a MongoDB **replica set** (any standard
+Atlas `mongodb+srv://` connection string already qualifies), because Goods
+Receipt and the newly-transactional Sale/Return/Stock-Adjustment routes use
+real multi-document transactions, which a standalone MongoDB instance does
+not support. This could not be verified against the actual Railway/Atlas
+deployment from this environment — no deployment credentials or live
+Railway/Atlas access exist here, so this is stated as what to verify before
+first use, not as something already confirmed against production. The same
+applies to file/image handling (Cloudinary) and any other credential-gated
+integration: their code paths and fallback behavior were verified by
+reading the code, not by making live calls against production credentials.
+
+### 11. Tests
+
+New test files: `src/__tests__/lib/inventory-update-stock.test.ts` (9
+tests), `src/__tests__/lib/supplier-debt-update.test.ts` (8 tests),
+`src/__tests__/lib/dashboard-stats-profit.test.ts` (1 test),
+`src/__tests__/lib/dashboard-stats-auth.test.ts` (2 tests),
+`src/__tests__/app/api/roles-route.test.ts` (10 tests) — covering every fix
+above: atomic guarded updates and their negative-value rejections for
+`updateStock`/`updateSupplierDebt`, the corrected profit formula, the new
+auth requirement, and the reserved-role-name guard (including the
+`runValidators`-protected rename cascade). Existing tests updated to match
+the new transactional/atomic implementations: `pos-create-sale.test.ts`
+(added negative/zero/fractional-quantity and empty-items rejection tests,
+plus a multi-item partial-failure test), `stock-adjustment-workflow-route.test.ts`,
+`purchase-order-approve-route.test.ts`, and `returns-route.test.ts` (all
+three re-mocked for `mongoose.startSession`/atomic `findOneAndUpdate`
+instead of plain `.save()`, with no assertions weakened — the same business
+rules are checked, just against the new implementation shape) plus one new
+double-refund-race test added to `returns-route.test.ts`.
+
+**Final verification**: `tsc --noEmit` exits 0 · `npm run build` succeeds ·
+`npx jest` passes **42/42 suites, 320/320 tests** (up from 37/37 suites,
+280/280 tests before this pass — 5 new suites, 40 new tests, zero
+regressions, no existing test weakened or removed).
+
+## Pass 7: theme system overhaul (light/dark centralization)
+
+### Root cause
+
+`globals.css`'s `:root` (light) block held dark HSL values —
+`--background: 240 10% 3.9%`, `--foreground: 0 0% 98%` — a straight copy of
+the dark palette. Light mode was never actually implemented; `.dark` had
+only marginally different values. Separately, ~20 dashboard pages never
+touched the token system at all: they used a self-contained, page-local
+`bg-white dark:bg-slate-900` / `text-slate-900 dark:text-white` pattern
+that mostly *worked* (both sides hardcoded) but wasn't centralized, plus a
+handful of pages/wrappers with **no** `dark:` pairing at all — genuine
+invisible-text bugs, not just an architecture complaint.
+
+### What changed, in the mandated order (audit → tokens → components →
+pages → charts → accessibility → verification)
+
+1. **Tokens** (`globals.css` + `tailwind.config.ts`): wrote real light and
+   dark HSL palettes for every semantic role —
+   background/foreground/card/popover/elevated/muted/input/
+   input-background/disabled/border/divider/ring/selected/primary/
+   secondary/accent/destructive/success/warning/info/chart-1..5 — wired
+   through Tailwind's `<alpha-value>` pattern so opacity modifiers
+   (`bg-primary/10`) resolve correctly.
+2. **Shared components** (`src/components/ui/*`): removed every hardcoded
+   color. `badge.tsx`/`empty-state.tsx`'s `success`/`warning` variants now
+   use the `success`/`warning` tokens instead of `emerald-*`/`orange-*` +
+   manual `dark:` overrides. `input.tsx`/`textarea.tsx`/`select.tsx` now
+   use `bg-input-background` (was `bg-background`) for a consistent
+   input-surface token. `dialog.tsx`'s `DialogContent` now uses
+   `bg-popover`/`text-popover-foreground` (was bare `bg-background`).
+   `kpi-card.tsx`'s trend/change indicators now use `success`/`destructive`
+   tokens; its per-card icon-accent palette (blue/purple/emerald/etc. by
+   KPI type) was left as-is — legitimate branding variety, not a semantic
+   contrast bug.
+3. **`sonner`'s `<Toaster>`** — mounted once in the root layout, so
+   effectively a shared component — was never wired to the app's theme
+   (its `theme` prop defaults to light). Every toast, on every page,
+   rendered with light chrome even in dark mode. Wrapped it in
+   `src/components/ui/toaster.tsx`, syncing `theme` from `next-themes`'
+   `useTheme()`.
+4. **Layout** (Sidebar, Header): already almost entirely token-based.
+   Found and fixed two literal hardcoded-status-color +
+   `dark:`-override leftovers (the sidebar's "online" indicator dot, the
+   header's "Verified" label) — migrated to the `success` token.
+5. **Pages** (`src/app/dashboard/**`, `src/app/error.tsx`): audited all 106
+   `.tsx` files. Found two disjoint groups with zero overlap — 30 already
+   on centralized tokens, 20 on the self-contained legacy
+   `bg-white dark:bg-slate-*` pattern. Fixed concrete invisible-text bugs
+   first: a bare `text-white` left on a table wrapper
+   (`suppliers/page.tsx`) and on two KPI-grid wrappers
+   (`branches/page.tsx`, `online-orders/page.tsx`) with no matching
+   background — dead/dangerous CSS that would show as invisible text for
+   anything not individually overridden; five "default" status-badge
+   fallbacks (`users`, `purchase-orders`, `promotions`, `activity-logs`,
+   `notifications`, `active-users`) that had every *other* case branch
+   correctly paired with `dark:` except the neutral default, which was
+   light-only. Then mechanically migrated all ~900 legacy paired-color
+   occurrences across the 20 files via a verified-safe scripted literal
+   string replacement (`bg-white dark:bg-slate-900` → `bg-card`,
+   `text-slate-900 dark:text-white` → `text-foreground`,
+   `border-slate-100 dark:border-slate-800` → `border-border`, etc., built
+   from an actual frequency count of every pattern in those files, applied
+   longest-match-first), then hand-fixed the ~15 one-off residuals the
+   frequency mapping didn't catch. `ai-assistant/page.tsx` was fully
+   rewritten — it was the one page with almost no dark-mode support at all
+   (hardcoded `bg-gray-50`/`bg-white`/`text-gray-*` throughout, aside from
+   one previously-retrofitted input bar).
+6. **Charts** (`dashboard-charts.tsx` and `sales/page.tsx` — the only two
+   files using `recharts`): grid/axis/tooltip styling in
+   `dashboard-charts.tsx` already referenced CSS variables; its
+   revenue/sales/profit series colors were hardcoded hex, migrated to the
+   `chart-1..5` tokens. `sales/page.tsx` had a real dark-mode bug: its
+   chart tooltips hardcoded a white, 90%-opacity background
+   (`rgba(255,255,255,0.9)`) — every chart tooltip in dark mode popped up
+   as a bright white box over the dark UI. Fixed to
+   `hsl(var(--popover))`/`hsl(var(--popover-foreground))`, and migrated
+   its hardcoded axis/grid/data colors to the same CSS-variable pattern.
+7. **Accessibility/contrast**: computed WCAG contrast ratios for all 15
+   foreground/background token pairings in both themes (script-verified
+   against the actual HSL values, not eyeballed). One real failure: white
+   text on `--primary` was 3.63:1 (light) / 3.16:1 (dark) — below the
+   4.5:1 AA threshold for normal text. Darkened `--primary` from 60%/64%
+   lightness to a single 50% lightness in both themes (same blue
+   hue/saturation), bringing it to 5.05:1 while keeping the
+   primary-vs-background UI-boundary ratio comfortably above 3:1 in both
+   themes. Every other pairing (foreground/background, card,
+   muted-foreground, secondary, destructive, success, warning, info,
+   selected) already cleared 4.5:1 (text) / 3:1 (UI) with margin.
+   `disabled-foreground/disabled` (2.9:1 / 3.4:1) and card/table border
+   contrast (~1.2–1.6:1) were left as-is: WCAG explicitly exempts disabled
+   controls from the contrast requirement, and a barely-visible card
+   border matches both shadcn's own default convention and the "subtle
+   borders" quality bar this task asked for.
+8. **Theme-switching behavior**: `layout.tsx` already had
+   `suppressHydrationWarning` on `<html>` and `<body>`; `DashboardHeader`'s
+   toggle already gated its icon behind a `mounted` check — both correct,
+   pre-existing. Verified with a headless-browser run against the public
+   (DB-independent) `/login` page: `<html>` class toggles cleanly
+   `dark` → `light` → `dark` with no hydration warnings/errors in the
+   console, and both themes render with correct contrast (screenshots
+   taken). Dashboard pages need a live database/session this sandbox
+   doesn't have configured, so those were verified by exhaustive
+   source-level grep sweeps (zero remaining `slate-`/`gray-` +
+   `dark:`-paired legacy classes, zero unpaired dark-toned text left
+   anywhere in `src/app`) plus `tsc`/`jest`/`next build`, **not** by a live
+   click-through — see the checklist below for what that leaves open.
+
+### Files changed
+
+`tailwind.config.ts`, `src/app/globals.css`, `src/app/layout.tsx`,
+`src/app/error.tsx`; `src/components/ui/{badge,input,textarea,select,
+dialog,empty-state,kpi-card}.tsx` and new `src/components/ui/toaster.tsx`;
+`src/components/dashboard-header.tsx`, `dashboard-sidebar.tsx`,
+`dashboard-charts.tsx`; and 24 files under `src/app/dashboard/**`
+(active-users, activity-logs, ai-assistant, ai-predictions, barcode,
+branches, customers + customers/[id], employees + employees/[id] +
+employees/new, expenses, notifications, online-orders, promotions,
+purchase-orders, receipts + receipts/[id], sales, settings, suppliers +
+suppliers/[id] + suppliers/new, users, whatsapp-messages,
+whatsapp-orders), plus `src/components/settings/TwoFactorSettings.tsx`.
+
+### What was NOT changed
+
+No database, API, authentication, authorization, or business-logic code
+was touched. No component was structurally rewritten beyond
+`ai-assistant/page.tsx`'s color classes (its logic/JSX structure is
+unchanged). No new shared component primitives (Checkbox/Radio/Switch/
+Dropdown/Popover/Table/Alert/Tabs/Tooltip) were created — none exist in
+this codebase today; building one is a separate, explicit decision, not
+assumed here.
+
+### Verification checklist
+
+- [x] `tsc --noEmit` — 0 errors
+- [x] `npx jest` — 42/42 suites, 320/320 tests passing (unchanged count —
+      this was a styling-only pass, no test should have needed to change)
+- [x] `npx next build` — succeeds, full route manifest, no warnings
+- [x] Zero remaining `text-slate-*`/`text-gray-*` (900/800/700/600)
+      without a `dark:` pairing anywhere in `src/app`
+- [x] Zero remaining `slate-*`/`gray-*` + `dark:`-paired legacy classes in
+      `src/app` (all migrated to tokens)
+- [x] Zero hardcoded hex colors left in any chart `fill`/`stroke` prop
+- [x] WCAG AA contrast (4.5:1 text / 3:1 UI) verified computationally for
+      all 15 token pairings in both themes; one failure found and fixed
+      (`--primary`)
+- [x] `/login`, `/register` — visually verified in a real headless browser,
+      both themes, no hydration warnings/errors, screenshots reviewed
+- [ ] Authenticated dashboard pages (Dashboard, Products, Categories,
+      Inventory, Inventory Reports, Purchase Orders, Goods Receipts,
+      Sales/POS, Orders, Customers, Suppliers, Employees, Activity Logs,
+      Financial Reports, Expenses, Notifications, Settings, User
+      management) — verified by source-level audit (token usage, contrast
+      math, exhaustive hardcoded-color grep sweep) and a successful build,
+      **not** by a live authenticated browser session: this sandbox has no
+      MongoDB URI or NEXTAUTH secret configured, so no session can be
+      established here. **Recommended before calling this fully closed**:
+      one manual theme-toggle pass on 3–4 representative pages (Dashboard,
+      a table-heavy page like Inventory, a dialog-heavy page like Purchase
+      Orders) against a real deployment or local DB.
