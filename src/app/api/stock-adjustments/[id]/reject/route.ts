@@ -3,6 +3,7 @@ import { withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import { StockAdjustment } from '@/models';
 import { handleApiError } from '@/lib/error-handler';
+import { logActivity } from '@/lib/activity-log';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -10,27 +11,45 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     try {
       await connectDB();
 
-      const adjustment = await StockAdjustment.findById(id);
-      if (!adjustment) {
-        return NextResponse.json(
-          { success: false, error: 'Stock adjustment not found' },
-          { status: 404 }
-        );
-      }
+      // No stock change either way - it was never applied while pending.
+      // Still an atomic compare-and-swap (only a still-pending adjustment
+      // matches) so a concurrent or retried reject call, or a reject that
+      // loses a race against an approval, can't double-process the same
+      // adjustment.
+      const adjustment = await StockAdjustment.findOneAndUpdate(
+        { _id: id, status: 'pending' },
+        {
+          status: 'rejected',
+          reviewedBy: user.name || 'Unknown',
+          reviewedById: user.id,
+          reviewedAt: new Date(),
+        },
+        { new: true }
+      );
 
-      if (adjustment.status !== 'pending') {
+      if (!adjustment) {
+        const existing = await StockAdjustment.findById(id);
+        if (!existing) {
+          return NextResponse.json(
+            { success: false, error: 'Stock adjustment not found' },
+            { status: 404 }
+          );
+        }
         return NextResponse.json(
-          { success: false, error: `Cannot reject an adjustment with status "${adjustment.status}"` },
+          { success: false, error: `Cannot reject an adjustment with status "${existing.status}"` },
           { status: 400 }
         );
       }
 
-      // No stock change - it was never applied while pending.
-      adjustment.status = 'rejected';
-      adjustment.reviewedBy = user.name || 'Unknown';
-      adjustment.reviewedById = user.id;
-      adjustment.reviewedAt = new Date();
-      await adjustment.save();
+      logActivity({
+        action: 'STOCK_ADJUSTMENT_REJECTED',
+        description: `${user.name || 'Unknown'} rejected a stock adjustment request for "${adjustment.productName}"`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: 'info',
+      });
 
       return NextResponse.json({
         success: true,

@@ -3,10 +3,16 @@
 import connectDB from '@/lib/mongodb';
 import { Sale, Product, Expense, Customer, Notification } from '@/models';
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, subDays } from 'date-fns';
+import { requireAuth } from '@/lib/security';
 
 export async function getDashboardStats() {
+  // A 'use server' export is independently network-callable regardless of
+  // whether any page currently imports it - this returned revenue, profit,
+  // and customer data with no authentication check at all before this fix.
+  await requireAuth();
+
   const db = await connectDB();
-  
+
   if (!db) {
     // Return default data when MongoDB is not connected
     return {
@@ -84,8 +90,16 @@ export async function getDashboardStats() {
   });
   const totalExpenses = monthlyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
-  // Calculate profit
-  const totalProfit = monthlyRevenue - totalExpenses;
+  // Calculate profit. This must stay consistent with how /api/financial-reports
+  // defines net profit (revenue - cost of goods sold - expenses) - a plain
+  // revenue-minus-expenses figure here would silently overstate profit by
+  // the full cost of goods sold, showing a materially different number for
+  // the same period than the Financial Reports page.
+  const monthlyCogs = monthlySales.reduce(
+    (sum, sale) => sum + sale.items.reduce((s, item) => s + item.buyingPrice * item.quantity, 0),
+    0
+  );
+  const totalProfit = monthlyRevenue - monthlyCogs - totalExpenses;
 
   // Total customers
   const totalCustomers = await Customer.countDocuments();
@@ -117,6 +131,8 @@ export async function getDashboardStats() {
 }
 
 export async function getSalesData(period: 'daily' | 'weekly' | 'monthly' | 'yearly') {
+  await requireAuth();
+
   const db = await connectDB();
   
   if (!db) {

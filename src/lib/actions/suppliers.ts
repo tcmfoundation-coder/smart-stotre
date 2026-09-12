@@ -112,22 +112,39 @@ export async function updateSupplierDebt(id: string, amount: number, operation: 
     throw new Error('Database connection failed');
   }
 
-  const supplier = await Supplier.findById(id);
+  // A non-positive or non-finite amount is never legitimate, and left
+  // unchecked it would flip the guard below the same way it would for stock
+  // quantities - e.g. 'subtract' with a negative amount would increase debt
+  // while bypassing the "cannot exceed outstanding debt" check.
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('amount must be a positive number');
+  }
+
+  // A plain findById -> mutate -> save() here would let two concurrent calls
+  // (e.g. a payment recorded at the same time as a new invoiced amount) each
+  // read the same outstandingDebt and apply their own delta on top of it,
+  // silently losing one of the two updates. The atomic update below applies
+  // the delta as part of the same operation that reads current debt, and for
+  // 'subtract' only succeeds if enough debt is actually still outstanding.
+  const delta = operation === 'add' ? amount : -amount;
+  const updateQuery: Record<string, unknown> = { _id: id };
+  if (operation === 'subtract') {
+    updateQuery.outstandingDebt = { $gte: amount };
+  }
+
+  const supplier = await Supplier.findOneAndUpdate(
+    updateQuery,
+    { $inc: { outstandingDebt: delta } },
+    { new: true }
+  );
 
   if (!supplier) {
-    throw new Error('Supplier not found');
-  }
-
-  if (operation === 'add') {
-    supplier.outstandingDebt += amount;
-  } else {
-    if (supplier.outstandingDebt < amount) {
-      throw new Error('Debt amount exceeds outstanding debt');
+    const exists = await Supplier.findById(id).select('_id');
+    if (!exists) {
+      throw new Error('Supplier not found');
     }
-    supplier.outstandingDebt -= amount;
+    throw new Error('Debt amount exceeds outstanding debt');
   }
-
-  await supplier.save();
 
   revalidatePath('/dashboard/suppliers');
   return JSON.parse(JSON.stringify(supplier));

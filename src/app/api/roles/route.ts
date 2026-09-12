@@ -5,6 +5,20 @@ import Role from '@/models/Role';
 import User from '@/models/User';
 import { handleApiError } from '@/lib/error-handler';
 import { escapeRegex } from '@/lib/utils';
+import { logActivity } from '@/lib/activity-log';
+
+// User.role is a fixed 3-value schema enum ('admin' | 'manager' | 'cashier')
+// enforced independently by src/lib/rbac.ts - a custom Role document can
+// never actually be assigned to a user through any validated write path, so
+// a custom role sharing one of these names would be meaningless at best. Far
+// worse, PUT /api/roles/[id] below cascades a rename into
+// User.updateMany({role: oldName}, {role: newName}), which (like all
+// updateMany calls) skips Mongoose validators unless explicitly told not to
+// - so without this guard, a real admin/manager/cashier's role could be
+// silently mass-reassigned by renaming an unrelated custom role that
+// happens to collide with one of these names, with no confirmation and no
+// audit trail.
+const RESERVED_ROLE_NAMES = ['admin', 'manager', 'cashier'];
 
 export async function GET(request: NextRequest) {
   return withAdmin(async (req, user) => {
@@ -67,7 +81,14 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      
+
+      if (RESERVED_ROLE_NAMES.includes(name.toLowerCase())) {
+        return NextResponse.json(
+          { success: false, error: `"${name}" is a reserved system role name and cannot be used for a custom role` },
+          { status: 400 }
+        );
+      }
+
       // Check if role already exists
       const existingRole = await Role.findOne({ name: name.toLowerCase() });
       if (existingRole) {
@@ -76,14 +97,24 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
-      
+
       const role = await Role.create({
         name: name.toLowerCase(),
         description,
         permissions: permissions || [],
         isSystem: false,
       });
-      
+
+      logActivity({
+        action: 'ROLE_CREATED',
+        description: `${user.name || 'Unknown'} created role "${role.name}"`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: 'warning',
+      });
+
       return NextResponse.json({
         success: true,
         data: role

@@ -6,15 +6,17 @@ Statuses: `[ ]` not started · `[-]` in progress · `[x]` completed · `[!]` blo
 
 ## PRODUCTION READINESS STATUS
 
-Current state as of the end of "Pass 4: finalization" below. This section is a
-categorized index into the detailed narrative that follows (each phase/pass
-section has the full evidence and reasoning); it does not replace it. The six
-categories below are kept strictly separate, per direction — nothing appears
-in more than one.
+Current state as of the end of "Pass 6: production-hardening and consistency"
+below. This section is a categorized index into the detailed narrative that
+follows (each phase/pass section has the full evidence and reasoning); it
+does not replace it. The categories below are kept strictly separate, per
+direction — nothing appears in more than one.
 
 **Verification baseline as of this status**: `tsc --noEmit` exits 0 · `npm run
-build` succeeds · `npx jest` passes **37/37 suites, 280/280 tests** (updated
-after Pass 5 — Purchase Order receiving implementation, below).
+build` succeeds · `npx jest` passes **42/42 suites, 320/320 tests** (updated
+after Pass 6 — production-hardening: race-condition fixes, inventory
+mutation audit, financial-integrity fixes, activity-log coverage, and a
+role-name-collision guard).
 
 ### FIXED
 
@@ -90,6 +92,61 @@ and shipped on this branch).
   inventory application, PO status now driven by actual received
   quantities). Full detail in "Pass 5: Purchase Order receiving —
   implementation" at the end of this document.
+- **Race conditions in every remaining `findById` → mutate → `.save()` stock
+  mutation (Pass 6)**: `createSale`, `updateStock`, and Stock Adjustment
+  approval all had a real lost-update race (two concurrent requests could
+  each read the same stock/status and both proceed, causing incorrect
+  decrements, duplicate application, or a bypassed insufficient-stock
+  check). All now use atomic guarded `$inc`/`findOneAndUpdate` updates
+  (single document) or a real MongoDB transaction (when a status flip and a
+  stock change must succeed or fail together). The Returns route had the
+  same class of race between reading prior returns and creating a new one
+  (could double-refund/double-restock under concurrent returns on the same
+  sale) — now wrapped in a transaction that re-validates fresh state.
+  PurchaseOrder approve and Stock Adjustment reject had a duplicate-
+  processing race on their own status field (no stock effect, but still a
+  correctness/audit-trail concern) — now atomic compare-and-swap. Full
+  detail in "Pass 6: production-hardening and consistency" below.
+- **`createSale` never validated item quantities**: a client-supplied
+  negative or zero `quantity` would flip the atomic stock guard (any
+  non-negative stock satisfies "at least a negative number") and could
+  *increase* stock while *decreasing* the sale's own total. `updateStock`
+  had the identical gap. Both now reject non-positive/non-integer
+  quantities before touching the database. The Returns route was missing
+  an integer check on the same kind of input (a fractional quantity would
+  have produced fractional stock).
+- **`updateSupplierDebt` had the same race and validation gaps as the stock
+  mutations** (`findById` → mutate → `.save()`, no positivity check on
+  `amount`) on a financial field (`Supplier.outstandingDebt`). Fixed the
+  same way: atomic guarded `$inc`, explicit `amount` validation.
+- **Dashboard "Total Profit" omitted cost of goods sold entirely**:
+  `getDashboardStats()` computed `totalProfit = monthlyRevenue -
+  totalExpenses`, silently overstating profit by the full COGS for the
+  period — a materially different number from `/api/financial-reports`'s
+  correct `revenue - cost - expenses` for the same month. Fixed to subtract
+  COGS. (This function has no current UI caller — see "dead but reachable
+  server actions" below — so the wrong number was never actually displayed,
+  but the formula itself was wrong and is now fixed regardless.)
+- **`getDashboardStats`/`getSalesData` had no authentication check at all**:
+  both `'use server'` exports could be called directly over the network by
+  anyone, unauthenticated, returning real revenue/profit/customer-count
+  data. Both now require an authenticated session, matching the real
+  `/api/dashboard/stats` route's own requirement.
+- **A custom "Role" rename could silently mass-reassign real users'
+  `admin`/`manager`/`cashier` role**: `PUT /api/roles/[id]` cascades a
+  rename into `User.updateMany({role: oldName}, {role: newName})`, and
+  `updateMany` skips Mongoose's schema validators by default — so renaming
+  an unrelated custom role that happened to collide with one of the three
+  real RBAC role names could reassign every real user holding that role,
+  with no confirmation and no audit trail. Added a guard blocking any
+  custom role from being named or renamed to/from a reserved system role
+  name, plus `runValidators: true` on the cascade as defense in depth.
+- **Missing activity-log coverage for security-sensitive mutations**: user
+  creation, user update/role-change/deactivation, custom role
+  create/update/delete, Stock Adjustment rejection, and Purchase Order
+  create/approve performed no audit logging at all. All now call
+  `logActivity()` with new action strings, added to the Activity Logs
+  page's filter dropdown.
 
 ### VERIFIED
 
@@ -121,20 +178,64 @@ Checked carefully and found to already be correct — no change made.
   branch's commits; every claim beyond the one genuine finding (customer
   hard-delete, listed under FIXED) was confirmed to already be fixed on
   the actual branch.
+- **Inventory mutation map (Pass 6)**: every place `Product.stockQuantity`
+  can change was enumerated by grep (`stockQuantity [-+]=` and `$inc.*
+  stockQuantity`) — exactly four real sources (Sales, Returns, Goods
+  Receipts, Stock Adjustment approval) plus one unreachable dead-code path
+  (`updateStock`, see Future Hardening). All four real sources are now
+  atomic/transactional (Returns and Goods Receipts already were; Sales and
+  Stock Adjustments were fixed in this pass), authorized via the existing
+  RBAC permissions, and produce a corresponding business record (Sale,
+  Return, GoodsReceipt, StockAdjustment) that the inventory-movement feed
+  and turnover reconstruction both already read from — there is no path
+  that changes stock without a matching audit-traceable record.
+- **Financial definitions already consistent where they're actually
+  displayed**: `createSale` already derives price from `Product.sellingPrice`
+  server-side (never the client); Returns already caps total refund at the
+  sale's own paid total; `/api/financial-reports` and `/api/sales/analytics`
+  both correctly compute profit as revenue minus COGS (from
+  `Sale.items.buyingPrice`) minus (for financial-reports) operating
+  expenses, and `/dashboard/sales` reads from the correct
+  `/api/sales/analytics` endpoint, not the flawed dead `getDashboardStats`
+  formula described under FIXED.
+- Every other `'use server'` action file (`ai.ts`, `branches.ts`,
+  `customers.ts`, `employees.ts`, `expenses.ts`, `orders.ts`,
+  `suppliers.ts`, and `notifications.ts`'s own `requireRequester()` +
+  per-role visibility filter pattern) already calls the correct
+  `require*`/session check as the first line of every exported function —
+  `dashboard.ts` (fixed above) was the only file missing this.
+- `User.password` is hashed via a `pre('save')` bcrypt hook — never stored
+  or returned in plaintext; the manual `delete userResponse.password` in
+  `POST /api/users` is defense in depth on top of an already-safe model,
+  not compensating for a real leak.
+- Discounts are not a live feature: `createSale`'s `discount` is hardcoded
+  to `0`, never read from client input, so there is no discount-manipulation
+  surface to close despite the `apply_discounts` permission existing in RBAC.
 
 ### REQUIRES PRODUCT DECISION
 
 Nothing further can be done here without the client choosing a direction —
 proposals are written, code is not.
 
-- **Race-condition hardening** (`Product.findById` → mutate → `.save()` in
-  `createSale`, `updateStock`, and Stock Adjustment approval) — a real,
-  pre-existing characteristic of every already-shipped stock-mutating
-  flow, not a new regression. Fixing it means touching multiple
-  already-tested flows; whether that's worth doing now, or paired with a
-  load-testing pass to first confirm it's a practical (not just
-  theoretical) risk at this store's actual transaction volume, is a
-  prioritization call for the client. See Recommended Future Work.
+- **Custom "Roles & Permissions" are entirely decorative — they do not
+  affect real authorization** (found in Pass 6). `/dashboard/roles` lets an
+  admin create a custom role and toggle specific permission checkboxes for
+  it, and persists that to a `Role` collection — but the actual
+  authorization system (`src/lib/rbac.ts`'s `ROLE_PERMISSIONS`,
+  `hasPermission()`, every `withPermission()` check) is a hardcoded map
+  keyed on the fixed 3-value `User.role` enum (`admin`/`manager`/`cashier`)
+  and never reads the `Role` collection at all. An admin toggling
+  permission checkboxes for a custom role has no effect on what any user
+  can actually do — confirmed by grep: nothing outside `src/app/api/roles/*`
+  ever reads `Role.permissions`. This is a genuine trust problem (an admin
+  could reasonably believe they've restricted access when they haven't),
+  but fixing it properly means replacing `rbac.ts`'s hardcoded model with a
+  database-driven one and auditing every permission check site — a real
+  architectural redesign, not a bug fix, so nothing has been changed here
+  beyond the safety guard described under FIXED (preventing a custom role
+  from colliding with a real role name). Needs a decision: keep the
+  hardcoded 3-role model and either remove or clearly label the custom-role
+  UI as not-yet-functional, or commission the DB-driven redesign.
 
 ### REQUIRES ENVIRONMENT CONFIGURATION
 
@@ -186,22 +287,42 @@ oversights.
   client wrapper (`src/lib/redis.ts`) and cache helper (`src/lib/cache.ts`),
   but confirmed by grep to have zero real callers anywhere in the
   application. Nothing needs to be provisioned for it in production today.
-- **Atomic stock-quantity updates** — the existing `findById` → mutate →
-  `.save()` pattern was deliberately not rewritten to `$inc`/
-  `findOneAndUpdate` across already-shipped flows during this finalization
-  pass, to avoid touching multiple already-tested code paths on a
-  theoretical (not observed) race window. See Recommended Future Work.
 
-### RECOMMENDED FUTURE WORK
+### FUTURE HARDENING
 
 Not required for production readiness as scoped by this engagement, but
 worth planning for.
 
-- Retrofit atomic `$inc`/`findOneAndUpdate` stock mutations in `createSale`,
-  `updateStock`, and Stock Adjustment approval, to close the theoretical
-  concurrent-request race window on `Product.stockQuantity` — ideally
-  paired with real load data showing whether it's a practical risk at this
-  store's actual concurrent-checkout volume.
+- **`Customer.totalSpent`/`loyaltyPoints`/`purchaseCount` still use
+  `findById` → mutate → `.save()`** inside `createSale` (investigated in
+  Pass 6, deliberately not fixed now). Two concurrent sales to the *same*
+  customer could lose one update. Left alone because the impact is
+  informational (loyalty math drift, not stock/payment correctness) and a
+  correct fix needs an atomic `$inc` for the scalars plus an atomic
+  `$addToSet` for the `favoriteProducts` array — a real change, not a
+  one-line guard, and lower priority than the inventory/financial fixes
+  actually made in this pass.
+- **Shift close (`POST /api/shifts/[id]/close`) has the same
+  check-then-mutate pattern** (investigated in Pass 6, deliberately not
+  fixed now). A double-close race exists in theory, but `computeLiveShiftStats`
+  is a pure read of Sale/Return records, so a second close just
+  recomputes and overwrites with equally-valid (often identical) numbers —
+  no double-counting or financial corruption results either way. Worth a
+  compare-and-swap for consistency with the other approve/reject routes if
+  this area is revisited, but not a real integrity risk today.
+- **Dead-but-reachable `'use server'` functions**: `updateStock`
+  (`lib/actions/inventory.ts`), `updateSupplierDebt`
+  (`lib/actions/suppliers.ts`), and `getDashboardStats`/`getSalesData`
+  (`lib/actions/dashboard.ts`) have no UI caller anywhere in the app today,
+  but remain independently network-callable (Next.js server actions are
+  callable regardless of whether a page imports them) — all four already
+  had their race/auth/validation gaps fixed in Pass 6 rather than left
+  exploitable, but consider either wiring them up to real UI or removing
+  them outright so there is no unused surface to keep auditing.
+- **Custom "Roles & Permissions" architecture mismatch** — see the matching
+  entry under Requires Product Decision. If the client decides to keep the
+  hardcoded 3-role model, the custom-role UI should be relabeled or removed
+  rather than left implying it does something it doesn't.
 - If a future in-app database restore is ever reconsidered despite the
   standing recommendation against it, the technical proposal's
   requirements (dry-run, checksum verification, replace-only, multi-step
@@ -213,6 +334,19 @@ worth planning for.
 - Wire the existing (currently unused) Redis cache helper if a future
   performance need justifies it — the infrastructure is already present,
   just not connected to anything.
+- `Product.buyingPrice` does not automatically update from Purchase
+  Order/Goods Receipt unit costs (investigated in Pass 6) — it stays a
+  single manually-edited value, and COGS at sale time uses whatever
+  `buyingPrice` was current then. This is the existing, pre-GoodsReceipt
+  behavior, not a regression; implementing real inventory costing (weighted
+  average or most-recent-cost) would be a genuine accounting-policy
+  decision, not a bug fix.
+- Purchase Order `supplierId`/`supplierName` are still trusted from the
+  client as denormalized display fields at creation time (unlike
+  `totalAmount`/line totals, which are now recomputed server-side in Pass
+  6) — a mismatched `supplierName` would only affect that PO's own display,
+  never inventory or financial correctness, so it was left as-is rather
+  than adding a Supplier lookup for a cosmetic-only field.
 
 ---
 
@@ -2330,4 +2464,345 @@ suite, covering every scenario in the client's list:
 **Final verification**: `tsc --noEmit` exits 0 · `npm run build` succeeds ·
 `npx jest` passes **37/37 suites, 280/280 tests** (up from 35/35 suites,
 239/239 tests before this pass — 2 new suites, 41 new tests, zero
+regressions, no existing test weakened or removed).
+
+---
+
+## Pass 6: production-hardening and consistency
+
+Direction for this pass, following the client's approval of the GoodsReceipt
+implementation: no new major business features; audit and fix remaining race
+conditions (starting from the ones flagged as future work in Pass 5); audit
+every inventory mutation site; verify the inventory ledger is reconstructable;
+audit financial-definition consistency; verify activity-log coverage; re-audit
+server-action/API auth boundaries; audit client-supplied financial values; a
+final UI dead-functionality sweep; verify production configuration; and
+finish with a report categorized as VERIFIED / FIXED / REQUIRES ENVIRONMENT
+CONFIGURATION / INTENTIONALLY NOT IMPLEMENTED / FUTURE HARDENING (folding the
+still-open architectural question into Requires Product Decision, since it
+needs a client choice, not just implementation time).
+
+### 1. Race conditions
+
+Grepped for every direct `stockQuantity` mutation
+(`stockQuantity\s*[-+]=` and `\$inc.*stockQuantity`) to get an exhaustive,
+not sampled, list. Exactly three non-atomic sites existed, all sharing the
+same `findById` → read → mutate in memory → `.save()` shape:
+
+- **`createSale`** (`src/lib/actions/pos.ts`): read `product.stockQuantity`,
+  check `< item.quantity`, decrement, save. Two concurrent sales for the
+  same product could both read the same starting quantity, both pass the
+  check, and both decrement from the same stale base — one decrement is
+  lost, so recorded stock ends up higher than what was actually sold. Fixed
+  by wrapping the whole per-item loop **and** the `Sale.create()` call in a
+  single MongoDB transaction (`mongoose.startSession()` +
+  `session.withTransaction()` — the same pattern already established for
+  GoodsReceipt in Pass 5), with each decrement done as an atomic
+  `Product.findOneAndUpdate({_id, stockQuantity: {$gte: quantity}}, {$inc:
+  {stockQuantity: -quantity}})`. The transaction is what makes the *whole
+  sale* all-or-nothing — previously, if item 2 of 3 was out of stock, item
+  1's decrement had already been saved with no Sale record ever created
+  (an orphaned decrement); now the entire attempt rolls back. The atomic
+  `$inc` with a guard is what actually closes the lost-update window itself.
+  Low-stock notifications were moved to after the transaction commits (they
+  were previously created mid-loop, which would have fired even on an
+  attempt that later rolled back).
+- **`updateStock`** (`src/lib/actions/inventory.ts`) — same shape, same
+  fix (atomic guarded `$inc`, no transaction needed since it only ever
+  touches one Product document and a best-effort Notification).
+- **Stock Adjustment approval** (`POST /api/stock-adjustments/[id]/approve`)
+  — two documents (the `StockAdjustment` itself and the `Product`) must
+  change together: flipping `status` to `approved` and applying the stock
+  delta. Worse, the *status* read-check-write was itself racy: two
+  concurrent approvals could both read `status: 'pending'` and both apply
+  the delta, double-counting the adjustment. Wrapped the whole
+  read-check-apply-save sequence in a transaction. This closes the
+  duplicate-approval race without needing an explicit compare-and-swap
+  filter on the status field, because MongoDB's own write-conflict
+  detection inside a transaction, combined with `withTransaction`'s
+  automatic retry on transient errors, means a second concurrent
+  transaction that loses the race gets retried from scratch — its retry
+  re-reads the now-`approved` status and correctly rejects, rather than
+  double-applying.
+
+Two more status-only fields (no stock effect either way) had the same
+duplicate-processing shape and were fixed with a lighter atomic
+compare-and-swap (`findOneAndUpdate({_id, status: 'pending'}, ...)`, no
+transaction needed since only one document changes): **Stock Adjustment
+rejection** and **Purchase Order approval**.
+
+**Returns** (`POST /api/returns`) had a related but distinct race: creation
+reads every prior `Return` for the sale to compute "already returned"/
+"already refunded," validates the new request against that, then creates
+the new `Return` and restocks. Two concurrent returns for the *same sale*
+could both read the same prior-returns total, both pass validation, and
+both proceed — over-restocking inventory and/or refunding more than the
+sale was ever paid for. Fixed by wrapping the read-validate-create-restock
+sequence in a transaction that re-reads prior returns fresh inside it, so a
+losing concurrent transaction retries against the post-commit state and
+correctly rejects.
+
+**Investigated and deliberately left alone** (documented under Future
+Hardening, not fixed): `Customer.totalSpent`/`loyaltyPoints` inside
+`createSale` (same shape, but the impact is informational loyalty-math
+drift, not stock/payment correctness — a proper fix needs an atomic `$inc`
+plus an atomic array update, a bigger change than the "smallest appropriate
+fix" this pass called for), and Shift close (same shape, but
+`computeLiveShiftStats` is a pure read of Sale/Return records, so a
+double-close just recomputes and overwrites with equally-valid numbers — no
+double-counting results either way).
+
+A **new** race/validation bug was found while fixing these, not present in
+the original list: **`createSale` never validated that `item.quantity` was
+a positive integer.** A negative quantity would flip the atomic guard
+(`stockQuantity >= -5` is trivially true for any non-negative stock) and
+the `$inc` would *increase* stock while the sale's own total went negative.
+`updateStock` had the identical gap. Both now reject non-positive/
+non-integer quantities before touching the database, and `createSale` also
+now rejects an empty `items` array (previously would have silently created
+a $0 sale record). The same audit found **`updateSupplierDebt`**
+(`src/lib/actions/suppliers.ts`) had the exact same race and validation
+gaps on a financial field (`outstandingDebt`) — fixed identically.
+
+### 2. Inventory mutation map
+
+| Mutation | Auth | Atomicity | Audit log | Movement feed | Duplicate protection | Negative-stock guard |
+|---|---|---|---|---|---|---|
+| Sale (decrease) | `requireAuth` (all 3 roles hold `create_sales`) | Transaction + atomic guarded `$inc` (fixed) | `SALE_COMPLETED` | `SALE` type | Transaction (per-request); no idempotency key on double-submit (client button-disable only — see Future Hardening) | Atomic guard |
+| Return (increase, restock) | `process_returns` (all 3 roles) | Transaction (fixed) | `RETURN_PROCESSED` | `RETURN` type | Transaction re-validates fresh state | N/A (restock only, no negative risk) |
+| Goods Receipt (increase, accepted + approved overage) | `manage_inventory` / `approve_purchase_orders` | Transaction + atomic `$inc` (Pass 5) | `GOODS_RECEIPT_CREATED` / `..._OVERAGE_APPROVED`/`..._REJECTED` | `PURCHASE` type (both accepted and overage) | Idempotency key (create) + CAS (overage decision) | N/A (increase only) |
+| Stock Adjustment approval (+/-) | `approve_stock_adjustments` | Transaction (fixed) | `STOCK_ADJUSTMENT` | `ADJUSTMENT` type | Transaction closes duplicate-approval race (fixed) | `newStock < 0` check inside the transaction |
+| `updateStock` (dead code, no UI caller) | `requireManagerOrAdmin` | Atomic guarded `$inc` (fixed) | **Not logged** (see Future Hardening) | Not in the feed (no caller, no real event to show) | Atomic guard | Atomic guard |
+
+No hidden mutation path exists: the four real, reachable sources all
+produce a corresponding business record that the movement feed and turnover
+reconstruction already read from.
+
+### 3. Inventory ledger reconstructability
+
+`reconstructQuantities()` in `/api/inventory-reports/route.ts` (built in
+Phase F, extended in Pass 5 for Goods Receipts) already implements exactly
+the formula requested: starting from current `Product.stockQuantity`, it
+reverses every Sale (add back), approved Stock Adjustment (reverse the
+signed delta), restocked Return (subtract back out), and Goods Receipt
+(subtract back out, both the accepted-at-creation and approved-overage
+events) that happened after the reconstruction point — which is
+algebraically the same as computing `opening + purchases + adjustments +
+returns - sales = expected stock` forward from an opening balance, just run
+in reverse from the current balance. Re-verified this covers all four real
+mutation sources (Section 2) with no gaps. Discrepancies between this
+reconstruction and the *actual* `Product.stockQuantity` cannot occur for
+any of the four tracked sources, because the reconstruction is deriving
+directly from the same event log those sources write — the only way that
+guarantee has a hole is `updateStock`, whose dead-code status is called out
+explicitly in Future Hardening precisely because it would corrupt the
+ledger if it were ever wired up without a corresponding record type.
+
+### 4. Financial integrity
+
+- **Sale price**: already verified in earlier passes and reconfirmed —
+  `createSale` derives `sellingPrice`/`buyingPrice` from the `Product`
+  record server-side; a client-supplied `price` field is accepted for
+  payload shape but never read.
+- **Return refund cap**: already verified — `totalAlreadyRefunded +
+  totalRefund > sale.total + 0.01` is checked before creating the Return,
+  now inside the transaction against freshly-read prior returns.
+- **Goods Receipt cost**: Goods Receipt only ever moves *quantities*; it
+  never touches `Product.buyingPrice` or any valuation field, so there is
+  no client-supplied cost value in the receiving flow to distrust. Whether
+  `buyingPrice` *should* update from purchase/receipt cost is a separate,
+  pre-existing (not introduced by GoodsReceipt) product question — see
+  Future Hardening.
+- **Profit-definition consistency — one real inconsistency found and
+  fixed**: `/api/financial-reports` and `/api/sales/analytics` both
+  correctly compute profit as revenue minus COGS (minus expenses, for
+  financial-reports specifically). The dead, uncalled `getDashboardStats()`
+  computed `totalProfit = monthlyRevenue - totalExpenses` — omitting COGS
+  entirely, which would overstate profit by the full cost of goods sold for
+  the period. Fixed to match the correct definition. Confirmed via grep
+  that this was the *only* file with a divergent formula; the live
+  `/dashboard/sales` page reads from the correct `/api/sales/analytics`
+  endpoint, not this dead function.
+- **Purchase Order `totalAmount`/line totals were trusted from the client
+  without recomputation** — found while auditing client-supplied financial
+  values (Section 6). Not a live security exploit in the same sense as
+  `createSale`'s price trust (only `create_purchase_orders`-holding staff,
+  i.e. manager/admin, can reach this route, and `totalAmount` doesn't feed
+  into any other calculation — a mismatch would only affect that PO's own
+  display), but it directly matches "never trust a client-calculated
+  financial total," so `POST /api/purchase-orders` now recomputes each
+  line's `total` (`quantity × unitPrice`) and the order's `totalAmount`
+  (`sum of line totals`) server-side, rejecting non-positive
+  quantities/negative unit prices, rather than trusting the client's
+  arithmetic.
+
+### 5. Activity-log coverage
+
+Checked every event on the client's list against an actual `logActivity()`
+call site (not assumed):
+
+| Event | Status before Pass 6 | Status after |
+|---|---|---|
+| Login | Already logged (`USER_LOGIN` in `src/lib/auth.ts`) | Unchanged |
+| Product creation | Already logged | Unchanged |
+| Stock adjustment (approve) | Already logged (`STOCK_ADJUSTMENT`) | Unchanged |
+| Stock adjustment (reject) | **Not logged** | Fixed — `STOCK_ADJUSTMENT_REJECTED` |
+| Sale completion | Already logged (`SALE_COMPLETED`) | Unchanged |
+| Goods receipt / approve / reject | Already logged (Pass 5) | Unchanged |
+| Returns/refunds | Already logged (`RETURN_PROCESSED`) | Unchanged |
+| User creation | **Not logged** | Fixed — `USER_CREATED` |
+| User modification | **Not logged** | Fixed — `USER_UPDATED` / `USER_ROLE_CHANGED` (role changes get a distinct, higher-severity action name) |
+| User deactivation | **Not logged** | Fixed — `USER_DEACTIVATED` |
+| Permission/role changes | **Not logged** | Fixed — `ROLE_CREATED` / `ROLE_UPDATED` / `ROLE_DELETED` |
+| Purchase Order create/approve | **Not logged** | Fixed — `PURCHASE_ORDER_CREATED` / `PURCHASE_ORDER_APPROVED` |
+| Backup/export | Already logged (Phase G) | Unchanged |
+
+All new action strings were added to the Activity Logs page's filter
+dropdown. No secrets, passwords, or payment credentials are included in any
+log description (spot-checked every new `logActivity()` call — each
+description only names the actor, the affected record, and non-sensitive
+identifying fields like name/email/order number).
+
+### 6. Server-action / API auth-boundary re-audit
+
+Re-grepped every `'use server'` file's exported functions against a real
+`require*()`/session check as the first statement (not assumed from an
+earlier pass) — `ai.ts`, `branches.ts`, `customers.ts`, `dashboard.ts`,
+`employees.ts`, `expenses.ts`, `inventory.ts`, `notifications.ts`,
+`orders.ts`, `pos.ts`, `suppliers.ts`. Every function in every file had a
+correct check, **except `dashboard.ts`**: `getDashboardStats()` and
+`getSalesData()` had no authentication check at all — either could be
+called directly, unauthenticated, over the network (a `'use server'` export
+is independently callable regardless of whether any page currently imports
+it — the same class of gap fixed for a dozen other functions in an earlier
+pass, apparently not caught for this file at the time), returning real
+revenue/profit/customer-count data. Both now call `requireAuth()`, matching
+the real, currently-used `/api/dashboard/stats` route's own requirement.
+
+Also re-verified the specific pattern the client asked about by name — "a
+frontend route may look protected while an imported `'use server'` function
+is independently callable" — by checking every API route that wraps a
+sibling server action or model call for a second, independent auth
+boundary rather than assuming the caller already checked. All API routes
+built in this and prior passes gate through `withPermission`/`withAdmin`/
+`withManagerOrAdmin` directly against the model layer, not through an
+already-checked server action, so there's no unchecked pass-through path
+in either direction.
+
+### 7. Client-supplied financial values
+
+Searched for client-controlled price/cost/discount/tax/total/payment/
+refund/quantity/commission/profit values across every mutation route:
+
+- **Sale**: price/cost server-derived (verified, unchanged).
+- **Return**: refund amounts computed server-side from the original sale's
+  recorded price, capped at what was actually paid (verified, unchanged).
+- **Purchase Order**: `totalAmount`/line totals were client-trusted — fixed
+  to recompute server-side (Section 4).
+- **Goods Receipt**: quantities only, already validated as non-negative
+  integers (Pass 5); no cost/price field exists on this model at all.
+- **Stock Adjustment**: `quantity` has no route-level positivity check, but
+  the Mongoose schema itself enforces `min: 1` on `.create()`, so an
+  invalid value is rejected by the model layer before ever reaching the
+  (later, separate) approval step that actually applies it to stock —
+  verified this is a real, load-bearing guarantee, not an assumption.
+- **Discount/commission**: not live features (`discount` hardcoded to `0`
+  in `createSale`; no commission field anywhere in the codebase) — nothing
+  to validate because nothing reads client input for either.
+- **Supplier debt** (`updateSupplierDebt`): `amount` had no validation at
+  all — fixed alongside its race condition (Section 1).
+
+### 8. UI dead-functionality sweep
+
+Directive B (Phase H / Pass 4) already completed an exhaustive sweep for
+dead buttons, empty handlers, fake loading/success, and placeholder data
+across every dashboard page. This pass re-checked specifically for anything
+introduced or newly discovered since then:
+
+- The Goods Receipt UI built in Pass 5 has no dead buttons or fake states —
+  every action (submit, approve, reject) calls a real mutation with real
+  loading/error/empty states.
+- **One new finding, more severe than a "dead button"**: the
+  `/dashboard/roles` page's permission checkboxes are fully functional as a
+  *form* (they persist to the database correctly) but have **zero effect
+  on real authorization** — see the "Custom Roles & Permissions are
+  entirely decorative" entry under Requires Product Decision. This isn't a
+  broken handler or a fake success message; it's a working feature that
+  does something other than what it visibly appears to do, which is a more
+  serious trust problem than the buttons-with-no-handler class of bug this
+  sweep originally targeted. Not fixed (a real redesign), but flagged
+  prominently and a narrow safety guard was added (Section 9) to close the
+  one path where it could silently do real damage.
+- No other new "coming soon," mock API call, or hardcoded dashboard value
+  was found. The Report Viewer's "coming soon" state remains, per explicit
+  direction, the one other intentionally-unfinished UI element.
+
+### 9. A bug found while cross-checking the Roles page against real RBAC
+
+While confirming the Roles page's decorative status (Section 8), found that
+`PUT /api/roles/[id]` cascades a role rename into `User.updateMany({role:
+oldName}, {role: newName})` — and `updateMany` skips Mongoose's schema
+validators unless `runValidators: true` is explicitly passed, which it
+wasn't. Since `User.role` is a strict 3-value enum, no user could ever
+legitimately hold a custom role name through any *validated* write path —
+but if a custom role happened to be named (or renamed to/from) one of the
+three real values (`admin`/`manager`/`cashier`), this bulk update would
+silently reassign every real user holding that role, completely bypassing
+the enum, with no confirmation dialog and no audit trail. Reachable only by
+an existing admin (the whole `/api/roles/*` surface is `withAdmin`-gated),
+so not a privilege-escalation path for a lower-privileged attacker, but a
+real accidental-mass-reassignment footgun for the admin performing an
+apparently-unrelated rename. Fixed with two changes: (1) a guard in both
+`POST /api/roles` and `PUT /api/roles/[id]` blocking any custom role from
+being named or renamed to/from one of the three reserved names, and (2)
+`runValidators: true` added to the cascading `updateMany` as defense in
+depth. Also added the missing `logActivity()` calls for role create/update/
+delete while in this file (Section 5).
+
+### 10. Production configuration and deployment verification
+
+Re-confirmed (no changes needed beyond the one addition below):
+`MONGODB_URI`/`NEXTAUTH_URL`/`NEXTAUTH_SECRET` remain required-for-startup
+with clear (non-crashing but non-functional) degradation when unset;
+`MFA_ENCRYPTION_KEY` still fails with a clear, non-generic operational error
+in production (verified in Pass 4, unchanged by this pass); every optional
+integration (NVIDIA AI, Cloudinary, WhatsApp) still degrades to its
+documented non-fake fallback rather than crashing or silently pretending to
+succeed; `/register` still redirects to `/login`; no `NEXT_PUBLIC_*`
+variable exists anywhere. **One addition**: `DEPLOYMENT.md` now documents
+that `MONGODB_URI` must point at a MongoDB **replica set** (any standard
+Atlas `mongodb+srv://` connection string already qualifies), because Goods
+Receipt and the newly-transactional Sale/Return/Stock-Adjustment routes use
+real multi-document transactions, which a standalone MongoDB instance does
+not support. This could not be verified against the actual Railway/Atlas
+deployment from this environment — no deployment credentials or live
+Railway/Atlas access exist here, so this is stated as what to verify before
+first use, not as something already confirmed against production. The same
+applies to file/image handling (Cloudinary) and any other credential-gated
+integration: their code paths and fallback behavior were verified by
+reading the code, not by making live calls against production credentials.
+
+### 11. Tests
+
+New test files: `src/__tests__/lib/inventory-update-stock.test.ts` (9
+tests), `src/__tests__/lib/supplier-debt-update.test.ts` (8 tests),
+`src/__tests__/lib/dashboard-stats-profit.test.ts` (1 test),
+`src/__tests__/lib/dashboard-stats-auth.test.ts` (2 tests),
+`src/__tests__/app/api/roles-route.test.ts` (10 tests) — covering every fix
+above: atomic guarded updates and their negative-value rejections for
+`updateStock`/`updateSupplierDebt`, the corrected profit formula, the new
+auth requirement, and the reserved-role-name guard (including the
+`runValidators`-protected rename cascade). Existing tests updated to match
+the new transactional/atomic implementations: `pos-create-sale.test.ts`
+(added negative/zero/fractional-quantity and empty-items rejection tests,
+plus a multi-item partial-failure test), `stock-adjustment-workflow-route.test.ts`,
+`purchase-order-approve-route.test.ts`, and `returns-route.test.ts` (all
+three re-mocked for `mongoose.startSession`/atomic `findOneAndUpdate`
+instead of plain `.save()`, with no assertions weakened — the same business
+rules are checked, just against the new implementation shape) plus one new
+double-refund-race test added to `returns-route.test.ts`.
+
+**Final verification**: `tsc --noEmit` exits 0 · `npm run build` succeeds ·
+`npx jest` passes **42/42 suites, 320/320 tests** (up from 37/37 suites,
+280/280 tests before this pass — 5 new suites, 40 new tests, zero
 regressions, no existing test weakened or removed).

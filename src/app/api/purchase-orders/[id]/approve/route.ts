@@ -3,30 +3,47 @@ import { withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
 import { PurchaseOrder } from '@/models';
 import { handleApiError } from '@/lib/error-handler';
+import { logActivity } from '@/lib/activity-log';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return withPermission('approve_purchase_orders')(async () => {
+  return withPermission('approve_purchase_orders')(async (req, user) => {
     try {
       await connectDB();
 
-      const order = await PurchaseOrder.findById(id);
-      if (!order) {
-        return NextResponse.json(
-          { success: false, error: 'Purchase order not found' },
-          { status: 404 }
-        );
-      }
+      // Atomic compare-and-swap: only a still-pending order matches, so a
+      // concurrent or retried approval call can't double-process the same
+      // order (approving a PO never touches inventory either way, but a
+      // duplicate approval is still worth ruling out for consistency).
+      const order = await PurchaseOrder.findOneAndUpdate(
+        { _id: id, status: 'pending' },
+        { status: 'approved' },
+        { new: true }
+      );
 
-      if (order.status !== 'pending') {
+      if (!order) {
+        const existing = await PurchaseOrder.findById(id);
+        if (!existing) {
+          return NextResponse.json(
+            { success: false, error: 'Purchase order not found' },
+            { status: 404 }
+          );
+        }
         return NextResponse.json(
-          { success: false, error: `Cannot approve an order with status "${order.status}"` },
+          { success: false, error: `Cannot approve an order with status "${existing.status}"` },
           { status: 400 }
         );
       }
 
-      order.status = 'approved';
-      await order.save();
+      logActivity({
+        action: 'PURCHASE_ORDER_APPROVED',
+        description: `${user.name || 'Unknown'} approved purchase order ${order.orderNumber}`,
+        userId: user.id,
+        userName: user.name || 'Unknown',
+        userRole: user.role || 'unknown',
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+        severity: 'info',
+      });
 
       return NextResponse.json({
         success: true,
