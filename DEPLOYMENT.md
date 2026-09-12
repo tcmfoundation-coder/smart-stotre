@@ -58,6 +58,18 @@ generation command's output) into Railway.
 |---|---|
 | `MONGODB_URI` | See above. Must point at the production MongoDB Atlas cluster, not a local or shared development database. |
 
+**Must be a replica set.** Purchase Order receiving (`POST
+/api/purchase-orders/[id]/goods-receipts` and the over-delivery
+approve/reject routes) uses real MongoDB multi-document transactions
+(`mongoose.startSession()`/`session.withTransaction()`) to keep inventory
+counts correct under concurrent receiving requests — the first and only
+feature in this codebase that requires transaction support. Any standard
+`mongodb+srv://` Atlas connection string already satisfies this (Atlas
+clusters are always replica sets); this only matters if `MONGODB_URI` is
+ever pointed at a standalone (non-replica-set) MongoDB instance, in which
+case those three routes would fail while the rest of the app continues to
+work normally.
+
 ### Required for Redis
 
 **None — Redis is not required for this application to function.** A

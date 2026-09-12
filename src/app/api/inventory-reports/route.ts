@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
-import { Product, Sale, StockAdjustment, Return } from '@/models';
+import { Product, Sale, StockAdjustment, Return, GoodsReceipt } from '@/models';
 import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
 
 // Average Inventory only has genuine historical data behind it because
-// Product.stockQuantity is mutated in exactly three places in this codebase
-// (sales decrement it, approved stock adjustments apply their delta, and
-// restocked returns increment it - verified by grep, purchase orders never
-// touch it). That means the quantity a product held at any past instant can
+// Product.stockQuantity is mutated in exactly four places in this codebase
+// (sales decrement it, approved stock adjustments apply their delta,
+// restocked returns increment it, and goods receipts increment it - verified
+// by grep). That means the quantity a product held at any past instant can
 // be reconstructed by starting at its current quantity and reversing every
-// one of those three event types that happened after that instant. There is
+// one of those event types that happened after that instant. There is
 // no historical cost data, though - Product.buyingPrice is a single mutable
 // current value - so both the beginning and ending valuations below price
 // reconstructed quantities at *today's* buying price. This is the strongest
 // data that genuinely exists; it's flagged to the caller via `limitations`
 // rather than presented as exact.
 const TURNOVER_LIMITATION =
-  'Average Inventory is reconstructed from real stock-movement records (sales, approved adjustments, restocked returns), ' +
+  'Average Inventory is reconstructed from real stock-movement records (sales, approved adjustments, restocked returns, goods receipts), ' +
   'but valued at each product\'s current buying price because historical cost snapshots are not stored. ' +
   'If buying prices changed during this period, treat the figure as an informed approximation, not an exact historical valuation.';
-
-const PURCHASE_ORDER_LIMITATION =
-  'Purchase orders are not counted as inventory movements or cost inputs: approving a purchase order does not currently update product stock ' +
-  'in this system (there is no receiving/goods-received step wired to inventory), so there is no real stock or cost event to report.';
 
 interface DateRangeResult {
   start: Date;
@@ -94,6 +90,14 @@ interface ReturnLean {
   items: { productId: mongoose.Types.ObjectId; quantity: number; restocked: boolean }[];
 }
 
+interface GoodsReceiptLean {
+  _id: mongoose.Types.ObjectId;
+  status: 'completed' | 'pending_approval' | 'rejected';
+  receivedAt: Date;
+  overageDecisionAt?: Date;
+  items: { productId: mongoose.Types.ObjectId; acceptedQuantity: number; overDeliveryQuantity: number }[];
+}
+
 /**
  * Reconstructs each product's quantity at `start` and `end` by starting from
  * its current stock and reversing every tracked movement that happened after
@@ -104,6 +108,7 @@ function reconstructQuantities(
   salesAfterStart: SaleLean[],
   adjustmentsAfterStart: AdjustmentLean[],
   returnsAfterStart: ReturnLean[],
+  goodsReceiptsAfterStart: GoodsReceiptLean[],
   start: Date,
   end: Date
 ) {
@@ -142,6 +147,30 @@ function reconstructQuantities(
     }
   }
 
+  for (const receipt of goodsReceiptsAfterStart) {
+    const acceptedIsAfterStart = receipt.receivedAt > start;
+    const acceptedIsAfterEnd = receipt.receivedAt > end;
+    // Approved over-delivery is a second, separately-dated stock increase on
+    // the same receipt (see src/lib/goods-receipts.ts) - a rejected or still
+    // pending over-delivery never touched stock and is not reversed here.
+    const overageApplies = receipt.status === 'completed' && !!receipt.overageDecisionAt;
+    const overageIsAfterStart = overageApplies && receipt.overageDecisionAt! > start;
+    const overageIsAfterEnd = overageApplies && receipt.overageDecisionAt! > end;
+
+    for (const item of receipt.items) {
+      const pid = item.productId.toString();
+      if (acceptedIsAfterStart && item.acceptedQuantity > 0) {
+        // A goods receipt increased stock, so reversing it means subtracting.
+        bump(reversalAfterStart, pid, -item.acceptedQuantity);
+        if (acceptedIsAfterEnd) bump(reversalAfterEnd, pid, -item.acceptedQuantity);
+      }
+      if (overageIsAfterStart && item.overDeliveryQuantity > 0) {
+        bump(reversalAfterStart, pid, -item.overDeliveryQuantity);
+        if (overageIsAfterEnd) bump(reversalAfterEnd, pid, -item.overDeliveryQuantity);
+      }
+    }
+  }
+
   const qtyAtStart = new Map<string, number>();
   const qtyAtEnd = new Map<string, number>();
   for (const product of products) {
@@ -165,7 +194,7 @@ export async function GET(request: NextRequest) {
         productQuery.categoryId = categoryFilter;
       }
 
-      const [products, salesAfterStart, salesInPeriod, adjustmentsAfterStart, returnsAfterStart] = await Promise.all([
+      const [products, salesAfterStart, salesInPeriod, adjustmentsAfterStart, returnsAfterStart, goodsReceiptsAfterStart] = await Promise.all([
         Product.find(productQuery).populate('categoryId', 'name').lean<ProductLean[]>(),
         Sale.find({ status: 'completed', createdAt: { $gt: start } })
           .select('createdAt items.productId items.quantity items.buyingPrice')
@@ -179,6 +208,9 @@ export async function GET(request: NextRequest) {
         Return.find({ createdAt: { $gt: start } })
           .select('createdAt saleId items.productId items.quantity items.restocked')
           .lean<ReturnLean[]>(),
+        GoodsReceipt.find({ $or: [{ receivedAt: { $gt: start } }, { overageDecisionAt: { $gt: start } }] })
+          .select('status receivedAt overageDecisionAt items.productId items.acceptedQuantity items.overDeliveryQuantity')
+          .lean<GoodsReceiptLean[]>(),
       ]);
 
       const { qtyAtStart, qtyAtEnd } = reconstructQuantities(
@@ -186,6 +218,7 @@ export async function GET(request: NextRequest) {
         salesAfterStart,
         adjustmentsAfterStart,
         returnsAfterStart,
+        goodsReceiptsAfterStart,
         start,
         end
       );
@@ -290,7 +323,7 @@ export async function GET(request: NextRequest) {
             outOfStockCount: overall.outOfStockCount,
           },
           categoryBreakdown,
-          limitations: [TURNOVER_LIMITATION, PURCHASE_ORDER_LIMITATION],
+          limitations: [TURNOVER_LIMITATION],
         },
       });
     } catch (error) {

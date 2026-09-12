@@ -13,7 +13,8 @@ categories below are kept strictly separate, per direction — nothing appears
 in more than one.
 
 **Verification baseline as of this status**: `tsc --noEmit` exits 0 · `npm run
-build` succeeds · `npx jest` passes **35/35 suites, 239/239 tests**.
+build` succeeds · `npx jest` passes **37/37 suites, 280/280 tests** (updated
+after Pass 5 — Purchase Order receiving implementation, below).
 
 ### FIXED
 
@@ -81,6 +82,14 @@ and shipped on this branch).
   operational `AppError` so the real message survives in every
   environment — the underlying "never fall back to an insecure key"
   behavior was already correct and is unchanged.
+- **Purchase Order receiving implemented (Pass 5)**: approving a PO
+  previously never affected `Product.stockQuantity` at all, and there was
+  no route or UI action reaching the schema's own `delivered`/`cancelled`
+  statuses. Built the full `GoodsReceipt` workflow proposed below (partial
+  receiving, over-delivery held for approval, idempotent + transactional
+  inventory application, PO status now driven by actual received
+  quantities). Full detail in "Pass 5: Purchase Order receiving —
+  implementation" at the end of this document.
 
 ### VERIFIED
 
@@ -118,22 +127,6 @@ Checked carefully and found to already be correct — no change made.
 Nothing further can be done here without the client choosing a direction —
 proposals are written, code is not.
 
-- **Purchase Order receiving workflow** — full architecture investigation
-  and a proposed `GoodsReceipt` model/workflow are documented below
-  ("Purchase Order receiving — architecture investigation and proposal").
-  Needs a decision on: approving the dedicated-record approach at all,
-  the over-delivery-requires-approval policy (vs. a numeric tolerance,
-  which would need the client to supply the actual tolerance value), and
-  whether `partially_received` should be a new PO status or left implicit.
-- **Database restore** — a full technical proposal is documented below
-  ("Database restore — technical proposal"), with a recommendation
-  *against* building it as a self-service in-app feature. Needs the
-  client to decide whether to accept that recommendation (Atlas Cloud
-  Backups + controlled ops restore + the existing export) or commission
-  the in-app version despite its risks.
-- **Report Viewer** (`dashboard/reports`' "coming soon" button) — an
-  honestly-labeled placeholder, not a fake success. Needs a decision on
-  what "viewing" a generated report should actually show before it's built.
 - **Race-condition hardening** (`Product.findById` → mutate → `.save()` in
   `createSale`, `updateStock`, and Stock Adjustment approval) — a real,
   pre-existing characteristic of every already-shipped stock-mutating
@@ -170,11 +163,17 @@ commands, and grouping in `DEPLOYMENT.md`.
 Deliberately not built, with the reasoning already investigated — not
 oversights.
 
-- **Self-service database restore** — recommended against by default (see
-  the technical proposal below); a destructive-by-design feature whose
-  failure mode is silent, irreversible data loss. MongoDB Atlas Cloud
-  Backups + controlled operational restore procedures + the existing
-  export are the recommended layered alternative.
+- **Self-service database restore** — decided against: the client
+  confirmed the recommendation in this document (see the technical
+  proposal below) and directed that no self-service restore be built. A
+  destructive-by-design feature whose failure mode is silent, irreversible
+  data loss. MongoDB Atlas Cloud Backups + controlled operational restore
+  procedures + the existing `GET /api/backup/export` are the adopted
+  disaster-recovery strategy.
+- **Report Viewer** (`dashboard/reports`' "coming soon" button) — the
+  client directed that no viewer be built until the exact reports it
+  should display are defined; the honestly-labeled "coming soon" state
+  stays as-is rather than a fake/stub viewer.
 - **Live Paystack payment processing** — `PAYSTACK_PUBLIC_KEY`/
   `PAYSTACK_SECRET_KEY` are read/written in Settings, but no code anywhere
   in this repo makes a real Paystack API call. Checkout's `paymentMethod:
@@ -187,10 +186,6 @@ oversights.
   client wrapper (`src/lib/redis.ts`) and cache helper (`src/lib/cache.ts`),
   but confirmed by grep to have zero real callers anywhere in the
   application. Nothing needs to be provisioned for it in production today.
-- **Purchase Order receiving / `GoodsReceipt`** — proposed, not built (see
-  REQUIRES PRODUCT DECISION above); today, approving a PO never affects
-  `Product.stockQuantity`, and there is no route or UI action that can
-  reach the schema's own `delivered`/`cancelled` PO statuses.
 - **Atomic stock-quantity updates** — the existing `findById` → mutate →
   `.save()` pattern was deliberately not rewritten to `$inc`/
   `findOneAndUpdate` across already-shipped flows during this finalization
@@ -207,12 +202,10 @@ worth planning for.
   concurrent-request race window on `Product.stockQuantity` — ideally
   paired with real load data showing whether it's a practical risk at this
   store's actual concurrent-checkout volume.
-- Build the proposed `GoodsReceipt`-based PO receiving workflow, once the
-  product decisions above are made.
-- Decide on and, if commissioned, build database restore per the technical
-  proposal's requirements (dry-run, checksum verification, replace-only,
-  multi-step confirmation, etc.) — or formally close this out by adopting
-  the Atlas-backups recommendation instead.
+- If a future in-app database restore is ever reconsidered despite the
+  standing recommendation against it, the technical proposal's
+  requirements (dry-run, checksum verification, replace-only, multi-step
+  confirmation, etc.) are the minimum bar before writing any of it.
 - Real Paystack integration, if/when the client wants live payment
   processing rather than a payment-method label.
 - A real report-content viewer for the Reports Center, once the client
@@ -1795,13 +1788,17 @@ as fixes above were tested).
 
 ---
 
-### Purchase Order receiving — architecture investigation and proposal (NOT implemented)
+### Purchase Order receiving — architecture investigation and proposal (IMPLEMENTED — see "Pass 5" at the end of this document)
 
 Investigated the existing architecture in full before proposing anything, per
-direction. This section documents what exists today, then proposes a
-receiving workflow addressing partial receipts, over-delivery, and a
-dedicated goods-receipt record — as a design for the client to approve,
-**not as something already built**.
+direction. This section documents what existed at the time (kept for
+historical record and design rationale), then proposes a receiving workflow
+addressing partial receipts, over-delivery, and a dedicated goods-receipt
+record. The client approved this proposal and it has since been built
+exactly as described below (the `partially_received` PO status, the
+over-delivery-requires-approval policy, and the dedicated `GoodsReceipt`
+record were all adopted as proposed) — see "Pass 5: Purchase Order
+receiving — implementation" for the as-built details, files, and tests.
 
 #### Current PO lifecycle (as it exists today)
 
@@ -1975,14 +1972,19 @@ reject before any code is written.
 
 ---
 
-### Database restore — technical proposal (NOT implemented)
+### Database restore — technical proposal (decision made: NOT building self-service restore)
+
+**Client decision**: do not build self-service restore; adopt MongoDB Atlas
+Cloud Backups + controlled operational restore as the disaster-recovery
+strategy, alongside the existing application-level export. Nothing further
+is planned here unless this decision is explicitly revisited. The proposal
+below is kept for the record and as the requirements a future in-app
+restore would need to meet if ever reconsidered.
 
 The existing `GET /api/backup/export` (admin-only, streams a live JSON
 snapshot of every collection, nothing stored server-side) remains the
 recommended and sufficient application-level export mechanism. This section
-is the requested proposal for what a *restore* feature would need — written
-so the client can decide whether to commission it, not as a plan already
-underway.
+is the original proposal for what a *restore* feature would need.
 
 **Recommended default: do not build self-service restore into the web
 application at all**, for one structural reason that doesn't depend on how
@@ -2083,3 +2085,249 @@ environment variable reference (grouped by app startup, authentication, 2FA,
 database, Redis, and optional integrations) and the recommended deployment
 sequence. Summary of what changed to get there is in the "Deployment safety"
 notes above and in `DEPLOYMENT.md` itself.
+
+---
+
+## Pass 5: Purchase Order receiving — implementation
+
+The client approved the `GoodsReceipt` proposal above and directed that it
+be implemented now, as production-quality, with inventory integrity as the
+explicit priority. No new environment variables or configuration are
+required — this is pure application code against the existing database.
+
+**Core invariant preserved throughout**: a Purchase Order represents what
+was *ordered*. A `GoodsReceipt` represents what was actually *received*.
+Creating a PO never touches inventory. Only an approved/applied
+`GoodsReceipt` increases `Product.stockQuantity`, and each received unit is
+applied exactly once.
+
+### Model
+
+- **`src/models/GoodsReceipt.ts`** (new) — `receiptNumber`, `purchaseOrderId`
+  (ref, authoritative), `orderNumber`/`supplierId`/`supplierName`
+  (denormalized display fields, matching the existing PO/Return/StockAdjustment
+  convention — the PO's own `items[].quantity` is never duplicated or
+  mutated), `items: [{ productId, productName, sku, orderedQuantity,
+  receivedQuantity, rejectedQuantity, acceptedQuantity,
+  overDeliveryQuantity, reason }]`, `status: 'completed' |
+  'pending_approval' | 'rejected'`, `receivedBy`/`receivedById`/
+  `receivedAt`, `overageDecisionBy`/`overageDecisionById`/
+  `overageDecisionAt`, `notes`, and a unique `idempotencyKey` (client-
+  generated, `crypto.randomUUID()`) that de-duplicates a retried/
+  double-submitted creation request at the database level.
+- **`src/models/PurchaseOrder.ts`** — additive `'partially_received'` value
+  added to the `status` enum (`'pending' | 'approved' |
+  'partially_received' | 'delivered' | 'cancelled'`); no other schema
+  change. `'delivered'`/`'cancelled'` already existed but were previously
+  unreachable dead enum values (no route ever set them) — `'delivered'` is
+  now reached by receiving; `'cancelled'` remains reachable only by future
+  business rules not built in this pass, and is correctly treated as a
+  dead end for receiving (see RBAC/business-rules below).
+- **`src/models/index.ts`** — `GoodsReceipt` registered as the 25th model.
+
+**Received/remaining is never stored as a counter.** Following the same
+append-only-record pattern already proven twice in this codebase (`Return`
+never mutates `Sale`; `Shift` computes live stats from `Sale`/`Return`
+queries), `src/lib/goods-receipts.ts` computes each PO line's
+applied/remaining quantity by summing every prior `GoodsReceipt` for that PO
+live, on every read. This is also why a `GoodsReceipt` has no edit/update
+route at all — the only two things that ever happen to one are its one-time
+creation and its one-time over-delivery approve/reject decision, both
+idempotency-protected; there is nothing else to mutate.
+
+### The accepted / over-delivery split
+
+Every submitted line is split with one formula:
+
+```
+netToStock         = receivedQuantity - rejectedQuantity
+acceptedQuantity   = min(netToStock, remainingOrderedAtSubmission)
+overDeliveryQuantity = max(0, netToStock - remainingOrderedAtSubmission)
+```
+
+`acceptedQuantity` is applied to `Product.stockQuantity` immediately and
+unconditionally — the routine, in-order portion of a delivery is never held
+hostage by an over-delivery decision on the same receipt.
+`overDeliveryQuantity` is held on the receipt (`status: 'pending_approval'`)
+until an authorized user explicitly approves or rejects it; only approval
+adds it to stock. Rejecting an over-delivery has no effect on stock beyond
+whatever was already accepted. This directly implements the client's
+requirement to distinguish ordered / accepted / over-delivered / rejected
+rather than silently accepting an over-delivery.
+
+By construction, any line with `overDeliveryQuantity > 0` already has
+`remainingQuantity === 0` the moment the receipt is created (the accepted
+portion exactly consumed what remained). This means approving or rejecting
+an over-delivery can only ever change stock, never the PO's own status —
+verified explicitly in the approve-overage test (`PurchaseOrder.findByIdAndUpdate`
+is asserted not to be called).
+
+### PO status
+
+`src/lib/goods-receipts.ts`'s `deriveNextPurchaseOrderStatus()` sets the PO's
+status purely from actual applied quantities, never from a button click: all
+lines fully applied → `delivered`; some but not all → `partially_received`;
+none → unchanged. A `cancelled` PO is never auto-reopened by this function.
+Receiving is only permitted when the PO's current status is `approved` or
+`partially_received` (`RECEIVABLE_PO_STATUSES`) — a `pending` (not yet
+approved) or `cancelled` PO is rejected with a clear 400 before any other
+validation runs.
+
+### API routes (all new)
+
+- **`POST /api/purchase-orders/[id]/goods-receipts`** — creates a receipt.
+  Gated by `manage_inventory` (existing permission, already granted
+  identically to admin+manager — no new permission invented). Runs inside a
+  real MongoDB multi-document transaction (`mongoose.startSession()` +
+  `session.withTransaction()`) — **the first use of a transaction anywhere
+  in this codebase**, a deliberate, narrowly-scoped exception justified
+  specifically by the client's explicit requirement for "the strongest
+  transaction/atomic-update strategy supported by the current MongoDB
+  deployment" (the `mongodb+srv://` Atlas connection string confirms a
+  replica set, so transactions are supported in production). Inside the
+  transaction: re-check the idempotency key, re-read prior receipts and the
+  live PO, validate every submitted quantity, compute the accepted/
+  over-delivery split per line, insert the `GoodsReceipt`, atomically
+  `$inc` `Product.stockQuantity` for each accepted quantity, and update the
+  PO's status — all as one atomic unit, so two concurrent receiving
+  requests against the same PO cannot each read a stale "remaining" value
+  and jointly over-apply stock. A duplicate-key error on the unique
+  `idempotencyKey` index (a genuine insert race between two concurrent
+  requests carrying the same key) is caught and resolved to the winning
+  document instead of surfacing as an error or double-applying inventory.
+- **`GET /api/purchase-orders/[id]/goods-receipts`** — read-only lookup for
+  the receiving UI: ordered/applied/remaining/pending-over-delivery per
+  line (computed live, no session/transaction needed), plus the full
+  receipt history for that PO. Gated the same way as the existing PO list
+  endpoint (`withManagerOrAdmin`).
+- **`POST /api/goods-receipts/[id]/approve-overage`** — authorizes the
+  over-delivered portion of a receipt. Gated by `approve_purchase_orders`
+  (existing permission, reusing the same admin/manager split already
+  established for PO approval). Atomic compare-and-swap via
+  `findOneAndUpdate({ _id, status: 'pending_approval' }, ...)`: only a
+  receipt still awaiting a decision matches, so a concurrent or retried
+  approval call that loses the race matches zero documents rather than
+  double-applying the over-delivery — verified by a dedicated test that
+  fires the route twice and confirms the second call is rejected with a
+  clear 400 and never touches `Product.stockQuantity` a second time. Runs
+  inside its own transaction for the same reason as creation.
+- **`POST /api/goods-receipts/[id]/reject-overage`** — same permission and
+  compare-and-swap pattern; never touches stock (the over-delivered
+  quantity was never applied while pending).
+
+No generic edit/update route exists for `GoodsReceipt` at all — this alone
+satisfies "cannot modify approved receipts" / "cannot force inventory
+application" without any extra authorization code, mirroring `Return`'s
+immutability.
+
+### Inventory Reports / movement feed integration
+
+- **`src/app/api/inventory-reports/movements/route.ts`** — now also queries
+  `GoodsReceipt` and emits up to two `PURCHASE`-type movement entries per
+  receipt: the accepted quantity (dated at `receivedAt`) and, only if
+  approved, the over-delivered quantity (dated at `overageDecisionAt`). The
+  stale "purchase orders are not counted" limitation note is removed.
+- **`src/app/api/inventory-reports/route.ts`** — `reconstructQuantities()`
+  now also reverses goods-receipt-driven stock increases (both the
+  accepted-at-creation and approved-overage-at-approval events) when
+  computing historical Average Inventory, alongside the three event types
+  it already reversed (sales, approved adjustments, restocked returns).
+  Without this, Average Inventory would have silently understated
+  beginning-of-period stock for any product that received a delivery
+  during the reporting window. The now-stale "no receiving step exists"
+  limitation note is removed; the turnover limitation note is updated to
+  list goods receipts among the real movement types it's built from.
+  Financial Reports (`/api/financial-reports/route.ts`) needed **no**
+  change — COGS is correctly computed from `Sale.items.buyingPrice` at time
+  of sale, not from receiving cost; receiving inventory is a balance-sheet
+  event, not an income-statement one.
+
+### Activity logging
+
+Three new `logActivity()` action strings, added to the Activity Logs page's
+filter dropdown alongside the existing ones: `GOODS_RECEIPT_CREATED`
+(severity `warning` when the receipt includes a pending over-delivery,
+`info` otherwise), `GOODS_RECEIPT_OVERAGE_APPROVED`, and
+`GOODS_RECEIPT_OVERAGE_REJECTED` (both `warning`).
+
+### UI
+
+Built into the existing Purchase Orders page rather than a new standalone
+page, per direction:
+
+- **`src/app/dashboard/purchase-orders/page.tsx`** — a "Receive Goods"
+  button appears on any order with status `approved` or
+  `partially_received`; the status badge/filter/dialog now also handle
+  `partially_received`.
+- **`src/components/dialogs/GoodsReceiptForm.tsx`** (new) — the receiving
+  dialog: a table of ordered/previously-received/remaining/receiving-now/
+  rejected quantities per line with a live accepted-vs-over-delivery
+  preview as the user types, a receipt history section below with
+  Approve/Reject buttons for any receipt awaiting an over-delivery
+  decision, and real loading/error/empty states (no fake UI). Client-side
+  validation blocks impossible quantities (negative, non-integer, rejected
+  exceeding received) before submission, but — per the client's explicit
+  instruction not to assume frontend validation is sufficient — every one
+  of these is re-validated server-side regardless. The dialog is mounted
+  with `key={purchaseOrder._id}` from the parent so switching purchase
+  orders (or reopening one) always starts from clean state, rather than
+  resetting form state from inside a `useEffect` (which both risks wiping
+  in-progress input on an unrelated background refetch and triggers this
+  project's stricter `react-hooks/set-state-in-effect` lint rule).
+- **`src/hooks/useGoodsReceipts.ts`** (new) — the lookup query and the
+  three mutations (create, approve-overage, reject-overage), each properly
+  surfacing a server-side failure as a rejected mutation (`onError` fires
+  with the real error message) rather than the silent-success gap present
+  in a couple of this codebase's older mutation hooks (`apiPost`/`apiGet`
+  resolve `{success:false, error}` rather than throwing; not fixed
+  elsewhere in this pass since it's out of scope, but avoided in all new
+  code here).
+
+### RBAC
+
+No new permission constants. `manage_inventory` (existing, admin+manager)
+gates creating a receipt; `approve_purchase_orders` (existing,
+admin+manager) gates approving/rejecting an over-delivery — both already
+granted identically to those two roles, matching the existing
+Stock-Adjustment/PurchaseOrder permission pattern. All checks happen
+server-side in the route handlers themselves (`withPermission(...)`); the UI
+only conditionally *shows* the receiving controls, it does not gate them.
+
+### Tests
+
+Two new test files plus targeted additions to the existing inventory-reports
+suite, covering every scenario in the client's list:
+
+- **`src/__tests__/lib/goods-receipts.test.ts`** (14 tests) — the pure
+  computation functions: `splitAcceptedAndOverDelivery` (fits within
+  remaining, exceeds remaining, fully-received-line over-delivery, fully
+  rejected), `computeLineProgress` (no prior receipts, multiple partial
+  receipts summed, approved over-delivery counted, pending/rejected
+  over-delivery not counted), `deriveNextPurchaseOrderStatus` (partially
+  received, delivered, unchanged, cancelled never reopens), and
+  `RECEIVABLE_PO_STATUSES`.
+- **`src/__tests__/app/api/goods-receipts-route.test.ts`** (25 tests) —
+  full receipt, partial receipt, multiple partial receipts summing to
+  completion, a delivery exceeding remaining (over-delivery split and
+  never silently applied), authorized over-delivery approval, a second
+  concurrent approval attempt correctly rejected once no longer pending,
+  duplicate submission returning the existing receipt without creating a
+  second one, a race on the same idempotency key never double-applying
+  inventory, unauthorized receipt creation (403) and unauthorized approval
+  (403), cancelled-PO and still-pending-PO rejection, invalid quantities
+  (negative, non-integer, rejected exceeding received), a missing product,
+  a missing purchase order, a product not on the PO, the GET lookup route's
+  `canReceive`/remaining computation, and activity-log calls for every
+  create/approve/reject path.
+- **`src/__tests__/app/api/inventory-reports-route.test.ts`** — extended
+  with a test confirming a goods-receipt-driven stock increase is
+  correctly reversed when reconstructing beginning-of-period inventory, and
+  a test confirming the movements feed emits separate accepted/approved-
+  overage `PURCHASE` entries; the three pre-existing tests in this file
+  were also updated to mock the newly-added `GoodsReceipt` import so they
+  keep passing.
+
+**Final verification**: `tsc --noEmit` exits 0 · `npm run build` succeeds ·
+`npx jest` passes **37/37 suites, 280/280 tests** (up from 35/35 suites,
+239/239 tests before this pass — 2 new suites, 41 new tests, zero
+regressions, no existing test weakened or removed).

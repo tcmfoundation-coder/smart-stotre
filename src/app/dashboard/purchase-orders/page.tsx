@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { ShoppingCart, Search, Plus, Truck, CheckCircle } from 'lucide-react';
+import { ShoppingCart, Search, Plus, Truck, CheckCircle, PackagePlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { formatCurrency } from '@/lib/utils';
 import { usePurchaseOrders, useApprovePurchaseOrder, type PurchaseOrder } from '@/hooks/usePurchaseOrders';
 import { PurchaseOrderForm } from '@/components/dialogs/PurchaseOrderForm';
+import { GoodsReceiptForm } from '@/components/dialogs/GoodsReceiptForm';
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
@@ -18,6 +19,7 @@ export default function PurchaseOrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<PurchaseOrder | null>(null);
+  const [receivingOrder, setReceivingOrder] = useState<PurchaseOrder | null>(null);
 
   const { data: purchaseOrders, isLoading, error, refetch } = usePurchaseOrders({
     search: searchQuery,
@@ -39,11 +41,16 @@ export default function PurchaseOrdersPage() {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
       case 'approved': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'partially_received': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
       case 'delivered': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
       case 'cancelled': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
+
+  const canReceiveGoods = (status: string) => status === 'approved' || status === 'partially_received';
+
+  const formatStatusLabel = (status: string) => status.replace(/_/g, ' ').toUpperCase();
 
   return (
     <div className="min-h-screen transition-colors duration-300">
@@ -71,6 +78,7 @@ export default function PurchaseOrdersPage() {
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
+              <option value="partially_received">Partially Received</option>
               <option value="delivered">Delivered</option>
               <option value="cancelled">Cancelled</option>
             </select>
@@ -114,7 +122,7 @@ export default function PurchaseOrdersPage() {
                         <ShoppingCart className="h-4 w-4 text-primary" />
                         <span className="font-bold text-foreground">{order.orderNumber}</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>
-                          {order.status.toUpperCase()}
+                          {formatStatusLabel(order.status)}
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground">{order.supplierName}</p>
@@ -157,11 +165,22 @@ export default function PurchaseOrdersPage() {
                           Approve
                         </Button>
                       )}
+                      {canReceiveGoods(order.status) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-primary hover:text-primary"
+                          onClick={() => setReceivingOrder(order)}
+                        >
+                          <PackagePlus className="h-4 w-4 mr-1" />
+                          Receive Goods
+                        </Button>
+                      )}
                     </div>
-                    {order.status === 'approved' && (
+                    {canReceiveGoods(order.status) && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Truck className="h-4 w-4" />
-                        <span>In transit</span>
+                        <span>{order.status === 'partially_received' ? 'Partially received' : 'In transit'}</span>
                       </div>
                     )}
                   </div>
@@ -186,6 +205,18 @@ export default function PurchaseOrdersPage() {
           onSuccess={() => refetch()}
         />
 
+        <GoodsReceiptForm
+          key={receivingOrder?._id || 'closed'}
+          open={!!receivingOrder}
+          onOpenChange={(open) => !open && setReceivingOrder(null)}
+          purchaseOrder={
+            receivingOrder
+              ? { _id: receivingOrder._id, orderNumber: receivingOrder.orderNumber, supplierName: receivingOrder.supplierName }
+              : null
+          }
+          onSuccess={() => refetch()}
+        />
+
         <Dialog open={!!viewingOrder} onOpenChange={(open) => !open && setViewingOrder(null)}>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
@@ -195,7 +226,7 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(viewingOrder.status)}`}>
-                    {viewingOrder.status.toUpperCase()}
+                    {formatStatusLabel(viewingOrder.status)}
                   </span>
                   <span className="text-sm text-muted-foreground">{viewingOrder.supplierName}</span>
                 </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/api-auth';
 import connectDB from '@/lib/mongodb';
-import { Sale, StockAdjustment, Return } from '@/models';
+import { Sale, StockAdjustment, Return, GoodsReceipt } from '@/models';
 import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
 
@@ -53,12 +53,14 @@ function resolveDateRange(searchParams: URLSearchParams) {
   return { start, end };
 }
 
-// Merges Sales, approved Stock Adjustments, and restocked Returns into one
-// normalized, chronologically-sorted feed - the only three record types that
-// ever actually change Product.stockQuantity in this codebase (verified by
-// grep; purchase orders do not - see PURCHASE_ORDER_LIMITATION in the
-// sibling turnover route). None of the source documents are modified here;
-// this only reads and reshapes them.
+// Merges Sales, approved Stock Adjustments, restocked Returns, and applied
+// Goods Receipts into one normalized, chronologically-sorted feed - the only
+// four record types that ever actually change Product.stockQuantity in this
+// codebase (verified by grep). A Goods Receipt can contribute up to two
+// entries: the accepted quantity (applied at receipt creation) and, only if
+// approved, the over-delivered quantity (applied at approval time) - see
+// src/lib/goods-receipts.ts for the accepted/over-delivery split. None of the
+// source documents are modified here; this only reads and reshapes them.
 export async function GET(request: NextRequest) {
   return withPermission('view_inventory_reports')(async (req) => {
     try {
@@ -187,6 +189,82 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      if (wantType('PURCHASE')) {
+        const receiptQuery: Record<string, unknown> = { receivedAt: { $gte: start, $lte: end } };
+        if (productId && mongoose.isValidObjectId(productId)) {
+          receiptQuery['items.productId'] = productId;
+        }
+        const receiptsReceived = await GoodsReceipt.find(receiptQuery)
+          .select('receiptNumber receivedAt receivedBy items')
+          .lean<
+            {
+              _id: mongoose.Types.ObjectId;
+              receiptNumber: string;
+              receivedAt: Date;
+              receivedBy: string;
+              items: { productId: mongoose.Types.ObjectId; productName: string; sku?: string; acceptedQuantity: number }[];
+            }[]
+          >();
+        for (const receipt of receiptsReceived) {
+          for (const item of receipt.items) {
+            if (item.acceptedQuantity <= 0) continue;
+            if (productId && item.productId.toString() !== productId) continue;
+            entries.push({
+              id: `PURCHASE-${receipt._id.toString()}-${item.productId.toString()}`,
+              type: 'PURCHASE',
+              date: receipt.receivedAt.toISOString(),
+              productId: item.productId.toString(),
+              productName: item.productName,
+              sku: item.sku || '',
+              quantityChange: item.acceptedQuantity,
+              reference: receipt.receiptNumber,
+              performedBy: receipt.receivedBy,
+            });
+          }
+        }
+
+        // Approved over-delivery is a second, separately-dated stock event on
+        // the same receipt - only receipts whose over-delivery was actually
+        // approved (status 'completed') ever reach here, since a rejected or
+        // still-pending over-delivery never touched stock.
+        const overageQuery: Record<string, unknown> = {
+          status: 'completed',
+          overageDecisionAt: { $gte: start, $lte: end },
+        };
+        if (productId && mongoose.isValidObjectId(productId)) {
+          overageQuery['items.productId'] = productId;
+        }
+        const receiptsOveraged = await GoodsReceipt.find(overageQuery)
+          .select('receiptNumber overageDecisionAt overageDecisionBy items')
+          .lean<
+            {
+              _id: mongoose.Types.ObjectId;
+              receiptNumber: string;
+              overageDecisionAt?: Date;
+              overageDecisionBy?: string;
+              items: { productId: mongoose.Types.ObjectId; productName: string; sku?: string; overDeliveryQuantity: number }[];
+            }[]
+          >();
+        for (const receipt of receiptsOveraged) {
+          if (!receipt.overageDecisionAt) continue;
+          for (const item of receipt.items) {
+            if (item.overDeliveryQuantity <= 0) continue;
+            if (productId && item.productId.toString() !== productId) continue;
+            entries.push({
+              id: `PURCHASE-OVERAGE-${receipt._id.toString()}-${item.productId.toString()}`,
+              type: 'PURCHASE',
+              date: receipt.overageDecisionAt.toISOString(),
+              productId: item.productId.toString(),
+              productName: item.productName,
+              sku: item.sku || '',
+              quantityChange: item.overDeliveryQuantity,
+              reference: `${receipt.receiptNumber} (over-delivery approved)`,
+              performedBy: receipt.overageDecisionBy || 'Unknown',
+            });
+          }
+        }
+      }
+
       let filtered = entries;
       if (search) {
         const needle = search.toLowerCase();
@@ -206,9 +284,7 @@ export async function GET(request: NextRequest) {
         data: {
           movements: pageItems,
           pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
-          notes: [
-            'Purchase orders are not included: approving a purchase order does not currently update product stock in this system, so there is no real movement to show.',
-          ],
+          notes: [],
         },
       });
     } catch (error) {

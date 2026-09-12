@@ -130,6 +130,9 @@ export default function ActivityLogsPage() {
               <option value="STOCK_ADJUSTMENT">Stock Adjustment</option>
               <option value="SALE_COMPLETED">Sale Completed</option>
               <option value="RETURN_PROCESSED">Return Processed</option>
+              <option value="GOODS_RECEIPT_CREATED">Goods Receipt Created</option>
+              <option value="GOODS_RECEIPT_OVERAGE_APPROVED">Over-Delivery Approved</option>
+              <option value="GOODS_RECEIPT_OVERAGE_REJECTED">Over-Delivery Rejected</option>
               <option value="DATABASE_EXPORTED">Database Exported</option>
             </select>
             <select
