@@ -23,7 +23,7 @@ export default function SuppliersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Supply Chain" userRole="admin" />
       
       <main className="p-8">
@@ -43,11 +43,11 @@ export default function SuppliersPage() {
           ) : (
             <>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-          <div className="group bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-100 dark:border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Active Partners</p>
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white">{suppliers?.length || 0}</h3>
+                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Active Partners</p>
+                <h3 className="text-3xl font-black text-foreground">{suppliers?.length || 0}</h3>
                 <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-2">Verified suppliers</p>
               </div>
               <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl">
@@ -55,11 +55,11 @@ export default function SuppliersPage() {
               </div>
             </div>
           </div>
-          <div className="group bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-100 dark:border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Total Procurement</p>
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white">
+                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Procurement</p>
+                <h3 className="text-3xl font-black text-foreground">
                   {formatCurrency(suppliers?.reduce((sum: number, s: any) => sum + (s.totalPurchases || 0), 0) || 0)}
                 </h3>
                 <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-2">Lifetime volume</p>
@@ -69,11 +69,11 @@ export default function SuppliersPage() {
               </div>
             </div>
           </div>
-          <div className="group bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-100 dark:border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Outstanding Debt</p>
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white">
+                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Outstanding Debt</p>
+                <h3 className="text-3xl font-black text-foreground">
                   {formatCurrency(suppliers?.reduce((sum: number, s: any) => sum + (s.outstandingDebt || 0), 0) || 0)}
                 </h3>
                 <p className="text-sm font-semibold text-rose-600 dark:text-rose-400 mt-2">Payables</p>
@@ -94,7 +94,7 @@ export default function SuppliersPage() {
               placeholder="Search suppliers by name, company, or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-slate-900 dark:text-white font-semibold outline-none placeholder:text-slate-400"
+              className="w-full pl-12 pr-4 py-4 bg-card border border-border rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
             />
           </div>
 
@@ -105,44 +105,44 @@ export default function SuppliersPage() {
         </div>
 
         {/* Suppliers Table */}
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 dark:border-slate-800 overflow-hidden">
-          <div className="overflow-x-auto text-white">
+        <div className="bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden">
+          <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Supplier Entity</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Communication</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Total Purchases</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Balance Due</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Terms</th>
-                  <th className="text-right py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Actions</th>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Supplier Entity</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Communication</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Total Purchases</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Balance Due</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Terms</th>
+                  <th className="text-right py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-border">
                 {suppliers?.map((supplier: any) => (
-                  <tr key={supplier._id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                  <tr key={supplier._id} className="group hover:bg-muted/50 transition-colors">
                     <td className="py-6 px-8">
                       <div className="flex items-center space-x-4">
-                        <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-indigo-600 font-black shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div className="h-12 w-12 rounded-2xl bg-muted flex items-center justify-center text-indigo-600 font-black shadow-sm border border-border">
                           {supplier.name.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{supplier.name}</p>
+                          <p className="font-bold text-foreground group-hover:text-blue-600 transition-colors">{supplier.name}</p>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">{supplier.company || 'Private Supplier'}</p>
                         </div>
                       </div>
                     </td>
                     <td className="py-6 px-8">
                       <div className="flex flex-col space-y-1">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                        <span className="text-sm font-bold text-foreground/80 flex items-center">
                           <Phone className="h-3 w-3 mr-2 text-slate-400" /> {supplier.phone}
                         </span>
-                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 flex items-center">
+                        <span className="text-xs font-medium text-muted-foreground flex items-center">
                           <Mail className="h-3 w-3 mr-2 text-slate-400" /> {supplier.email || 'No email'}
                         </span>
                       </div>
                     </td>
-                    <td className="py-6 px-8 text-sm font-black text-slate-900 dark:text-white">
+                    <td className="py-6 px-8 text-sm font-black text-foreground">
                       {formatCurrency(supplier.totalPurchases)}
                     </td>
                     <td className="py-6 px-8">
@@ -153,7 +153,7 @@ export default function SuppliersPage() {
                       </span>
                     </td>
                     <td className="py-6 px-8">
-                      <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400">
+                      <span className="px-3 py-1 bg-muted rounded-lg text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                         {supplier.paymentTerms || 'Standard'}
                       </span>
                     </td>

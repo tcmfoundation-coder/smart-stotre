@@ -289,7 +289,7 @@ export function DashboardHeader({ title, userRole }: DashboardHeaderProps) {
                 </motion.div>
                 <div className="hidden md:block">
                   <p className="text-xs font-bold text-foreground leading-none">{resolvedRole.toUpperCase()}</p>
-                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 mt-1 uppercase tracking-tighter">Verified</p>
+                  <p className="text-[10px] font-bold text-success mt-1 uppercase tracking-tighter">Verified</p>
                 </div>
               </motion.div>
 

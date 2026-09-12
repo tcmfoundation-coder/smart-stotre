@@ -107,7 +107,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="Employee Details" userRole="admin" />
         <main className="p-8">
           <div className="flex items-center justify-center h-64">
@@ -120,7 +120,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
   if (error || !employee) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="Employee Details" userRole="admin" />
         <main className="p-8">
           <div className="text-center text-red-600">{error || 'Employee not found'}</div>
@@ -133,30 +133,30 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const attendanceRate = totalAttendanceDays > 0 ? ((employee.attendance.present / totalAttendanceDays) * 100).toFixed(1) : '0';
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Employee Details" userRole="admin" />
       
       <main className="p-8">
         {/* Back Button */}
         <Link 
           href="/dashboard/employees"
-          className="inline-flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-8"
+          className="inline-flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors mb-8"
         >
           <ArrowLeft className="h-5 w-5" />
           <span className="font-semibold">Back to Employees</span>
         </Link>
 
         {/* Employee Header */}
-        <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-[0_8px_30px(rgb(0,0,0,0.04)] border border-slate-100 dark:border-slate-800 mb-8">
+        <div className="bg-card rounded-[2rem] p-8 shadow-[0_8px_30px(rgb(0,0,0,0.04)] border border-border mb-8">
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-6">
               <div className="h-20 w-20 rounded-2xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 font-black text-3xl border border-blue-200 dark:border-blue-500/30">
                 {employee.userId?.name?.charAt(0) || 'E'}
               </div>
               <div>
-                <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2">{employee.userId?.name || 'Unknown'}</h1>
+                <h1 className="text-3xl font-black text-foreground mb-2">{employee.userId?.name || 'Unknown'}</h1>
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  <span className="text-sm font-semibold text-muted-foreground">
                     {employee.employeeId}
                   </span>
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
@@ -190,7 +190,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 <>
                   <button 
                     onClick={handleCancel}
-                    className="flex items-center space-x-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="flex items-center space-x-2 px-6 py-3 bg-muted text-foreground/80 rounded-xl font-bold hover:bg-muted transition-colors"
                   >
                     <X className="h-5 w-5" />
                     <span>Cancel</span>
@@ -211,50 +211,50 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl">
                 <TrendingUp className="h-6 w-6 text-emerald-600" />
               </div>
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Sales</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Sales</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {formatCurrency(employee.performance.totalSales)}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
                 <Briefcase className="h-6 w-6 text-blue-600" />
               </div>
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Transactions</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Transactions</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {employee.performance.totalTransactions}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-500/10 rounded-xl">
                 <DollarSign className="h-6 w-6 text-purple-600" />
               </div>
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Avg Transaction</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Transaction</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {formatCurrency(employee.performance.averageTransactionValue)}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-orange-50 dark:bg-orange-500/10 rounded-xl">
                 <Clock className="h-6 w-6 text-orange-600" />
               </div>
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Attendance</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Attendance</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {attendanceRate}%
             </p>
             <p className="text-xs font-semibold text-slate-500 mt-2">{employee.attendance.present} present</p>
@@ -262,127 +262,127 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         {/* Employee Details Form */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm mb-8">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">Employee Information</h2>
+        <div className="bg-card rounded-2xl p-8 border border-border shadow-sm mb-8">
+          <h2 className="text-xl font-black text-foreground mb-6">Employee Information</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Full Name</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Full Name</label>
               {editing ? (
                 <input
                   type="text"
                   value={formData.userId?.name || ''}
                   onChange={(e) => handleInputChange('userId', { ...formData.userId, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{employee.userId?.name || 'Unknown'}</p>
+                <p className="text-lg font-semibold text-foreground">{employee.userId?.name || 'Unknown'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Email</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Email</label>
               {editing ? (
                 <input
                   type="email"
                   value={formData.userId?.email || ''}
                   onChange={(e) => handleInputChange('userId', { ...formData.userId, email: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{employee.userId?.email || 'Not specified'}</p>
+                <p className="text-lg font-semibold text-foreground">{employee.userId?.email || 'Not specified'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Phone</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Phone</label>
               {editing ? (
                 <input
                   type="tel"
                   value={formData.userId?.phone || ''}
                   onChange={(e) => handleInputChange('userId', { ...formData.userId, phone: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{employee.userId?.phone || 'Not specified'}</p>
+                <p className="text-lg font-semibold text-foreground">{employee.userId?.phone || 'Not specified'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Position</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Position</label>
               {editing ? (
                 <input
                   type="text"
                   value={formData.position || ''}
                   onChange={(e) => handleInputChange('position', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{employee.position}</p>
+                <p className="text-lg font-semibold text-foreground">{employee.position}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Department</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Department</label>
               {editing ? (
                 <input
                   type="text"
                   value={formData.department || ''}
                   onChange={(e) => handleInputChange('department', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{employee.department || 'Not specified'}</p>
+                <p className="text-lg font-semibold text-foreground">{employee.department || 'Not specified'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Branch</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Branch</label>
               {editing ? (
                 <input
                   type="text"
                   value={formData.branchId?.name || ''}
                   onChange={(e) => handleInputChange('branchId', { ...formData.branchId, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{employee.branchId?.name || 'Not assigned'}</p>
+                <p className="text-lg font-semibold text-foreground">{employee.branchId?.name || 'Not assigned'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Salary</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Salary</label>
               {editing ? (
                 <input
                   type="number"
                   value={formData.salary || 0}
                   onChange={(e) => handleInputChange('salary', parseFloat(e.target.value))}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{formatCurrency(employee.salary)}</p>
+                <p className="text-lg font-semibold text-foreground">{formatCurrency(employee.salary)}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Hire Date</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Hire Date</label>
               {editing ? (
                 <input
                   type="date"
                   value={formData.hireDate ? new Date(formData.hireDate).toISOString().split('T')[0] : ''}
                   onChange={(e) => handleInputChange('hireDate', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{formatDate(employee.hireDate)}</p>
+                <p className="text-lg font-semibold text-foreground">{formatDate(employee.hireDate)}</p>
               )}
             </div>
           </div>
         </div>
 
         {/* Status */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">Status</h2>
+        <div className="bg-card rounded-2xl p-8 border border-border shadow-sm">
+          <h2 className="text-xl font-black text-foreground mb-6">Status</h2>
           
           <div className="flex items-center space-x-4">
             {editing ? (
@@ -393,7 +393,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   onChange={(e) => handleInputChange('isActive', e.target.checked)}
                   className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
                 />
-                <span className="text-lg font-semibold text-slate-900 dark:text-white">Active Employee</span>
+                <span className="text-lg font-semibold text-foreground">Active Employee</span>
               </label>
             ) : (
               <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-black uppercase tracking-wider ${

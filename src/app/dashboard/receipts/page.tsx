@@ -10,7 +10,7 @@ export default async function ReceiptsPage() {
   const sales = await getRecentSales(100);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Receipts History" userRole="cashier" />
 
       <main className="p-8">

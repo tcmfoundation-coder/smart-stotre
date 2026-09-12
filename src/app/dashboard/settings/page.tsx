@@ -158,12 +158,12 @@ export default function SettingsPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="System Settings" userRole="admin" />
         <main className="p-8 flex items-center justify-center min-h-[60vh]">
           <div className="text-center space-y-4">
             <RefreshCw className="h-10 w-10 text-blue-600 animate-spin mx-auto" />
-            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Loading settings...</p>
+            <p className="text-sm font-semibold text-muted-foreground">Loading settings...</p>
           </div>
         </main>
       </div>
@@ -172,15 +172,15 @@ export default function SettingsPage() {
 
   if (!canAccessSettings) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="System Settings" userRole="admin" />
         <main className="p-8 flex items-center justify-center min-h-[60vh]">
           <div className="max-w-md rounded-[2rem] border border-rose-200 bg-white p-8 text-center shadow-lg dark:border-rose-500/20 dark:bg-slate-900">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-600">
               <Lock className="h-7 w-7" />
             </div>
-            <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Admin Access Required</h3>
-            <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <h3 className="text-xl font-black uppercase tracking-tight text-foreground">Admin Access Required</h3>
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
               Only administrators can view or change system control settings.
             </p>
           </div>
@@ -190,7 +190,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="System Settings" userRole="admin" />
 
       <main className="p-8">
@@ -208,7 +208,7 @@ export default function SettingsPage() {
                   'w-full flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold transition-all duration-300',
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-xl shadow-blue-200 dark:shadow-none'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800'
+                    : 'bg-card text-muted-foreground hover:bg-muted border border-border'
                 )}
               >
                 <tab.icon className="h-5 w-5" />
@@ -218,7 +218,7 @@ export default function SettingsPage() {
           </aside>
 
           {/* Content Area */}
-          <div className="flex-1 bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 dark:border-slate-800 overflow-hidden">
+          <div className="flex-1 bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden">
             <form onSubmit={handleSave} className="p-10 space-y-8">
               {/* Feedback Alert */}
               {feedback && (
@@ -243,10 +243,10 @@ export default function SettingsPage() {
               <div className="flex items-center space-x-3 mb-2">
                 <div className="h-8 w-1.5 bg-blue-600 rounded-full"></div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                  <h3 className="text-xl font-black text-foreground tracking-tight uppercase">
                     {tabs.find((t) => t.id === activeTab)?.name} Config
                   </h3>
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-xs font-semibold text-muted-foreground mt-0.5">
                     {activeTab === 'general' && 'Global system parameters and identity.'}
                     {activeTab === 'notifications' && 'Configure email/SMS logs and system stock alerts.'}
                     {activeTab === 'security' && 'Manage your account credentials and system authorization.'}
@@ -260,7 +260,7 @@ export default function SettingsPage() {
               {activeTab === 'general' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Store Name
                     </label>
                     <input
@@ -268,12 +268,12 @@ export default function SettingsPage() {
                       name="storeName"
                       value={settings.storeName}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Support Email
                     </label>
                     <input
@@ -281,19 +281,19 @@ export default function SettingsPage() {
                       name="storeEmail"
                       value={settings.storeEmail}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Base Currency
                     </label>
                     <select
                       name="currency"
                       value={settings.currency}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none appearance-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none appearance-none"
                     >
                       <option value="NGN">NGN (₦)</option>
                       <option value="USD">USD ($)</option>
@@ -302,7 +302,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Default Tax Rate (%)
                     </label>
                     <input
@@ -311,12 +311,12 @@ export default function SettingsPage() {
                       name="taxRate"
                       value={settings.taxRate}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Low Stock Threshold (Units)
                     </label>
                     <input
@@ -324,12 +324,12 @@ export default function SettingsPage() {
                       name="lowStockThreshold"
                       value={settings.lowStockThreshold}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Expiry Warning Threshold (Days)
                     </label>
                     <input
@@ -337,7 +337,7 @@ export default function SettingsPage() {
                       name="expiryWarningDays"
                       value={settings.expiryWarningDays}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
@@ -347,10 +347,10 @@ export default function SettingsPage() {
               {/* TAB CONTENT: Notifications */}
               {activeTab === 'notifications' && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between p-6 bg-muted/30 rounded-2xl border border-border">
                     <div>
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Email Alerts</h4>
-                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Receive daily audit summaries and operational logs via email.</p>
+                      <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Email Alerts</h4>
+                      <p className="text-xs font-semibold text-muted-foreground mt-1">Receive daily audit summaries and operational logs via email.</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -360,14 +360,14 @@ export default function SettingsPage() {
                         onChange={handleInputChange}
                         className="sr-only peer"
                       />
-                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-14 h-7 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
 
-                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between p-6 bg-muted/30 rounded-2xl border border-border">
                     <div>
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">SMS Alerts</h4>
-                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Receive priority crisis alerts (critical inventory shortfall) via SMS.</p>
+                      <h4 className="text-sm font-black text-foreground uppercase tracking-tight">SMS Alerts</h4>
+                      <p className="text-xs font-semibold text-muted-foreground mt-1">Receive priority crisis alerts (critical inventory shortfall) via SMS.</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -377,14 +377,14 @@ export default function SettingsPage() {
                         onChange={handleInputChange}
                         className="sr-only peer"
                       />
-                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-14 h-7 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
 
-                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between p-6 bg-muted/30 rounded-2xl border border-border">
                     <div>
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Low Stock Alerts</h4>
-                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Trigger system notifications when products drop below threshold level.</p>
+                      <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Low Stock Alerts</h4>
+                      <p className="text-xs font-semibold text-muted-foreground mt-1">Trigger system notifications when products drop below threshold level.</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -394,14 +394,14 @@ export default function SettingsPage() {
                         onChange={handleInputChange}
                         className="sr-only peer"
                       />
-                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-14 h-7 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
 
-                  <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between p-6 bg-muted/30 rounded-2xl border border-border">
                     <div>
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Expiry Alerts</h4>
-                      <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Flag items automatically as they approach threshold warning days.</p>
+                      <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Expiry Alerts</h4>
+                      <p className="text-xs font-semibold text-muted-foreground mt-1">Flag items automatically as they approach threshold warning days.</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                         onChange={handleInputChange}
                         className="sr-only peer"
                       />
-                      <div className="w-14 h-7 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-14 h-7 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
                 </div>
@@ -422,7 +422,7 @@ export default function SettingsPage() {
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                      <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                         Current Password
                       </label>
                       <input
@@ -431,11 +431,11 @@ export default function SettingsPage() {
                         value={security.currentPassword}
                         onChange={handleSecurityChange}
                         placeholder="••••••••"
-                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                        className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                      <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                         New Password
                       </label>
                       <input
@@ -444,11 +444,11 @@ export default function SettingsPage() {
                         value={security.newPassword}
                         onChange={handleSecurityChange}
                         placeholder="New Password"
-                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                        className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                      <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                         Confirm New Password
                       </label>
                       <input
@@ -457,7 +457,7 @@ export default function SettingsPage() {
                         value={security.confirmPassword}
                         onChange={handleSecurityChange}
                         placeholder="Confirm Password"
-                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                        className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       />
                     </div>
                   </div>
@@ -471,7 +471,7 @@ export default function SettingsPage() {
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                      <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                         Paystack Public Key
                       </label>
                       <input
@@ -480,11 +480,11 @@ export default function SettingsPage() {
                         value={settings.paystackPublicKey}
                         onChange={handleInputChange}
                         placeholder="pk_test_..."
-                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                        className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                      <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                         Paystack Secret Key
                       </label>
                       <input
@@ -493,18 +493,18 @@ export default function SettingsPage() {
                         value={settings.paystackSecretKey}
                         onChange={handleInputChange}
                         placeholder="sk_test_..."
-                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                        className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <label className="block text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">
+                    <label className="block text-[11px] font-black text-muted-foreground uppercase tracking-widest ml-1">
                       Active POS Payment Methods
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Cash Settlements</span>
+                      <div className="flex items-center justify-between p-5 bg-muted/30 rounded-2xl border border-border">
+                        <span className="text-sm font-bold text-foreground/80">Cash Settlements</span>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
                             type="checkbox"
@@ -513,12 +513,12 @@ export default function SettingsPage() {
                             onChange={handleInputChange}
                             className="sr-only peer"
                           />
-                          <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          <div className="w-12 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                       </div>
 
-                      <div className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Card Terminals</span>
+                      <div className="flex items-center justify-between p-5 bg-muted/30 rounded-2xl border border-border">
+                        <span className="text-sm font-bold text-foreground/80">Card Terminals</span>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
                             type="checkbox"
@@ -527,12 +527,12 @@ export default function SettingsPage() {
                             onChange={handleInputChange}
                             className="sr-only peer"
                           />
-                          <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          <div className="w-12 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                       </div>
 
-                      <div className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Mobile Transfer</span>
+                      <div className="flex items-center justify-between p-5 bg-muted/30 rounded-2xl border border-border">
+                        <span className="text-sm font-bold text-foreground/80">Mobile Transfer</span>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
                             type="checkbox"
@@ -541,7 +541,7 @@ export default function SettingsPage() {
                             onChange={handleInputChange}
                             className="sr-only peer"
                           />
-                          <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          <div className="w-12 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                       </div>
                     </div>
@@ -553,7 +553,7 @@ export default function SettingsPage() {
               {activeTab === 'online' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Storefront Name
                     </label>
                     <input
@@ -561,12 +561,12 @@ export default function SettingsPage() {
                       name="storeName"
                       value={settings.storeName}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Store Contact Email
                     </label>
                     <input
@@ -574,12 +574,12 @@ export default function SettingsPage() {
                       name="storeEmail"
                       value={settings.storeEmail}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       Flat Delivery Charge (₦)
                     </label>
                     <input
@@ -587,12 +587,12 @@ export default function SettingsPage() {
                       name="deliveryCharge"
                       value={settings.deliveryCharge}
                       onChange={handleInputChange}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">
+                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
                       WhatsApp Orders Phone Number
                     </label>
                     <input
@@ -601,14 +601,14 @@ export default function SettingsPage() {
                       value={settings.whatsappNumber}
                       onChange={handleInputChange}
                       placeholder="+234..."
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white font-semibold outline-none"
+                      className="w-full px-5 py-4 bg-muted border-none rounded-2xl focus:ring-2 focus:ring-blue-600/10 focus:bg-white dark:focus:bg-slate-800 transition-all text-foreground font-semibold outline-none"
                     />
                   </div>
                 </div>
               )}
 
               {/* Submit Buttons */}
-              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <div className="pt-8 border-t border-border flex justify-end">
                 <button
                   type="submit"
                   disabled={saving}

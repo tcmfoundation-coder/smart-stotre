@@ -3,7 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SessionProvider } from "next-auth/react";
 import { QueryProvider } from "@/components/providers/QueryProvider";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "SmartMart Pro - AI Supermarket Management",
@@ -31,8 +31,8 @@ export default function RootLayout({
           <QueryProvider>
             <ThemeProvider>
               {children}
+              <Toaster position="top-right" richColors />
             </ThemeProvider>
-            <Toaster position="top-right" richColors />
           </QueryProvider>
         </SessionProvider>
       </body>

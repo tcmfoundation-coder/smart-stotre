@@ -93,7 +93,7 @@ export function KPICard({
               <motion.span
                 className={cn(
                   "text-sm font-semibold",
-                  trend >= 0 ? "text-emerald-600" : "text-rose-600"
+                  trend >= 0 ? "text-success" : "text-destructive"
                 )}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -114,8 +114,8 @@ export function KPICard({
               <motion.span 
                 className={cn(
                   "px-3 py-1.5 rounded-full text-[12px] font-bold inline-flex items-center border",
-                  changeType === 'positive' ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : 
-                  changeType === 'negative' ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20" : 
+                  changeType === 'positive' ? "bg-success/10 text-success border-success/20" :
+                  changeType === 'negative' ? "bg-destructive/10 text-destructive border-destructive/20" :
                   "bg-secondary text-muted-foreground border-border"
                 )}
                 whileHover={{ scale: 1.05 }}

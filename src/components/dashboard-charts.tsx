@@ -35,9 +35,9 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
   ];
 
   const getEntryClassName = (entry: any) => {
-    if (entry.dataKey === 'revenue') return 'text-emerald-600';
-    if (entry.dataKey === 'sales') return 'text-blue-600';
-    if (entry.dataKey === 'profit') return 'text-violet-600';
+    if (entry.dataKey === 'revenue') return 'text-chart-2';
+    if (entry.dataKey === 'sales') return 'text-chart-1';
+    if (entry.dataKey === 'profit') return 'text-chart-4';
     return 'text-foreground';
   };
 
@@ -68,8 +68,8 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
       <div className="bg-card rounded-2xl border border-border shadow-lg p-6 hover:shadow-2xl transition-shadow duration-300">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 rounded-xl">
-              <TrendingUp className="h-5 w-5 text-emerald-600" />
+            <div className="p-2 bg-chart-2/10 rounded-xl">
+              <TrendingUp className="h-5 w-5 text-chart-2" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-foreground">Revenue Trend</h3>
@@ -94,8 +94,8 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
           <AreaChart data={salesData}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
@@ -113,7 +113,7 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
             <Area
               type="monotone"
               dataKey="revenue"
-              stroke="#10b981"
+              stroke="hsl(var(--chart-2))"
               strokeWidth={3}
               fillOpacity={1}
               fill="url(#colorRevenue)"
@@ -127,8 +127,8 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
       <div className="bg-card rounded-2xl border border-border shadow-lg p-6 hover:shadow-2xl transition-shadow duration-300">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/10 rounded-xl">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-chart-1/10 rounded-xl">
+              <BarChart3 className="h-5 w-5 text-chart-1" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-foreground">Sales Overview</h3>
@@ -163,15 +163,15 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
-            <Bar 
-              dataKey="sales" 
-              fill="#3b82f6" 
+            <Bar
+              dataKey="sales"
+              fill="hsl(var(--chart-1))"
               radius={[8, 8, 0, 0]}
               animationDuration={1000}
             />
-            <Bar 
-              dataKey="profit" 
-              fill="#8b5cf6" 
+            <Bar
+              dataKey="profit"
+              fill="hsl(var(--chart-4))"
               radius={[8, 8, 0, 0]}
               animationDuration={1000}
             />

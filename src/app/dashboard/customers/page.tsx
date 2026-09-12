@@ -22,7 +22,7 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Customer Intelligence" userRole="manager" />
       
       <main className="p-8">
@@ -42,11 +42,11 @@ export default function CustomersPage() {
           ) : (
             <>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-          <div className="group bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-100 dark:border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Total Database</p>
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white">{customers?.length || 0}</h3>
+                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Database</p>
+                <h3 className="text-3xl font-black text-foreground">{customers?.length || 0}</h3>
                 <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-2">Active accounts</p>
               </div>
               <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl">
@@ -54,11 +54,11 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
-          <div className="group bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-100 dark:border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Total Revenue</p>
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white">
+                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
+                <h3 className="text-3xl font-black text-foreground">
                   {formatCurrency(customers?.reduce((sum: number, c: Customer) => sum + c.totalSpent, 0) || 0)}
                 </h3>
                 <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-2">Lifetime value</p>
@@ -68,11 +68,11 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
-          <div className="group bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-100 dark:border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Loyalty Points</p>
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white">
+                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Loyalty Points</p>
+                <h3 className="text-3xl font-black text-foreground">
                   {customers?.reduce((sum: number, c: Customer) => sum + c.loyaltyPoints, 0) || 0}
                 </h3>
                 <p className="text-sm font-semibold text-orange-600 dark:text-orange-400 mt-2">Reward pool</p>
@@ -93,12 +93,12 @@ export default function CustomersPage() {
               placeholder="Search customers by name, phone, or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-slate-900 dark:text-white font-semibold outline-none placeholder:text-slate-400"
+              className="w-full pl-12 pr-4 py-4 bg-card border border-border rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
             />
           </div>
 
           <div className="flex items-center gap-3 w-full xl:w-auto">
-            <Link href="/dashboard/customers/analytics" className="flex-1 xl:flex-none flex items-center justify-center space-x-2 px-6 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">
+            <Link href="/dashboard/customers/analytics" className="flex-1 xl:flex-none flex items-center justify-center space-x-2 px-6 py-4 bg-card border border-border text-foreground/80 rounded-2xl font-black shadow-sm hover:bg-muted transition-all active:scale-95">
               <BarChart3 className="h-5 w-5" />
               <span>ANALYTICS</span>
             </Link>
@@ -110,40 +110,40 @@ export default function CustomersPage() {
         </div>
 
         {/* Customers Table */}
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 dark:border-slate-800 overflow-hidden">
+        <div className="bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Customer Profile</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Contact / Info</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Type</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Loyalty Status</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Lifetime Value</th>
-                  <th className="text-left py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Last Seen</th>
-                  <th className="text-right py-6 px-8 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Actions</th>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Customer Profile</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Contact / Info</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Type</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Loyalty Status</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Lifetime Value</th>
+                  <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Last Seen</th>
+                  <th className="text-right py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-border">
                 {customers?.map((customer: Customer) => (
-                  <tr key={customer._id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                  <tr key={customer._id} className="group hover:bg-muted/50 transition-colors">
                     <td className="py-6 px-8">
                       <div className="flex items-center space-x-4">
                         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-200 dark:shadow-none">
                           {customer.name.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{customer.name}</p>
+                          <p className="font-bold text-foreground group-hover:text-blue-600 transition-colors">{customer.name}</p>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">ID: {customer._id.substring(18)}</p>
                         </div>
                       </div>
                     </td>
                     <td className="py-6 px-8">
                       <div className="flex flex-col space-y-1">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                        <span className="text-sm font-bold text-foreground/80 flex items-center">
                           <Phone className="h-3 w-3 mr-2 text-slate-400" /> {customer.phone}
                         </span>
-                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500 flex items-center">
+                        <span className="text-xs font-medium text-muted-foreground flex items-center">
                           <Mail className="h-3 w-3 mr-2 text-slate-400" /> {customer.email || 'No email'}
                         </span>
                       </div>
@@ -153,7 +153,7 @@ export default function CustomersPage() {
                         customer.customerType === 'vip' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400' :
                         customer.customerType === 'corporate' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400' :
                         customer.customerType === 'registered' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' :
-                        'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400'
+                        'bg-muted text-muted-foreground'
                       }`}>
                         {customer.customerType || 'walk-in'}
                       </span>
@@ -161,15 +161,15 @@ export default function CustomersPage() {
                     <td className="py-6 px-8">
                       <div className="flex items-center space-x-2">
                         <Award className="h-4 w-4 text-orange-500" />
-                        <span className="text-sm font-black text-slate-900 dark:text-white">{customer.loyaltyPoints}</span>
+                        <span className="text-sm font-black text-foreground">{customer.loyaltyPoints}</span>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pts</span>
                       </div>
                     </td>
                     <td className="py-6 px-8">
-                      <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(customer.totalSpent)}</p>
+                      <p className="text-sm font-black text-foreground">{formatCurrency(customer.totalSpent)}</p>
                       <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-widest mt-1">{customer.purchaseCount} Sales</p>
                     </td>
-                    <td className="py-6 px-8 text-xs font-bold text-slate-500 dark:text-slate-400">
+                    <td className="py-6 px-8 text-xs font-bold text-muted-foreground">
                       {new Date(customer.updatedAt).toLocaleDateString()}
                     </td>
                     <td className="py-6 px-8 text-right">

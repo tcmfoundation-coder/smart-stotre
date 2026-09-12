@@ -102,12 +102,12 @@ export default function NotificationsPage() {
       case 'medium':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-secondary text-secondary-foreground border-border';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Notifications" userRole="admin" />
       
       <main className="p-8">
@@ -123,7 +123,7 @@ export default function NotificationsPage() {
             </button>
             <div className="flex items-center space-x-2">
               <div className="h-2 w-2 rounded-full bg-blue-600 animate-pulse"></div>
-              <span className="text-sm font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
+              <span className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
                 {notifications.filter(n => !n.isRead).length} Unread
               </span>
             </div>
@@ -133,16 +133,16 @@ export default function NotificationsPage() {
         {/* Notifications List */}
         <div className="space-y-6 max-w-4xl">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col items-center justify-center py-20 bg-card rounded-[2rem] border border-border">
               <div className="h-10 w-10 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mb-4"></div>
               <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Syncing alerts...</p>
             </div>
           ) : error ? (
-            <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-sm border border-slate-100 dark:border-slate-800 p-20 text-center">
+            <div className="bg-card rounded-[3rem] shadow-sm border border-border p-20 text-center">
               <div className="h-24 w-24 bg-red-50 dark:bg-red-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
                 <Bell className="h-10 w-10 text-red-400" />
               </div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Failed to load notifications</h3>
+              <h3 className="text-xl font-black text-foreground mb-2">Failed to load notifications</h3>
               <button
                 onClick={fetchNotifications}
                 className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-2xl text-sm font-bold"
@@ -151,21 +151,21 @@ export default function NotificationsPage() {
               </button>
             </div>
           ) : notifications.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-sm border border-slate-100 dark:border-slate-800 p-20 text-center">
-              <div className="h-24 w-24 bg-slate-50 dark:bg-slate-800 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
-                <Bell className="h-10 w-10 text-slate-300 dark:text-slate-600" />
+            <div className="bg-card rounded-[3rem] shadow-sm border border-border p-20 text-center">
+              <div className="h-24 w-24 bg-muted rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                <Bell className="h-10 w-10 text-muted-foreground/60" />
               </div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Zero alerts</h3>
+              <h3 className="text-xl font-black text-foreground mb-2">Zero alerts</h3>
               <p className="text-slate-400 font-medium">Your system is running smoothly with no new notifications.</p>
             </div>
           ) : (
             notifications.map((notification) => (
               <div
                 key={notification._id}
-                className={`group bg-white dark:bg-slate-900 rounded-[2rem] p-6 border transition-all duration-300 ${
+                className={`group bg-card rounded-[2rem] p-6 border transition-all duration-300 ${
                   !notification.isRead 
                     ? 'border-blue-600/20 dark:border-blue-500/20 shadow-xl shadow-blue-600/[0.03] bg-blue-50/30 dark:bg-blue-900/10' 
-                    : 'border-slate-100 dark:border-slate-800 shadow-sm opacity-80'
+                    : 'border-border shadow-sm opacity-80'
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -181,7 +181,7 @@ export default function NotificationsPage() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="font-black text-slate-900 dark:text-white tracking-tight text-lg">{notification.title}</h3>
+                        <h3 className="font-black text-foreground tracking-tight text-lg">{notification.title}</h3>
                         <span className={cn(
                           "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
                           getPriorityColor(notification.priority)
@@ -189,9 +189,9 @@ export default function NotificationsPage() {
                           {notification.priority}
                         </span>
                       </div>
-                      <p className="text-slate-600 dark:text-slate-400 font-medium leading-relaxed mb-4">{notification.message}</p>
+                      <p className="text-muted-foreground font-medium leading-relaxed mb-4">{notification.message}</p>
                       <div className="flex items-center space-x-4">
-                        <div className="flex items-center text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        <div className="flex items-center text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                           <Clock className="h-3.5 w-3.5 mr-1.5" />
                           <span>{formatDate(notification.createdAt)}</span>
                         </div>

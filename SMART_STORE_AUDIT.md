@@ -2806,3 +2806,164 @@ double-refund-race test added to `returns-route.test.ts`.
 `npx jest` passes **42/42 suites, 320/320 tests** (up from 37/37 suites,
 280/280 tests before this pass — 5 new suites, 40 new tests, zero
 regressions, no existing test weakened or removed).
+
+## Pass 7: theme system overhaul (light/dark centralization)
+
+### Root cause
+
+`globals.css`'s `:root` (light) block held dark HSL values —
+`--background: 240 10% 3.9%`, `--foreground: 0 0% 98%` — a straight copy of
+the dark palette. Light mode was never actually implemented; `.dark` had
+only marginally different values. Separately, ~20 dashboard pages never
+touched the token system at all: they used a self-contained, page-local
+`bg-white dark:bg-slate-900` / `text-slate-900 dark:text-white` pattern
+that mostly *worked* (both sides hardcoded) but wasn't centralized, plus a
+handful of pages/wrappers with **no** `dark:` pairing at all — genuine
+invisible-text bugs, not just an architecture complaint.
+
+### What changed, in the mandated order (audit → tokens → components →
+pages → charts → accessibility → verification)
+
+1. **Tokens** (`globals.css` + `tailwind.config.ts`): wrote real light and
+   dark HSL palettes for every semantic role —
+   background/foreground/card/popover/elevated/muted/input/
+   input-background/disabled/border/divider/ring/selected/primary/
+   secondary/accent/destructive/success/warning/info/chart-1..5 — wired
+   through Tailwind's `<alpha-value>` pattern so opacity modifiers
+   (`bg-primary/10`) resolve correctly.
+2. **Shared components** (`src/components/ui/*`): removed every hardcoded
+   color. `badge.tsx`/`empty-state.tsx`'s `success`/`warning` variants now
+   use the `success`/`warning` tokens instead of `emerald-*`/`orange-*` +
+   manual `dark:` overrides. `input.tsx`/`textarea.tsx`/`select.tsx` now
+   use `bg-input-background` (was `bg-background`) for a consistent
+   input-surface token. `dialog.tsx`'s `DialogContent` now uses
+   `bg-popover`/`text-popover-foreground` (was bare `bg-background`).
+   `kpi-card.tsx`'s trend/change indicators now use `success`/`destructive`
+   tokens; its per-card icon-accent palette (blue/purple/emerald/etc. by
+   KPI type) was left as-is — legitimate branding variety, not a semantic
+   contrast bug.
+3. **`sonner`'s `<Toaster>`** — mounted once in the root layout, so
+   effectively a shared component — was never wired to the app's theme
+   (its `theme` prop defaults to light). Every toast, on every page,
+   rendered with light chrome even in dark mode. Wrapped it in
+   `src/components/ui/toaster.tsx`, syncing `theme` from `next-themes`'
+   `useTheme()`.
+4. **Layout** (Sidebar, Header): already almost entirely token-based.
+   Found and fixed two literal hardcoded-status-color +
+   `dark:`-override leftovers (the sidebar's "online" indicator dot, the
+   header's "Verified" label) — migrated to the `success` token.
+5. **Pages** (`src/app/dashboard/**`, `src/app/error.tsx`): audited all 106
+   `.tsx` files. Found two disjoint groups with zero overlap — 30 already
+   on centralized tokens, 20 on the self-contained legacy
+   `bg-white dark:bg-slate-*` pattern. Fixed concrete invisible-text bugs
+   first: a bare `text-white` left on a table wrapper
+   (`suppliers/page.tsx`) and on two KPI-grid wrappers
+   (`branches/page.tsx`, `online-orders/page.tsx`) with no matching
+   background — dead/dangerous CSS that would show as invisible text for
+   anything not individually overridden; five "default" status-badge
+   fallbacks (`users`, `purchase-orders`, `promotions`, `activity-logs`,
+   `notifications`, `active-users`) that had every *other* case branch
+   correctly paired with `dark:` except the neutral default, which was
+   light-only. Then mechanically migrated all ~900 legacy paired-color
+   occurrences across the 20 files via a verified-safe scripted literal
+   string replacement (`bg-white dark:bg-slate-900` → `bg-card`,
+   `text-slate-900 dark:text-white` → `text-foreground`,
+   `border-slate-100 dark:border-slate-800` → `border-border`, etc., built
+   from an actual frequency count of every pattern in those files, applied
+   longest-match-first), then hand-fixed the ~15 one-off residuals the
+   frequency mapping didn't catch. `ai-assistant/page.tsx` was fully
+   rewritten — it was the one page with almost no dark-mode support at all
+   (hardcoded `bg-gray-50`/`bg-white`/`text-gray-*` throughout, aside from
+   one previously-retrofitted input bar).
+6. **Charts** (`dashboard-charts.tsx` and `sales/page.tsx` — the only two
+   files using `recharts`): grid/axis/tooltip styling in
+   `dashboard-charts.tsx` already referenced CSS variables; its
+   revenue/sales/profit series colors were hardcoded hex, migrated to the
+   `chart-1..5` tokens. `sales/page.tsx` had a real dark-mode bug: its
+   chart tooltips hardcoded a white, 90%-opacity background
+   (`rgba(255,255,255,0.9)`) — every chart tooltip in dark mode popped up
+   as a bright white box over the dark UI. Fixed to
+   `hsl(var(--popover))`/`hsl(var(--popover-foreground))`, and migrated
+   its hardcoded axis/grid/data colors to the same CSS-variable pattern.
+7. **Accessibility/contrast**: computed WCAG contrast ratios for all 15
+   foreground/background token pairings in both themes (script-verified
+   against the actual HSL values, not eyeballed). One real failure: white
+   text on `--primary` was 3.63:1 (light) / 3.16:1 (dark) — below the
+   4.5:1 AA threshold for normal text. Darkened `--primary` from 60%/64%
+   lightness to a single 50% lightness in both themes (same blue
+   hue/saturation), bringing it to 5.05:1 while keeping the
+   primary-vs-background UI-boundary ratio comfortably above 3:1 in both
+   themes. Every other pairing (foreground/background, card,
+   muted-foreground, secondary, destructive, success, warning, info,
+   selected) already cleared 4.5:1 (text) / 3:1 (UI) with margin.
+   `disabled-foreground/disabled` (2.9:1 / 3.4:1) and card/table border
+   contrast (~1.2–1.6:1) were left as-is: WCAG explicitly exempts disabled
+   controls from the contrast requirement, and a barely-visible card
+   border matches both shadcn's own default convention and the "subtle
+   borders" quality bar this task asked for.
+8. **Theme-switching behavior**: `layout.tsx` already had
+   `suppressHydrationWarning` on `<html>` and `<body>`; `DashboardHeader`'s
+   toggle already gated its icon behind a `mounted` check — both correct,
+   pre-existing. Verified with a headless-browser run against the public
+   (DB-independent) `/login` page: `<html>` class toggles cleanly
+   `dark` → `light` → `dark` with no hydration warnings/errors in the
+   console, and both themes render with correct contrast (screenshots
+   taken). Dashboard pages need a live database/session this sandbox
+   doesn't have configured, so those were verified by exhaustive
+   source-level grep sweeps (zero remaining `slate-`/`gray-` +
+   `dark:`-paired legacy classes, zero unpaired dark-toned text left
+   anywhere in `src/app`) plus `tsc`/`jest`/`next build`, **not** by a live
+   click-through — see the checklist below for what that leaves open.
+
+### Files changed
+
+`tailwind.config.ts`, `src/app/globals.css`, `src/app/layout.tsx`,
+`src/app/error.tsx`; `src/components/ui/{badge,input,textarea,select,
+dialog,empty-state,kpi-card}.tsx` and new `src/components/ui/toaster.tsx`;
+`src/components/dashboard-header.tsx`, `dashboard-sidebar.tsx`,
+`dashboard-charts.tsx`; and 24 files under `src/app/dashboard/**`
+(active-users, activity-logs, ai-assistant, ai-predictions, barcode,
+branches, customers + customers/[id], employees + employees/[id] +
+employees/new, expenses, notifications, online-orders, promotions,
+purchase-orders, receipts + receipts/[id], sales, settings, suppliers +
+suppliers/[id] + suppliers/new, users, whatsapp-messages,
+whatsapp-orders), plus `src/components/settings/TwoFactorSettings.tsx`.
+
+### What was NOT changed
+
+No database, API, authentication, authorization, or business-logic code
+was touched. No component was structurally rewritten beyond
+`ai-assistant/page.tsx`'s color classes (its logic/JSX structure is
+unchanged). No new shared component primitives (Checkbox/Radio/Switch/
+Dropdown/Popover/Table/Alert/Tabs/Tooltip) were created — none exist in
+this codebase today; building one is a separate, explicit decision, not
+assumed here.
+
+### Verification checklist
+
+- [x] `tsc --noEmit` — 0 errors
+- [x] `npx jest` — 42/42 suites, 320/320 tests passing (unchanged count —
+      this was a styling-only pass, no test should have needed to change)
+- [x] `npx next build` — succeeds, full route manifest, no warnings
+- [x] Zero remaining `text-slate-*`/`text-gray-*` (900/800/700/600)
+      without a `dark:` pairing anywhere in `src/app`
+- [x] Zero remaining `slate-*`/`gray-*` + `dark:`-paired legacy classes in
+      `src/app` (all migrated to tokens)
+- [x] Zero hardcoded hex colors left in any chart `fill`/`stroke` prop
+- [x] WCAG AA contrast (4.5:1 text / 3:1 UI) verified computationally for
+      all 15 token pairings in both themes; one failure found and fixed
+      (`--primary`)
+- [x] `/login`, `/register` — visually verified in a real headless browser,
+      both themes, no hydration warnings/errors, screenshots reviewed
+- [ ] Authenticated dashboard pages (Dashboard, Products, Categories,
+      Inventory, Inventory Reports, Purchase Orders, Goods Receipts,
+      Sales/POS, Orders, Customers, Suppliers, Employees, Activity Logs,
+      Financial Reports, Expenses, Notifications, Settings, User
+      management) — verified by source-level audit (token usage, contrast
+      math, exhaustive hardcoded-color grep sweep) and a successful build,
+      **not** by a live authenticated browser session: this sandbox has no
+      MongoDB URI or NEXTAUTH secret configured, so no session can be
+      established here. **Recommended before calling this fully closed**:
+      one manual theme-toggle pass on 3–4 representative pages (Dashboard,
+      a table-heavy page like Inventory, a dialog-heavy page like Purchase
+      Orders) against a real deployment or local DB.

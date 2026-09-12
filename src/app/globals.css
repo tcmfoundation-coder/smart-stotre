@@ -2,52 +2,155 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Centralized theme tokens.
+ *
+ * Every color in the app should resolve to one of these semantic tokens
+ * (via the Tailwind color names wired up in tailwind.config.ts) rather than
+ * a hardcoded Tailwind gray/slate/white/black or a raw hex value. Each
+ * token is defined once here for light mode (:root) and once for dark mode
+ * (.dark) - components never need their own `dark:` overrides for
+ * structural colors (backgrounds, text, borders, status colors) because
+ * the token itself already knows how to look right in both themes.
+ *
+ * `dark:` variants are still legitimate for things that are NOT color
+ * tokens (spacing, layout, shadows that only make sense in one theme,
+ * etc.) - just not for plugging a gap in the token system.
+ */
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 5% 10%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 5% 10%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 5% 10%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5% 10%;
-    --input: 240 5% 10%;
+    /* Backgrounds */
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Elevated: surfaces that sit above a card (dropdown menus, tooltips,
+       floating panels) - same as card in light mode, distinguished mainly
+       by shadow; genuinely lighter than card in dark mode. */
+    --elevated: 0 0% 100%;
+    --elevated-foreground: 222 47% 11%;
+
+    --muted: 210 20% 95%;
+    --muted-foreground: 215 19% 35%;
+
+    --input-background: 0 0% 100%;
+
+    /* Foreground */
+    --disabled: 210 20% 95%;
+    --disabled-foreground: 215 16% 58%;
+
+    /* UI */
+    --border: 214 32% 91%;
+    --input: 213 27% 84%;
     --ring: 217 91% 60%;
+    --divider: 210 20% 93%;
+    --selected: 217 91% 95%;
+    --selected-foreground: 217 91% 30%;
+
+    /* Actions */
+    /* 50% lightness (not the brand's nominal 60%) is deliberate: it's the
+       darkest point that still reads as the brand blue while giving white
+       button text >= 4.5:1 contrast (WCAG AA normal text). */
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 95%;
+    --secondary-foreground: 222 47% 11%;
+
+    --accent: 210 20% 95%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Status */
+    --success: 142 71% 30%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 35%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 199 89% 35%;
+    --info-foreground: 0 0% 100%;
+
+    /* Data visualization */
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 32 95% 50%;
+    --chart-4: 271 81% 56%;
+    --chart-5: 340 82% 52%;
+
     --radius: 1rem;
     --font-geist-sans: Arial, Helvetica, sans-serif;
     --font-geist-mono: "Courier New", Courier, monospace;
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 217 91% 60%;
+    /* Backgrounds */
+    --background: 222 47% 7%;
+    --foreground: 210 20% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 20% 98%;
+
+    --elevated: 215 28% 17%;
+    --elevated-foreground: 210 20% 98%;
+
+    --muted: 215 28% 17%;
+    --muted-foreground: 217 19% 68%;
+
+    --input-background: 215 28% 17%;
+
+    --disabled: 215 28% 15%;
+    --disabled-foreground: 217 15% 48%;
+
+    /* UI */
+    --border: 215 25% 22%;
+    --input: 215 20% 30%;
+    --ring: 217 91% 64%;
+    --divider: 215 28% 14%;
+    --selected: 217 50% 20%;
+    --selected-foreground: 210 20% 98%;
+
+    /* Actions */
+    /* Same fixed lightness as light mode: white button text needs >= 4.5:1
+       (WCAG AA), which a brighter dark-mode-typical blue would not clear. */
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 210 20% 98%;
+
+    --accent: 215 28% 17%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Status */
+    --success: 142 65% 50%;
+    --success-foreground: 144 61% 8%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 26 83% 10%;
+
+    --info: 199 89% 60%;
+    --info-foreground: 202 80% 8%;
+
+    /* Data visualization */
+    --chart-1: 217 91% 66%;
+    --chart-2: 142 71% 55%;
+    --chart-3: 32 95% 60%;
+    --chart-4: 271 81% 68%;
+    --chart-5: 340 82% 64%;
   }
 }
 
@@ -62,28 +165,33 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   /* Typography improvements */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-bold tracking-tight;
+    @apply font-bold tracking-tight text-foreground;
   }
-  
+
   h1 {
     @apply text-4xl md:text-5xl;
   }
-  
+
   h2 {
     @apply text-3xl md:text-4xl;
   }
-  
+
   h3 {
     @apply text-2xl md:text-3xl;
   }
-  
+
   p {
     @apply leading-relaxed;
   }
-  
+
+  ::placeholder {
+    @apply text-muted-foreground;
+    opacity: 1;
+  }
+
   /* Focus states for accessibility */
   *:focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
@@ -94,9 +202,9 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-xl border border-border shadow-lg;
   }
-  
+
   .premium-input {
-    @apply w-full px-4 py-3 bg-background border border-input rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent transition-all text-foreground placeholder:text-muted-foreground outline-none;
+    @apply w-full px-4 py-3 bg-input-background border border-input rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent transition-all text-foreground placeholder:text-muted-foreground outline-none;
   }
 
   .btn-primary {
@@ -120,11 +228,11 @@
   }
 
   .table-row {
-    @apply hover:bg-muted/50 transition-colors border-b border-border last:border-0;
+    @apply hover:bg-muted/50 transition-colors border-b border-divider last:border-0;
   }
 
   .table-cell {
-    @apply py-4 px-6 text-sm;
+    @apply py-4 px-6 text-sm text-foreground;
   }
 
   .card {
@@ -136,7 +244,7 @@
   }
 
   .card-title {
-    @apply text-2xl font-semibold leading-none tracking-tight;
+    @apply text-2xl font-semibold leading-none tracking-tight text-foreground;
   }
 
   .card-description {
@@ -150,20 +258,20 @@
   .card-footer {
     @apply flex items-center p-6 pt-0;
   }
-  
+
   /* Empty state styling */
   .empty-state {
     @apply flex flex-col items-center justify-center py-12 px-6 text-center;
   }
-  
+
   .empty-state-icon {
-    @apply h-16 w-16 text-muted-foreground/30 mb-4;
+    @apply h-16 w-16 text-muted-foreground/40 mb-4;
   }
-  
+
   .empty-state-title {
     @apply text-lg font-semibold text-foreground mb-2;
   }
-  
+
   .empty-state-description {
     @apply text-sm text-muted-foreground max-w-sm;
   }
@@ -173,22 +281,22 @@
   .text-balance {
     text-wrap: balance;
   }
-  
+
   /* Custom scrollbar for webkit */
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-track {
     @apply bg-transparent;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50 transition-colors;
   }

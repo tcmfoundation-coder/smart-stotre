@@ -115,7 +115,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="Customer Details" userRole="manager" />
         <main className="p-8">
           <div className="flex items-center justify-center h-64">
@@ -128,7 +128,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   if (error || !customer) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="Customer Details" userRole="manager" />
         <main className="p-8">
           <div className="text-center text-red-600">{error || 'Customer not found'}</div>
@@ -146,40 +146,40 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       case 'registered':
         return 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400';
       default:
-        return 'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400';
+        return 'bg-muted text-muted-foreground';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Customer Details" userRole="manager" />
       
       <main className="p-8">
         {/* Back Button */}
         <Link 
           href="/dashboard/customers"
-          className="inline-flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-8"
+          className="inline-flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors mb-8"
         >
           <ArrowLeft className="h-5 w-5" />
           <span className="font-semibold">Back to Customers</span>
         </Link>
 
         {/* Customer Header */}
-        <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 dark:border-slate-800 mb-8">
+        <div className="bg-card rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border mb-8">
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-6">
               <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-3xl shadow-lg shadow-blue-200 dark:shadow-none">
                 {customer.name?.charAt(0) || 'C'}
               </div>
               <div>
-                <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-black text-foreground mb-2">
                   {customer.name || 'Walk-in Customer'}
                 </h1>
                 <div className="flex items-center space-x-4">
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${getCustomerTypeColor(customer.customerType)}`}>
                     {customer.customerType}
                   </span>
-                  <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  <span className="text-sm font-semibold text-muted-foreground">
                     ID: {customer.customerId}
                   </span>
                 </div>
@@ -206,7 +206,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 <>
                   <button
                     onClick={handleCancel}
-                    className="flex items-center space-x-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="flex items-center space-x-2 px-6 py-3 bg-muted text-foreground/80 rounded-xl font-bold hover:bg-muted transition-colors"
                   >
                     <X className="h-5 w-5" />
                     <span>Cancel</span>
@@ -227,50 +227,50 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl">
                 <TrendingUp className="h-6 w-6 text-emerald-600" />
               </div>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Spent</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {formatCurrency(customer.totalSpent)}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-orange-50 dark:bg-orange-500/10 rounded-xl">
                 <Award className="h-6 w-6 text-orange-600" />
               </div>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Loyalty Points</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {customer.loyaltyPoints}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
                 <ShoppingBag className="h-6 w-6 text-blue-600" />
               </div>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Purchases</span>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">
+            <p className="text-2xl font-black text-foreground">
               {customer.purchaseCount}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-500/10 rounded-xl">
                 <Calendar className="h-6 w-6 text-purple-600" />
               </div>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Purchase</span>
             </div>
-            <p className="text-lg font-black text-slate-900 dark:text-white">
+            <p className="text-lg font-black text-foreground">
               {customer.lastPurchaseDate 
                 ? new Date(customer.lastPurchaseDate).toLocaleDateString()
                 : 'Never'
@@ -280,8 +280,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         {/* Contact Information */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm mb-8">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">Contact Information</h2>
+        <div className="bg-card rounded-2xl p-8 border border-border shadow-sm mb-8">
+          <h2 className="text-xl font-black text-foreground mb-6">Contact Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Name</p>
@@ -290,10 +290,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   type="text"
                   value={formData.name || ''}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                 />
               ) : (
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{customer.name || 'Walk-in Customer'}</p>
+                <p className="text-lg font-semibold text-foreground">{customer.name || 'Walk-in Customer'}</p>
               )}
             </div>
 
@@ -308,10 +308,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     type="tel"
                     value={formData.phone || ''}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                    className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                   />
                 ) : (
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{customer.phone}</p>
+                  <p className="text-lg font-semibold text-foreground">{customer.phone}</p>
                 )}
               </div>
             </div>
@@ -327,10 +327,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     type="email"
                     value={formData.email || ''}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                    className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                   />
                 ) : (
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                  <p className="text-lg font-semibold text-foreground">
                     {customer.email || 'No email provided'}
                   </p>
                 )}
@@ -348,10 +348,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     type="text"
                     value={formData.address || ''}
                     onChange={(e) => handleInputChange('address', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
+                    className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
                   />
                 ) : (
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                  <p className="text-lg font-semibold text-foreground">
                     {customer.address || 'No address provided'}
                   </p>
                 )}
@@ -360,28 +360,28 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </div>
 
           {(editing || customer.notes) && (
-            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+            <div className="mt-6 pt-6 border-t border-border">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Notes</p>
               {editing ? (
                 <textarea
                   value={formData.notes || ''}
                   onChange={(e) => handleInputChange('notes', e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none resize-none"
+                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none resize-none"
                 />
               ) : (
-                <p className="text-slate-700 dark:text-slate-300">{customer.notes}</p>
+                <p className="text-foreground/80">{customer.notes}</p>
               )}
             </div>
           )}
         </div>
 
         {/* Purchase History */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">Purchase History</h2>
+        <div className="bg-card rounded-2xl p-8 border border-border shadow-sm">
+          <h2 className="text-xl font-black text-foreground mb-6">Purchase History</h2>
           
           {purchaseHistory.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+            <div className="text-center py-12 text-muted-foreground">
               <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="font-semibold">No purchase history yet</p>
             </div>
@@ -390,19 +390,19 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               {purchaseHistory.map((sale) => (
                 <div 
                   key={sale._id}
-                  className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-blue-200 dark:hover:border-blue-500/30 transition-colors"
+                  className="p-6 bg-muted/50 rounded-xl border border-border hover:border-blue-200 dark:hover:border-blue-500/30 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">
                         {sale.saleNumber}
                       </p>
-                      <p className="text-lg font-black text-slate-900 dark:text-white">
+                      <p className="text-lg font-black text-foreground">
                         {formatCurrency(sale.total)}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                      <p className="text-sm font-semibold text-muted-foreground">
                         {new Date(sale.createdAt).toLocaleDateString()}
                       </p>
                       <span className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -418,31 +418,31 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Payment Method</p>
-                      <p className="font-semibold text-slate-700 dark:text-slate-300 capitalize">
+                      <p className="font-semibold text-foreground/80 capitalize">
                         {sale.paymentMethod}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cashier</p>
-                      <p className="font-semibold text-slate-700 dark:text-slate-300">
+                      <p className="font-semibold text-foreground/80">
                         {sale.cashierId?.name || 'N/A'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="mt-4 pt-4 border-t border-border">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Items ({sale.items.length})</p>
                     <div className="flex flex-wrap gap-2">
                       {sale.items.slice(0, 3).map((item, index) => (
                         <span 
                           key={index}
-                          className="px-3 py-1 bg-white dark:bg-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300"
+                          className="px-3 py-1 bg-card rounded-lg text-xs font-semibold text-foreground/80"
                         >
                           {item.productName} x{item.quantity}
                         </span>
                       ))}
                       {sale.items.length > 3 && (
-                        <span className="px-3 py-1 bg-slate-100 dark:bg-slate-600 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        <span className="px-3 py-1 bg-muted rounded-lg text-xs font-semibold text-muted-foreground">
                           +{sale.items.length - 3} more
                         </span>
                       )}

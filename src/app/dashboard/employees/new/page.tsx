@@ -70,14 +70,14 @@ export default function NewEmployeePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <DashboardHeader title="Add New Employee" userRole="admin" />
       
       <main className="p-8">
         {/* Back Button */}
         <Link 
           href="/dashboard/employees"
-          className="inline-flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-8"
+          className="inline-flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors mb-8"
         >
           <ArrowLeft className="h-5 w-5" />
           <span className="font-semibold">Back to Employees</span>
@@ -85,14 +85,14 @@ export default function NewEmployeePage() {
 
         {/* Form Container */}
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-[0_8px_30px(rgb(0,0,0,0.04)] border border-slate-100 dark:border-slate-800">
+          <div className="bg-card rounded-[2rem] p-8 shadow-[0_8px_30px(rgb(0,0,0,0.04)] border border-border">
             <div className="flex items-center space-x-4 mb-8">
               <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl">
                 <User className="h-8 w-8 text-blue-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-slate-900 dark:text-white">New Employee</h1>
-                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Add a new employee to your workforce</p>
+                <h1 className="text-2xl font-black text-foreground">New Employee</h1>
+                <p className="text-sm font-semibold text-muted-foreground">Add a new employee to your workforce</p>
               </div>
             </div>
 
@@ -105,13 +105,13 @@ export default function NewEmployeePage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* User Account Information */}
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center">
+                <h2 className="text-lg font-black text-foreground mb-4 flex items-center">
                   <User className="h-5 w-5 mr-2 text-blue-600" />
                   Account Information
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Full Name *
                     </label>
                     <input
@@ -121,12 +121,12 @@ export default function NewEmployeePage() {
                       onChange={handleChange}
                       required
                       placeholder="John Doe"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Email Address *
                     </label>
                     <input
@@ -136,12 +136,12 @@ export default function NewEmployeePage() {
                       onChange={handleChange}
                       required
                       placeholder="john@example.com"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Password *
                     </label>
                     <input
@@ -152,12 +152,12 @@ export default function NewEmployeePage() {
                       required
                       placeholder="••••••••"
                       minLength={6}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Phone Number *
                     </label>
                     <input
@@ -167,7 +167,7 @@ export default function NewEmployeePage() {
                       onChange={handleChange}
                       required
                       placeholder="+1 234 567 8900"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -175,13 +175,13 @@ export default function NewEmployeePage() {
 
               {/* Employment Details */}
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center">
+                <h2 className="text-lg font-black text-foreground mb-4 flex items-center">
                   <Briefcase className="h-5 w-5 mr-2 text-blue-600" />
                   Employment Details
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Position *
                     </label>
                     <input
@@ -191,12 +191,12 @@ export default function NewEmployeePage() {
                       onChange={handleChange}
                       required
                       placeholder="Cashier, Manager, etc."
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Department
                     </label>
                     <input
@@ -205,12 +205,12 @@ export default function NewEmployeePage() {
                       value={formData.department}
                       onChange={handleChange}
                       placeholder="Sales, Operations, etc."
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Salary *
                     </label>
                     <input
@@ -222,12 +222,12 @@ export default function NewEmployeePage() {
                       placeholder="50000"
                       min="0"
                       step="0.01"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Hire Date *
                     </label>
                     <input
@@ -236,12 +236,12 @@ export default function NewEmployeePage() {
                       value={formData.hireDate}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Role *
                     </label>
                     <select
@@ -249,7 +249,7 @@ export default function NewEmployeePage() {
                       value={formData.role}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     >
                       <option value="cashier">Cashier</option>
                       <option value="manager">Manager</option>
@@ -258,14 +258,14 @@ export default function NewEmployeePage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                       Branch
                     </label>
                     <select
                       name="branchId"
                       value={formData.branchId}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                     >
                       <option value="">No Branch</option>
                       {branches.map((branch) => (
@@ -277,10 +277,10 @@ export default function NewEmployeePage() {
               </div>
 
               {/* Submit Button */}
-              <div className="flex items-center justify-end space-x-4 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-end space-x-4 pt-6 border-t border-border">
                 <Link
                   href="/dashboard/employees"
-                  className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  className="px-6 py-3 bg-muted text-foreground/80 rounded-xl font-bold hover:bg-muted transition-colors"
                 >
                   Cancel
                 </Link>

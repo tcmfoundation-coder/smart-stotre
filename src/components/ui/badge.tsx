@@ -13,8 +13,8 @@ const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
       secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
       destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/80",
       outline: "text-foreground border border-border hover:bg-accent",
-      success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20",
-      warning: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 hover:bg-orange-500/20"
+      success: "bg-success/10 text-success border border-success/20 hover:bg-success/20",
+      warning: "bg-warning/10 text-warning border border-warning/20 hover:bg-warning/20"
     }
 
     return (

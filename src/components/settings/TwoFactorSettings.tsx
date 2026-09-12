@@ -112,13 +112,13 @@ export function TwoFactorSettings() {
 
   if (stage === 'enabled') {
     return (
-      <div className="p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+      <div className="p-6 bg-muted/30 rounded-2xl border border-border space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ShieldCheck className="h-6 w-6 text-emerald-600" />
             <div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Two-Factor Authentication</h4>
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Enabled — an authenticator code is required at login.</p>
+              <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Two-Factor Authentication</h4>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Enabled — an authenticator code is required at login.</p>
             </div>
           </div>
           <button
@@ -135,19 +135,19 @@ export function TwoFactorSettings() {
 
   if (stage === 'disabling') {
     return (
-      <div className="p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+      <div className="p-6 bg-muted/30 rounded-2xl border border-border space-y-4">
         <div className="flex items-center gap-3">
           <ShieldOff className="h-6 w-6 text-rose-600" />
-          <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Disable Two-Factor Authentication</h4>
+          <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Disable Two-Factor Authentication</h4>
         </div>
-        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">Enter your password to confirm.</p>
+        <p className="text-xs font-semibold text-muted-foreground">Enter your password to confirm.</p>
         <div className="flex gap-2 max-w-sm">
           <input
             type="password"
             value={disablePassword}
             onChange={(e) => setDisablePassword(e.target.value)}
             placeholder="Current password"
-            className="flex-1 px-4 py-3 bg-white dark:bg-slate-900 border-none rounded-xl focus:ring-2 focus:ring-ring/10 text-slate-900 dark:text-white font-semibold outline-none"
+            className="flex-1 px-4 py-3 bg-card border-none rounded-xl focus:ring-2 focus:ring-ring/10 text-foreground font-semibold outline-none"
           />
           <button
             type="button"
@@ -160,7 +160,7 @@ export function TwoFactorSettings() {
           <button
             type="button"
             onClick={() => { setStage('enabled'); setDisablePassword(''); }}
-            className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider"
+            className="px-4 py-2 bg-muted text-foreground/80 rounded-xl text-xs font-bold uppercase tracking-wider"
           >
             Cancel
           </button>
@@ -171,18 +171,18 @@ export function TwoFactorSettings() {
 
   if (stage === 'setup') {
     return (
-      <div className="p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
-        <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Set Up Two-Factor Authentication</h4>
-        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
+      <div className="p-6 bg-muted/30 rounded-2xl border border-border space-y-4">
+        <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Set Up Two-Factor Authentication</h4>
+        <p className="text-xs font-semibold text-muted-foreground">
           Scan this QR code with an authenticator app (Google Authenticator, Authy, 1Password, etc.), or enter the code manually.
         </p>
         {qrDataUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={qrDataUrl} alt="Two-factor setup QR code" className="w-40 h-40 rounded-xl border border-slate-200 dark:border-slate-700" />
+          <img src={qrDataUrl} alt="Two-factor setup QR code" className="w-40 h-40 rounded-xl border border-border" />
         )}
         <div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Manual entry code</p>
-          <code className="block px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-sm font-mono text-slate-900 dark:text-white break-all">{manualSecret}</code>
+          <code className="block px-3 py-2 bg-card rounded-lg text-sm font-mono text-foreground break-all">{manualSecret}</code>
         </div>
         <div className="flex gap-2 max-w-sm">
           <input
@@ -190,7 +190,7 @@ export function TwoFactorSettings() {
             value={verifyCode}
             onChange={(e) => setVerifyCode(e.target.value)}
             placeholder="Enter 6-digit code"
-            className="flex-1 px-4 py-3 bg-white dark:bg-slate-900 border-none rounded-xl focus:ring-2 focus:ring-ring/10 text-slate-900 dark:text-white font-semibold outline-none text-center tracking-[0.3em]"
+            className="flex-1 px-4 py-3 bg-card border-none rounded-xl focus:ring-2 focus:ring-ring/10 text-foreground font-semibold outline-none text-center tracking-[0.3em]"
           />
           <button
             type="button"
@@ -207,17 +207,17 @@ export function TwoFactorSettings() {
 
   if (stage === 'recovery-codes') {
     return (
-      <div className="p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+      <div className="p-6 bg-muted/30 rounded-2xl border border-border space-y-4">
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-6 w-6 text-emerald-600" />
-          <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Two-Factor Authentication Enabled</h4>
+          <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Two-Factor Authentication Enabled</h4>
         </div>
         <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
           Save these recovery codes somewhere safe. Each one can be used once to sign in if you lose access to your authenticator app. They will not be shown again.
         </p>
         <div className="grid grid-cols-2 gap-2 font-mono text-sm">
           {recoveryCodes.map((code) => (
-            <code key={code} className="px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-slate-900 dark:text-white text-center">
+            <code key={code} className="px-3 py-2 bg-card rounded-lg text-foreground text-center">
               {code}
             </code>
           ))}
@@ -225,7 +225,7 @@ export function TwoFactorSettings() {
         <button
           type="button"
           onClick={copyRecoveryCodes}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider"
+          className="flex items-center gap-2 px-4 py-2 bg-muted text-foreground/80 rounded-xl text-xs font-bold uppercase tracking-wider"
         >
           {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           {copied ? 'Copied' : 'Copy Codes'}
@@ -242,11 +242,11 @@ export function TwoFactorSettings() {
   }
 
   return (
-    <div className="p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+    <div className="p-6 bg-muted/30 rounded-2xl border border-border">
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Two-Factor Authentication</h4>
-          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">Require an authenticator app code on dashboard logins.</p>
+          <h4 className="text-sm font-black text-foreground uppercase tracking-tight">Two-Factor Authentication</h4>
+          <p className="text-xs font-semibold text-muted-foreground mt-1">Require an authenticator app code on dashboard logins.</p>
         </div>
         <button
           type="button"
