@@ -98,6 +98,7 @@ export const ADMIN_NAVIGATION: NavGroup[] = [
     title: 'Reports',
     items: [
       { name: 'Reports Center', href: '/dashboard/reports', icon: FileText, roles: ['admin'] },
+      { name: 'Inventory Reports', href: '/dashboard/inventory-reports', icon: BarChart3, roles: ['admin'] },
     ]
   },
   {

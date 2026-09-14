@@ -31,7 +31,7 @@ export default function InventoryReportsPage() {
     dateRange,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
   });
-  const { data: movementsData, isLoading: movementsLoading } = useInventoryMovements({
+  const { data: movementsData, isLoading: movementsLoading, error: movementsError, refetch: refetchMovements } = useInventoryMovements({
     dateRange,
     type: movementType !== 'all' ? movementType : undefined,
     search: movementSearch || undefined,
@@ -248,6 +248,11 @@ export default function InventoryReportsPage() {
                 {movementsLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : movementsError ? (
+                  <div className="text-center py-12">
+                    <p className="text-red-500 mb-4 text-sm">Unable to load inventory movements.</p>
+                    <Button variant="outline" size="sm" onClick={() => refetchMovements()}>Retry</Button>
                   </div>
                 ) : !movementsData || movementsData.movements.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-6 text-center">No inventory movements found for this filter</p>

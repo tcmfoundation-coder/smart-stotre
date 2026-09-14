@@ -1,19 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { FileText, Search, Download, Calendar, TrendingUp, DollarSign, Package, Users, Filter, Loader2, X, ChevronDown } from 'lucide-react';
+import { FileText, Search, Download, Calendar, TrendingUp, DollarSign, Package, Users, Filter, Loader2, X, ChevronDown, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
-import { useReports, useGenerateReport, useDownloadReport, useDeleteReport } from '@/hooks/useReports';
+import { useReports, useGenerateReport, useDownloadReport, useDeleteReport, generateReportCSV } from '@/hooks/useReports';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [dateRange, setDateRange] = useState('month');
   const [reportType, setReportType] = useState('sales');
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,7 +25,7 @@ export default function ReportsPage() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   
-  const { data: reports, isLoading, refetch } = useReports({ type: reportType });
+  const { data: reports, isLoading, error, refetch } = useReports({ type: reportType });
   const generateReport = useGenerateReport();
   const downloadReport = useDownloadReport();
   const deleteReport = useDeleteReport();
@@ -69,17 +71,29 @@ export default function ReportsPage() {
   };
 
   const handleExportAll = () => {
-    const filteredReports = reports?.filter(report => 
-      report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.generatedBy.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    
-    if (filteredReports && filteredReports.length > 0) {
-      toast.success(`Exporting ${filteredReports.length} reports...`);
-      // Implement actual export logic here
-    } else {
+    // Export exactly the reports currently visible under the active type
+    // tab and search filter - not the full unfiltered list - so the file
+    // matches what the user is looking at on screen.
+    if (!filteredReports || filteredReports.length === 0) {
       toast.error('No reports to export');
+      return;
     }
+
+    const csv = filteredReports
+      .map(report => generateReportCSV(report))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `reports_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${filteredReports.length} ${filteredReports.length === 1 ? 'report' : 'reports'}`);
   };
 
   const handleCustomDateSubmit = () => {
@@ -284,6 +298,13 @@ export default function ReportsPage() {
                   <CardSkeleton key={i} />
                 ))}
               </div>
+            ) : error ? (
+              <Card>
+                <CardContent className="p-6 text-center py-12" role="alert">
+                  <p className="text-red-500 mb-4">Unable to load reports.</p>
+                  <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+                </CardContent>
+              </Card>
             ) : (
               <Card>
                 <CardContent className="p-6">
@@ -333,12 +354,13 @@ export default function ReportsPage() {
                               {downloadReport.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4 mr-1" aria-hidden="true" />}
                               Download
                             </Button>
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
-                              onClick={() => toast.info('Report viewer coming soon')}
+                              onClick={() => router.push(`/dashboard/reports/${report._id}`)}
                               aria-label={`View ${report.name}`}
                             >
+                              <Eye className="h-4 w-4 mr-1" aria-hidden="true" />
                               View
                             </Button>
                             <Button 

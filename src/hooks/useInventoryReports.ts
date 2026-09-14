@@ -1,7 +1,18 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '@/lib/api-client';
+import { apiGet, ApiResponse } from '@/lib/api-client';
+
+// apiGet resolves to { success:false, error } on an HTTP-level failure
+// rather than throwing - see useFinancialReports.ts for why this matters
+// for distinguishing a real backend failure from a period with no data.
+async function unwrap<T>(promise: Promise<ApiResponse<T>>): Promise<T> {
+  const response = await promise;
+  if (!response.success) {
+    throw new Error(response.error || 'Request failed');
+  }
+  return response.data as T;
+}
 
 export interface InventoryReportMetrics {
   totalInventoryValue: number;
@@ -45,8 +56,7 @@ export function useInventoryReports(params?: InventoryReportParams) {
 
   return useQuery({
     queryKey: ['inventory-reports', params],
-    queryFn: () => apiGet<InventoryReportData>(`/api/inventory-reports?${queryParams}`),
-    select: (data) => data.data,
+    queryFn: () => unwrap(apiGet<InventoryReportData>(`/api/inventory-reports?${queryParams}`)),
   });
 }
 
@@ -89,7 +99,6 @@ export function useInventoryMovements(params?: MovementParams) {
 
   return useQuery({
     queryKey: ['inventory-movements', params],
-    queryFn: () => apiGet<MovementsData>(`/api/inventory-reports/movements?${queryParams}`),
-    select: (data) => data.data,
+    queryFn: () => unwrap(apiGet<MovementsData>(`/api/inventory-reports/movements?${queryParams}`)),
   });
 }

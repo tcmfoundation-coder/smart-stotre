@@ -12,6 +12,7 @@ export interface Report {
   generatedAt: string;
   status: 'pending' | 'completed' | 'failed';
   fileUrl?: string;
+  dateRange?: { start: string; end: string };
   metadata?: Record<string, any>;
 }
 
@@ -22,6 +23,21 @@ export interface ReportParams {
   endDate?: string;
   page?: number;
   limit?: number;
+}
+
+// apiGet/apiPost/apiDelete resolve to { success:false, error } on an
+// HTTP-level failure (e.g. a 403 or a 500) rather than throwing. Without
+// unwrapping: a failed query looks identical to "genuinely zero rows" to
+// react-query (data is undefined, error stays null), and a failed
+// mutation still runs onSuccess - so a denied generate/delete would show
+// a false "success" toast. `data` is intentionally not required to be
+// present here: a successful DELETE's response has no `data` field.
+async function unwrap<T>(promise: Promise<ApiResponse<T>>): Promise<T> {
+  const response = await promise;
+  if (!response.success) {
+    throw new Error(response.error || 'Request failed');
+  }
+  return response.data as T;
 }
 
 export function useReports(params?: ReportParams) {
@@ -35,8 +51,16 @@ export function useReports(params?: ReportParams) {
 
   return useQuery({
     queryKey: ['reports', params],
-    queryFn: () => apiGet<Report[]>(`/api/reports?${queryParams}`),
-    select: (data) => data.data ?? [],
+    queryFn: () => unwrap(apiGet<Report[]>(`/api/reports?${queryParams}`)),
+  });
+}
+
+export function useReport(id: string | undefined) {
+  return useQuery({
+    queryKey: ['reports', 'detail', id],
+    queryFn: () => unwrap(apiGet<Report>(`/api/reports/${id}`)),
+    enabled: !!id,
+    retry: false,
   });
 }
 
@@ -44,14 +68,18 @@ export function useGenerateReport() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // apiPost resolves (rather than rejects) even on a 403 from the
+    // permission check in /api/reports/generate, so without unwrapping,
+    // onSuccess below would fire - and show a false "success" toast - for
+    // a role that was actually denied.
     mutationFn: (data: { type: string; dateRange?: string; startDate?: string; endDate?: string }) =>
-      apiPost<Report>('/api/reports/generate', data),
+      unwrap(apiPost<Report>('/api/reports/generate', data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       toast.success('Report generation started');
     },
     onError: (error: any) => {
-      toast.error(error.error || 'Failed to generate report');
+      toast.error(error.message || 'Failed to generate report');
     },
   });
 }
@@ -82,7 +110,7 @@ export function useDownloadReport() {
   });
 }
 
-function generateReportCSV(report: any): string {
+export function generateReportCSV(report: any): string {
   const metadata = report.metadata || {};
   const type = report.type;
   
@@ -155,13 +183,15 @@ export function useDeleteReport() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (reportId: string) => apiDelete(`/api/reports?id=${reportId}`),
+    // Same unwrap concern as useGenerateReport - a 403 or 404 from the
+    // DELETE route must not be reported to the user as a success.
+    mutationFn: (reportId: string) => unwrap(apiDelete(`/api/reports?id=${reportId}`)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       toast.success('Report deleted');
     },
     onError: (error: any) => {
-      toast.error(error.error || 'Failed to delete report');
+      toast.error(error.message || 'Failed to delete report');
     },
   });
 }

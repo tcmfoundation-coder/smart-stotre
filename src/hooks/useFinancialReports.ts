@@ -3,6 +3,20 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, ApiResponse } from '@/lib/api-client';
 
+// apiGet resolves to { success:false, error } on an HTTP-level failure
+// (e.g. a 403 from view_financial_reports, or a 500) rather than
+// throwing, so without unwrapping, react-query's `error` never populates
+// on a real backend failure - the page would render `data: undefined` as
+// if the period genuinely had no financial activity instead of showing
+// its "Failed to load financial reports" retry state.
+async function unwrap<T>(promise: Promise<ApiResponse<T>>): Promise<T> {
+  const response = await promise;
+  if (!response.success) {
+    throw new Error(response.error || 'Request failed');
+  }
+  return response.data as T;
+}
+
 export interface FinancialMetrics {
   totalRevenue: number;
   netProfit: number;
@@ -46,7 +60,6 @@ export function useFinancialReports(params?: FinancialParams) {
 
   return useQuery({
     queryKey: ['financial-reports', params],
-    queryFn: () => apiGet<FinancialData>(`/api/financial-reports?${queryParams}`),
-    select: (data) => data.data,
+    queryFn: () => unwrap(apiGet<FinancialData>(`/api/financial-reports?${queryParams}`)),
   });
 }
