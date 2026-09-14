@@ -6,10 +6,13 @@ import { getDashboardRoleConfig } from '@/lib/dashboard-role';
 import { Save, Store, Bell, Shield, CreditCard, Globe, AlertCircle, CheckCircle, RefreshCw, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import { TwoFactorSettings } from '@/components/settings/TwoFactorSettings';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('general');
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(requestedTab === 'security' ? 'security' : 'general');
   const [settings, setSettings] = useState({
     currency: 'NGN',
     taxRate: 7.5,
@@ -36,13 +39,18 @@ export default function SettingsPage() {
     confirmPassword: '',
   });
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const { data: session, status } = useSession();
   const role = (session?.user?.role as string | undefined) || 'cashier';
   const roleConfig = getDashboardRoleConfig(role);
   const canAccessSettings = roleConfig.canAccessSettings;
+
+  // Roles without canAccessSettings never fetch /api/settings (it's
+  // admin-only) below, so there's nothing to wait on - skip the loading
+  // spinner for them entirely instead of flashing it before an effect
+  // clears it a tick later.
+  const [loading, setLoading] = useState(canAccessSettings);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const tabs = [
     { id: 'general', name: 'General', icon: Store },
@@ -52,8 +60,14 @@ export default function SettingsPage() {
     { id: 'online', name: 'Online Store', icon: Globe },
   ];
 
-  // Fetch settings from API on mount
+  // Fetch settings from API on mount - /api/settings is admin-only, so
+  // skip it entirely for roles that can only ever reach the security tab.
   useEffect(() => {
+    if (!canAccessSettings) {
+      setLoading(false);
+      return;
+    }
+
     async function fetchSettings() {
       try {
         const response = await fetch('/api/settings');
@@ -74,7 +88,15 @@ export default function SettingsPage() {
       }
     }
     fetchSettings();
-  }, []);
+  }, [canAccessSettings]);
+
+  // Non-admins can only ever reach the Security tab (password/2FA) - the
+  // other four tabs are real store-configuration and stay admin-only.
+  useEffect(() => {
+    if (!canAccessSettings && activeTab !== 'security') {
+      setActiveTab('security');
+    }
+  }, [canAccessSettings, activeTab]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -170,7 +192,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!canAccessSettings) {
+  if (!canAccessSettings && activeTab !== 'security') {
     return (
       <div className="min-h-screen bg-background transition-colors duration-300">
         <DashboardHeader title="System Settings" userRole="admin" />
@@ -194,28 +216,32 @@ export default function SettingsPage() {
       <DashboardHeader title="System Settings" userRole="admin" />
 
       <main className="p-8">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-8">
-          {/* Sidebar Tabs */}
-          <aside className="w-full md:w-64 space-y-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setFeedback(null);
-                }}
-                className={cn(
-                  'w-full flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold transition-all duration-300',
-                  activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-xl shadow-blue-200 dark:shadow-none'
-                    : 'bg-card text-muted-foreground hover:bg-muted border border-border'
-                )}
-              >
-                <tab.icon className="h-5 w-5" />
-                <span>{tab.name}</span>
-              </button>
-            ))}
-          </aside>
+        <div className={cn('mx-auto flex flex-col md:flex-row gap-8', canAccessSettings ? 'max-w-6xl' : 'max-w-2xl')}>
+          {/* Sidebar Tabs - the other tabs are real store configuration and
+              stay admin-only, so non-admins (limited to Security) skip
+              straight to the form instead of seeing a one-item switcher. */}
+          {canAccessSettings && (
+            <aside className="w-full md:w-64 space-y-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setFeedback(null);
+                  }}
+                  className={cn(
+                    'w-full flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold transition-all duration-300',
+                    activeTab === tab.id
+                      ? 'bg-blue-600 text-white shadow-xl shadow-blue-200 dark:shadow-none'
+                      : 'bg-card text-muted-foreground hover:bg-muted border border-border'
+                  )}
+                >
+                  <tab.icon className="h-5 w-5" />
+                  <span>{tab.name}</span>
+                </button>
+              ))}
+            </aside>
+          )}
 
           {/* Content Area */}
           <div className="flex-1 bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden">

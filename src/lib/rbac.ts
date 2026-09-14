@@ -138,6 +138,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       '/dashboard/promotions',
       '/dashboard/expenses',
       '/dashboard/notifications',
+      '/dashboard/profile',
       '/dashboard/activity-logs',
       '/dashboard/settings',
       '/dashboard/backup',
@@ -204,6 +205,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       '/dashboard/reports',
       '/dashboard/promotions',
       '/dashboard/notifications',
+      '/dashboard/profile',
       '/inventory',
       '/dashboard/pos',
       '/dashboard/online-orders',
@@ -246,6 +248,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       '/dashboard/receipt-history',
       '/dashboard/shift-summary',
       '/dashboard/notifications',
+      '/dashboard/profile',
       '/dashboard/barcode',
     ],
     dashboardCards: [

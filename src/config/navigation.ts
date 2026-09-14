@@ -194,8 +194,7 @@ export const CASHIER_NAVIGATION: NavGroup[] = [
   {
     title: 'Point of Sale',
     items: [
-      { name: 'POS Terminal', href: '/dashboard/pos', icon: Scan, roles: ['cashier'] },
-      { name: 'New Sale', href: '/dashboard/pos', icon: ShoppingCart, roles: ['cashier'] },
+      { name: 'POS Terminal', href: '/dashboard/pos', icon: ShoppingCart, roles: ['cashier'] },
       { name: 'Product Search', href: '/dashboard/products', icon: Search, roles: ['cashier'] },
     ]
   },
