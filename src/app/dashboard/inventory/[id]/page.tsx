@@ -71,20 +71,30 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [productData, categoriesData, suppliersData] = await Promise.all([
-        getProductById(id),
-        getCategories(),
-        getSuppliers(),
-      ]);
+      const productData = await getProductById(id);
       setProduct(productData);
       setFormData(productData);
-      setCategories(categoriesData);
-      setSuppliers(suppliersData);
     } catch (err) {
       console.error('Error loading product data:', err);
       setError('Failed to load product data');
+      setLoading(false);
+      return;
+    }
+
+    // Categories/suppliers only populate the edit dropdowns - getSuppliers
+    // requires manager/admin while viewing a product only requires being
+    // authenticated, so a cashier who can see this page at all must not
+    // have the product itself fail to load just because they lack
+    // permission for supplier data they can't edit anyway (updateProduct
+    // already enforces manager/admin server-side).
+    try {
+      const [categoriesData, suppliersData] = await Promise.all([getCategories(), getSuppliers()]);
+      setCategories(categoriesData);
+      setSuppliers(suppliersData);
+    } catch (err) {
+      console.error('Error loading product edit metadata:', err);
     } finally {
       setLoading(false);
     }
