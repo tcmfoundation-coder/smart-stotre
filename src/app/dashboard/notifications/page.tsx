@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, CheckCircle, Tag, Clock } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, CheckCircle, Tag, Clock, Loader2 } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 
 interface Notification {
   _id: string;
@@ -15,6 +20,20 @@ interface Notification {
   isRead: boolean;
   createdAt: string;
 }
+
+const TYPE_STYLES: Record<Notification['type'], { icon: typeof Info; className: string }> = {
+  warning: { icon: AlertTriangle, className: 'bg-warning/10 text-warning' },
+  error: { icon: AlertCircle, className: 'bg-destructive/10 text-destructive' },
+  success: { icon: CheckCircle, className: 'bg-success/10 text-success' },
+  info: { icon: Info, className: 'bg-info/10 text-info' },
+};
+
+const PRIORITY_BADGE: Record<Notification['priority'], 'destructive' | 'warning' | 'info' | 'secondary'> = {
+  urgent: 'destructive',
+  high: 'warning',
+  medium: 'info',
+  low: 'secondary',
+};
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -50,9 +69,7 @@ export default function NotificationsPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to mark notification as read');
       }
-      setNotifications(notifications.map(n =>
-        n._id === id ? { ...n, isRead: true } : n
-      ));
+      setNotifications(notifications.map((n) => (n._id === id ? { ...n, isRead: true } : n)));
     } catch (error) {
       console.error('Error marking as read:', error);
     }
@@ -65,7 +82,7 @@ export default function NotificationsPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to mark all notifications as read');
       }
-      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+      setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
@@ -74,155 +91,100 @@ export default function NotificationsPage() {
   const handleDelete = async (id: string) => {
     try {
       await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
-      setNotifications(notifications.filter(n => n._id !== id));
+      setNotifications(notifications.filter((n) => n._id !== id));
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'warning':
-        return <AlertTriangle className="h-5 w-5 text-orange-600" />;
-      case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-600" />;
-      case 'success':
-        return <CheckCircle className="h-5 w-5 text-green-600" />;
-      default:
-        return <Info className="h-5 w-5 text-blue-600" />;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'high':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default:
-        return 'bg-secondary text-secondary-foreground border-border';
-    }
-  };
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Notifications" userRole="admin" />
-      
-      <main className="p-8">
+
+      <main className="p-6 lg:p-8">
         {/* Actions Bar */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-6">
-            <button
-              onClick={handleMarkAllAsRead}
-              className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95"
-            >
-              <CheckCheck className="h-5 w-5" />
-              <span>MARK ALL AS READ</span>
-            </button>
-            <div className="flex items-center space-x-2">
-              <div className="h-2 w-2 rounded-full bg-blue-600 animate-pulse"></div>
-              <span className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
-                {notifications.filter(n => !n.isRead).length} Unread
-              </span>
-            </div>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" className="gap-2" onClick={handleMarkAllAsRead} disabled={unreadCount === 0}>
+              <CheckCheck className="h-4 w-4" />
+              Mark all as read
+            </Button>
+            {unreadCount > 0 && <Badge variant="info">{unreadCount} unread</Badge>}
           </div>
         </div>
 
         {/* Notifications List */}
-        <div className="space-y-6 max-w-4xl">
+        <div className="max-w-4xl space-y-4">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 bg-card rounded-[2rem] border border-border">
-              <div className="h-10 w-10 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Syncing alerts...</p>
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading notifications...
             </div>
           ) : error ? (
-            <div className="bg-card rounded-[3rem] shadow-sm border border-border p-20 text-center">
-              <div className="h-24 w-24 bg-red-50 dark:bg-red-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
-                <Bell className="h-10 w-10 text-red-400" />
-              </div>
-              <h3 className="text-xl font-black text-foreground mb-2">Failed to load notifications</h3>
-              <button
-                onClick={fetchNotifications}
-                className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-2xl text-sm font-bold"
-              >
-                Retry
-              </button>
-            </div>
+            <ErrorState description="Failed to load notifications" onRetry={fetchNotifications} />
           ) : notifications.length === 0 ? (
-            <div className="bg-card rounded-[3rem] shadow-sm border border-border p-20 text-center">
-              <div className="h-24 w-24 bg-muted rounded-[2rem] flex items-center justify-center mx-auto mb-6">
-                <Bell className="h-10 w-10 text-muted-foreground/60" />
-              </div>
-              <h3 className="text-xl font-black text-foreground mb-2">Zero alerts</h3>
-              <p className="text-slate-400 font-medium">Your system is running smoothly with no new notifications.</p>
-            </div>
+            <EmptyState icon={Bell} title="No notifications" description="You're all caught up." />
           ) : (
-            notifications.map((notification) => (
-              <div
-                key={notification._id}
-                className={`group bg-card rounded-[2rem] p-6 border transition-all duration-300 ${
-                  !notification.isRead 
-                    ? 'border-blue-600/20 dark:border-blue-500/20 shadow-xl shadow-blue-600/[0.03] bg-blue-50/30 dark:bg-blue-900/10' 
-                    : 'border-border shadow-sm opacity-80'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-6">
-                    <div className={cn(
-                      "p-4 rounded-2xl shadow-sm border border-transparent transition-transform group-hover:scale-110",
-                      notification.type === 'warning' ? "bg-orange-50 dark:bg-orange-500/10" : 
-                      notification.type === 'error' ? "bg-rose-50 dark:bg-rose-500/10" : 
-                      notification.type === 'success' ? "bg-emerald-50 dark:bg-emerald-500/10" : 
-                      "bg-blue-50 dark:bg-blue-500/10"
-                    )}>
-                      {getIcon(notification.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="font-black text-foreground tracking-tight text-lg">{notification.title}</h3>
-                        <span className={cn(
-                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
-                          getPriorityColor(notification.priority)
-                        )}>
-                          {notification.priority}
-                        </span>
+            notifications.map((notification) => {
+              const { icon: Icon, className } = TYPE_STYLES[notification.type] ?? TYPE_STYLES.info;
+              return (
+                <Card
+                  key={notification._id}
+                  className={cn(!notification.isRead && 'border-primary/30 bg-primary/[0.03]')}
+                >
+                  <CardContent className="flex items-start justify-between gap-4 p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md', className)}>
+                        <Icon className="h-5 w-5" />
                       </div>
-                      <p className="text-muted-foreground font-medium leading-relaxed mb-4">{notification.message}</p>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                          <Clock className="h-3.5 w-3.5 mr-1.5" />
-                          <span>{formatDate(notification.createdAt)}</span>
+                      <div className="flex-1">
+                        <div className="mb-1.5 flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-foreground">{notification.title}</h3>
+                          <Badge variant={PRIORITY_BADGE[notification.priority] ?? 'secondary'} className="capitalize">
+                            {notification.priority}
+                          </Badge>
                         </div>
-                        <div className="flex items-center text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                          <Tag className="h-3.5 w-3.5 mr-1.5" />
-                          <span>{notification.category.replace('_', ' ')}</span>
+                        <p className="mb-3 text-sm text-muted-foreground">{notification.message}</p>
+                        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{formatDate(notification.createdAt)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Tag className="h-3.5 w-3.5" />
+                            <span className="capitalize">{notification.category.replace('_', ' ')}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col items-center space-y-2">
-                    {!notification.isRead && (
-                      <button
-                        onClick={() => handleMarkAsRead(notification._id)}
-                        className="p-3 hover:bg-white dark:hover:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-all text-blue-600"
-                        title="Mark as read"
+                    <div className="flex flex-shrink-0 items-center gap-1">
+                      {!notification.isRead && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary"
+                          onClick={() => handleMarkAsRead(notification._id)}
+                          title="Mark as read"
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDelete(notification._id)}
+                        title="Delete"
                       >
-                        <Check className="h-5 w-5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(notification._id)}
-                      className="p-3 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all text-rose-500"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </div>
       </main>

@@ -3,7 +3,13 @@
 import { useEffect, useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getBranches, deleteBranch } from '@/lib/actions/branches';
-import { Plus, MapPin, Phone, Mail, Settings, Edit, Trash2, Globe } from 'lucide-react';
+import { Plus, MapPin, Phone, Mail, Edit, Trash2, Building2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { CardSkeleton } from '@/components/loading/CardSkeleton';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { BranchForm, type BranchRecord } from '@/components/dialogs/BranchForm';
 import { toast } from 'sonner';
 
@@ -68,121 +74,108 @@ export default function BranchesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Node Management" userRole="admin" />
 
-      <main className="p-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+      <main className="p-6 lg:p-8">
+        <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-xl font-black text-foreground uppercase tracking-tight">Regional Network</h2>
-            <p className="text-muted-foreground font-medium text-sm mt-1">Orchestrate multiple storefronts and supply nodes.</p>
+            <h2 className="text-lg font-semibold text-foreground">Regional Network</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Orchestrate multiple storefronts and supply nodes.</p>
           </div>
-          <button
-            onClick={handleCreate}
-            className="flex items-center space-x-2 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none hover:bg-blue-700 transition-all active:scale-95 uppercase tracking-widest text-sm"
-          >
-            <Plus className="h-5 w-5" />
-            <span>DEPLOY NEW NODE</span>
-          </button>
+          <Button className="w-full gap-2 sm:w-auto" onClick={handleCreate}>
+            <Plus className="h-4 w-4" />
+            Deploy New Node
+          </Button>
         </div>
 
-        {loading ? (
-          <div className="text-center py-24">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          </div>
-        ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {branches.map((branch: Branch) => (
-            <div key={branch._id} className="group bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-500">
-              <div className="p-8">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="h-14 w-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                    <Globe className="h-7 w-7" />
-                  </div>
-                  <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleEdit(branch)}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-all"
-                    >
-                      <Edit className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(branch)}
-                      disabled={deletingId === branch._id}
-                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-all disabled:opacity-50"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <h3 className="text-xl font-black text-foreground tracking-tight">{branch.name}</h3>
-                  <span className="inline-block px-3 py-1 bg-muted text-muted-foreground text-[10px] font-black uppercase tracking-widest rounded-lg mt-2 border border-border">
-                    Identifier: {branch.code}
-                  </span>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3 text-sm font-medium text-muted-foreground leading-relaxed">
-                    <MapPin className="h-5 w-5 text-muted-foreground/60 flex-shrink-0" />
-                    <span>{branch.address}</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-sm font-medium text-muted-foreground">
-                    <Phone className="h-5 w-5 text-muted-foreground/60 flex-shrink-0" />
-                    <span>{branch.phone}</span>
-                  </div>
-                  {branch.email && (
-                    <div className="flex items-center space-x-3 text-sm font-medium text-muted-foreground">
-                      <Mail className="h-5 w-5 text-muted-foreground/60 flex-shrink-0" />
-                      <span>{branch.email}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-border grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-muted/50 rounded-2xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-1">Fiscal Rate</p>
-                    <p className="text-lg font-black text-foreground">{branch.settings?.taxRate || 0}%</p>
-                  </div>
-                  <div className="text-center p-4 bg-muted/50 rounded-2xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-1">Currency</p>
-                    <p className="text-lg font-black text-foreground">{branch.settings?.currency || 'NGN'}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-8 py-5 bg-muted/50 border-t border-border flex justify-between items-center">
-                <span className={`flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] ${branch.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                  <span className={`h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${branch.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-                  <span>{branch.isActive ? 'Operational' : 'Offline'}</span>
-                </span>
-                <button
-                  onClick={() => handleEdit(branch)}
-                  className="flex items-center space-x-1.5 text-xs font-black text-blue-600 dark:text-blue-400 hover:text-blue-700 uppercase tracking-widest"
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>Configure Node</span>
-                </button>
-              </div>
+        <ErrorBoundary>
+          {loading ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <CardSkeleton key={i} />
+              ))}
             </div>
-          ))}
+          ) : branches.length === 0 ? (
+            <EmptyState
+              icon={Building2}
+              title="Isolated Environment"
+              description="No operational nodes detected in your regional network."
+              actionLabel="Initialize First Node"
+              onAction={handleCreate}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {branches.map((branch: Branch) => (
+                <Card key={branch._id}>
+                  <CardContent className="p-6">
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" onClick={() => handleEdit(branch)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDelete(branch)}
+                          disabled={deletingId === branch._id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
 
-          {branches.length === 0 && (
-            <div className="col-span-full py-24 text-center bg-card rounded-[3rem] border-2 border-dashed border-border">
-              <MapPin className="h-16 w-16 text-muted-foreground/40 mx-auto mb-6" />
-              <h3 className="text-xl font-black text-foreground uppercase tracking-tight">Isolated Environment</h3>
-              <p className="text-slate-400 font-medium mt-2">No operational nodes detected in your regional network.</p>
-              <button
-                onClick={handleCreate}
-                className="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none hover:bg-blue-700 uppercase tracking-widest text-sm"
-              >
-                Initialize First Node
-              </button>
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-foreground">{branch.name}</h3>
+                      <Badge variant="secondary" className="mt-1.5">Identifier: {branch.code}</Badge>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+                        <span>{branch.address}</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                        <Phone className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+                        <span>{branch.phone}</span>
+                      </div>
+                      {branch.email && (
+                        <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                          <Mail className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+                          <span>{branch.email}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-2 gap-3 border-t border-border pt-4">
+                      <div className="rounded-md bg-muted/50 p-3 text-center">
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal Rate</p>
+                        <p className="text-sm font-semibold text-foreground">{branch.settings?.taxRate || 0}%</p>
+                      </div>
+                      <div className="rounded-md bg-muted/50 p-3 text-center">
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Currency</p>
+                        <p className="text-sm font-semibold text-foreground">{branch.settings?.currency || 'NGN'}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                      <Badge variant={branch.isActive ? 'success' : 'secondary'}>
+                        {branch.isActive ? 'Operational' : 'Offline'}
+                      </Badge>
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => handleEdit(branch)}>
+                        Configure Node
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
-        </div>
-        )}
+        </ErrorBoundary>
       </main>
 
       <BranchForm

@@ -6,6 +6,10 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { Plus } from 'lucide-react';
 import { createCustomer } from '@/lib/actions/customers';
 import { toast } from 'sonner';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -34,128 +38,101 @@ export default function NewCustomerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Add New Customer" userRole="manager" />
-      
-      <main className="p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-card rounded-[2.5rem] shadow-lg border border-border p-10">
-            <form onSubmit={handleSubmit} className="space-y-10">
-              {/* Basic Information */}
-              <div>
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-1.5 bg-primary rounded-full"></div>
-                  <h3 className="text-xl font-black text-foreground tracking-tight uppercase">Customer Information</h3>
+
+      <main className="p-6 lg:p-8">
+        <div className="mx-auto max-w-4xl">
+          <Card>
+            <CardContent className="p-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="mb-4 text-base font-semibold text-foreground">Customer Information</h3>
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="cust-name">Full Name *</Label>
+                      <Input
+                        id="cust-name"
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cust-phone">Phone Number *</Label>
+                      <Input
+                        id="cust-phone"
+                        type="tel"
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="+234 800 123 4567"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 space-y-2">
+                    <Label htmlFor="cust-email">Email Address</Label>
+                    <Input
+                      id="cust-email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="john@example.com"
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                {/* Address */}
+                <div>
+                  <h3 className="mb-4 text-base font-semibold text-foreground">Address</h3>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-                      Full Name *
-                    </label>
-                    <input
+                    <Label htmlFor="cust-address">Street Address</Label>
+                    <Input
+                      id="cust-address"
                       type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="John Doe"
-                      className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="123 Main Street, Lagos"
                     />
                   </div>
+                </div>
+
+                {/* Loyalty */}
+                <div>
+                  <h3 className="mb-4 text-base font-semibold text-foreground">Loyalty Program</h3>
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+234 800 123 4567"
-                      className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
+                    <Label htmlFor="cust-loyalty">Initial Loyalty Points</Label>
+                    <Input
+                      id="cust-loyalty"
+                      type="number"
+                      min="0"
+                      value={formData.loyaltyPoints}
+                      onChange={(e) => setFormData({ ...formData, loyaltyPoints: parseInt(e.target.value) || 0 })}
                     />
+                    <p className="text-xs text-muted-foreground">Starting loyalty points for new customer</p>
                   </div>
                 </div>
-                <div className="mt-6 space-y-2">
-                  <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="john@example.com"
-                    className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
 
-              {/* Address */}
-              <div>
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-1.5 bg-emerald-500 rounded-full"></div>
-                  <h3 className="text-xl font-black text-foreground tracking-tight uppercase">Address</h3>
+                {/* Action Buttons */}
+                <div className="flex flex-col items-center justify-end gap-3 border-t border-border pt-6 sm:flex-row">
+                  <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => router.back()}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={loading} isLoading={loading} className="w-full gap-2 sm:w-auto">
+                    {!loading && (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        Save Customer
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-                    Street Address
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="123 Main Street, Lagos"
-                    className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
-
-              {/* Loyalty */}
-              <div>
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="h-8 w-1.5 bg-orange-500 rounded-full"></div>
-                  <h3 className="text-xl font-black text-foreground tracking-tight uppercase">Loyalty Program</h3>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-                    Initial Loyalty Points
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.loyaltyPoints}
-                    onChange={(e) => setFormData({ ...formData, loyaltyPoints: parseInt(e.target.value) || 0 })}
-                    className="w-full px-5 py-4 bg-secondary/50 border-none rounded-2xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-black outline-none"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Starting loyalty points for new customer</p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-10 border-t border-border flex flex-col md:flex-row items-center justify-end space-y-4 md:space-y-0 md:space-x-4">
-                <button
-                  type="button"
-                  onClick={() => router.back()}
-                  className="w-full md:w-auto px-10 py-4 text-muted-foreground font-black hover:text-foreground transition-colors uppercase tracking-widest text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full md:w-auto px-12 py-5 bg-primary text-primary-foreground rounded-[1.5rem] font-black shadow-xl shadow-primary/20 hover:bg-primary/90 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center space-x-3"
-                >
-                  {loading ? (
-                    <div className="h-6 w-6 border-4 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Plus className="h-6 w-6" />
-                      <span>SAVE CUSTOMER</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>

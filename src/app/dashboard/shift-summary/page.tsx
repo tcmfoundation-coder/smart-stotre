@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { DollarSign, ShoppingCart, Clock, TrendingDown, Loader2, Wallet, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { KPICard } from '@/components/ui/kpi-card';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 import { useCurrentShift, useShifts, useOpenShift, useCloseShift } from '@/hooks/useShifts';
 
@@ -37,35 +39,35 @@ export default function ShiftSummaryPage() {
 
   if (currentLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Shift Summary" userRole="cashier" />
 
-      <main className="py-6 space-y-6">
+      <main className="space-y-6 p-6 lg:p-8">
         {!currentShift ? (
           <Card>
             <CardContent className="p-8 text-center">
-              <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-foreground mb-2">No Open Shift</h2>
-              <p className="text-muted-foreground mb-6">Open a shift to start tracking sales and cash for this session.</p>
-              <div className="max-w-xs mx-auto space-y-3">
-                <input
+              <Wallet className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+              <h2 className="mb-2 text-xl font-semibold text-foreground">No Open Shift</h2>
+              <p className="mb-6 text-muted-foreground">Open a shift to start tracking sales and cash for this session.</p>
+              <div className="mx-auto max-w-xs space-y-3">
+                <Input
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="Opening cash balance"
                   value={openingCash}
                   onChange={(e) => setOpeningCash(e.target.value)}
-                  className="w-full px-4 py-3 bg-secondary/50 border-none rounded-xl text-center font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/10"
+                  className="text-center"
                 />
-                <Button className="w-full" onClick={handleOpen} disabled={openShift.isPending || !openingCash}>
-                  {openShift.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Open Shift'}
+                <Button className="w-full" onClick={handleOpen} disabled={openShift.isPending || !openingCash} isLoading={openShift.isPending}>
+                  {!openShift.isPending && 'Open Shift'}
                 </Button>
               </div>
             </CardContent>
@@ -73,115 +75,72 @@ export default function ShiftSummaryPage() {
         ) : (
           <>
             {/* Shift Header */}
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-2xl font-bold text-foreground">Open Shift</h2>
-                      <p className="text-muted-foreground mt-1">Opened by: {currentShift.openedByName}</p>
-                    </div>
-                    <Button variant="outline" onClick={() => setShowCloseForm((v) => !v)}>
-                      Close Shift
-                    </Button>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Open Shift</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Opened by: {currentShift.openedByName}</p>
                   </div>
+                  <Button variant="outline" onClick={() => setShowCloseForm((v) => !v)}>
+                    Close Shift
+                  </Button>
+                </div>
 
-                  <div className="flex items-center gap-6 mt-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span>Opened {new Date(currentShift.openedAt).toLocaleString()}</span>
+                <div className="mt-4 flex items-center gap-6 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    <span>Opened {new Date(currentShift.openedAt).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {showCloseForm && (
+                  <div className="mt-6 max-w-sm border-t border-border pt-6">
+                    <p className="mb-2 text-sm text-muted-foreground">
+                      Expected cash in drawer: <span className="font-semibold text-foreground">{formatCurrency(currentShift.expectedCash ?? 0)}</span>
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Actual counted cash"
+                        value={actualCash}
+                        onChange={(e) => setActualCash(e.target.value)}
+                      />
+                      <Button onClick={handleClose} disabled={closeShift.isPending || !actualCash} isLoading={closeShift.isPending}>
+                        {!closeShift.isPending && 'Confirm'}
+                      </Button>
                     </div>
                   </div>
-
-                  {showCloseForm && (
-                    <div className="mt-6 pt-6 border-t border-border max-w-sm">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Expected cash in drawer: <span className="font-bold text-foreground">{formatCurrency(currentShift.expectedCash ?? 0)}</span>
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Actual counted cash"
-                          value={actualCash}
-                          onChange={(e) => setActualCash(e.target.value)}
-                          className="flex-1 px-4 py-3 bg-secondary/50 border-none rounded-xl font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/10"
-                        />
-                        <Button onClick={handleClose} disabled={closeShift.isPending || !actualCash}>
-                          {closeShift.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Sales This Shift</p>
-                    <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(currentShift.salesTotal)}</p>
-                  </div>
-                  <div className="h-12 w-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-                    <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Transactions</p>
-                    <p className="text-2xl font-bold text-foreground mt-2">{currentShift.salesCount}</p>
-                  </div>
-                  <div className="h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                    <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Refunds</p>
-                    <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(currentShift.refundsTotal)}</p>
-                  </div>
-                  <div className="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
-                    <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Opening Cash</p>
-                    <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(currentShift.openingCashBalance)}</p>
-                  </div>
-                  <div className="h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                    <Wallet className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <KPICard title="Sales This Shift" value={formatCurrency(currentShift.salesTotal)} change="This shift" icon={DollarSign} variant="success" />
+              <KPICard title="Transactions" value={currentShift.salesCount} change="This shift" icon={ShoppingCart} variant="info" />
+              <KPICard title="Refunds" value={formatCurrency(currentShift.refundsTotal)} change="This shift" icon={TrendingDown} variant="destructive" />
+              <KPICard title="Opening Cash" value={formatCurrency(currentShift.openingCashBalance)} change="Session start" icon={Wallet} variant="primary" />
             </div>
 
             {/* Payment Methods */}
             <Card>
               <CardContent className="p-6">
-                <h3 className="text-lg font-bold text-foreground mb-4">Payment Methods This Shift</h3>
+                <h3 className="mb-4 text-base font-semibold text-foreground">Payment Methods This Shift</h3>
                 <div className="space-y-4">
                   {(['cash', 'card', 'transfer', 'paystack'] as const).map((method) => {
                     const amount = currentShift.paymentMethodTotals[method];
                     const pct = currentShift.salesTotal > 0 ? (amount / currentShift.salesTotal) * 100 : 0;
                     return (
                       <div key={method}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-foreground capitalize">{method}</span>
-                          <span className="text-sm font-bold text-foreground">{formatCurrency(amount)}</span>
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm font-medium capitalize text-foreground">{method}</span>
+                          <span className="text-sm font-semibold text-foreground">{formatCurrency(amount)}</span>
                         </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max(pct, 0)}%` }} />
+                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(pct, 0)}%` }} />
                         </div>
                       </div>
                     );
@@ -195,39 +154,36 @@ export default function ShiftSummaryPage() {
         {/* Shift History */}
         <Card>
           <CardContent className="p-6">
-            <h3 className="text-lg font-bold text-foreground mb-4">Recent Closed Shifts</h3>
+            <h3 className="mb-4 text-base font-semibold text-foreground">Recent Closed Shifts</h3>
             {historyLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : (pastShifts ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No closed shifts yet</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">No closed shifts yet</p>
             ) : (
               <div className="space-y-3">
-                {(pastShifts ?? []).map((shift) => (
-                  <div key={shift.id} className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl">
-                    <div>
-                      <p className="font-medium text-foreground text-sm">{shift.openedByName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(shift.openedAt).toLocaleString()} - {shift.closedAt && new Date(shift.closedAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-foreground text-sm">{formatCurrency(shift.salesTotal)}</p>
-                      <div className="flex items-center gap-1 text-xs justify-end">
-                        {Math.abs(shift.cashVariance ?? 0) < 0.01 ? (
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                        ) : (
-                          <AlertTriangle className="h-3 w-3 text-amber-600" />
-                        )}
-                        <span className={Math.abs(shift.cashVariance ?? 0) < 0.01 ? 'text-emerald-600' : 'text-amber-600'}>
+                {(pastShifts ?? []).map((shift) => {
+                  const balanced = Math.abs(shift.cashVariance ?? 0) < 0.01;
+                  return (
+                    <div key={shift.id} className="flex items-center justify-between rounded-md border border-border p-4">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{shift.openedByName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(shift.openedAt).toLocaleString()} - {shift.closedAt && new Date(shift.closedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-foreground">{formatCurrency(shift.salesTotal)}</p>
+                        <Badge variant={balanced ? 'success' : 'warning'} className="mt-1 gap-1">
+                          {balanced ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
                           {(shift.cashVariance ?? 0) >= 0 ? '+' : ''}
-                          {formatCurrency(shift.cashVariance ?? 0)} variance
-                        </span>
+                          {formatCurrency(shift.cashVariance ?? 0)}
+                        </Badge>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

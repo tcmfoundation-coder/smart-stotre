@@ -3,16 +3,21 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { 
-  Scan, 
-  Search, 
-  AlertCircle, 
-  Clock, 
-  Check, 
-  ShoppingCart, 
+import {
+  Scan,
+  Search,
+  AlertCircle,
+  Clock,
+  Check,
+  ShoppingCart,
   HelpCircle,
-  Eye
+  Eye,
+  Loader2,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency, cn } from '@/lib/utils';
 
 // Import BarcodeScanner dynamically to prevent Next.js SSR document/window reference errors
@@ -85,7 +90,7 @@ export default function BarcodeScannerPage() {
     setError(null);
     setProduct(null);
     setAddedToCart(false);
-    
+
     try {
       const response = await fetch(`/api/pos/barcode/${barcode}`);
       const result = await response.json();
@@ -128,12 +133,12 @@ export default function BarcodeScannerPage() {
     try {
       const currentCartRaw = localStorage.getItem('smartmart-cart');
       let cart: CartItem[] = [];
-      
+
       if (currentCartRaw) {
         cart = JSON.parse(currentCartRaw);
       }
 
-      const existingItemIndex = cart.findIndex(item => item.productId === product._id);
+      const existingItemIndex = cart.findIndex((item) => item.productId === product._id);
 
       if (existingItemIndex > -1) {
         cart[existingItemIndex].quantity += 1;
@@ -145,7 +150,7 @@ export default function BarcodeScannerPage() {
           sku: product.sku,
           price: product.sellingPrice,
           quantity: 1,
-          total: product.sellingPrice
+          total: product.sellingPrice,
         });
       }
 
@@ -158,22 +163,21 @@ export default function BarcodeScannerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Optical Scanner" userRole="cashier" />
-      
-      <main className="p-8">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
+      <main className="p-6 lg:p-8">
+        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Main Scanner Pane (Left Column) */}
-          <div className="lg:col-span-2 space-y-8">
-            <div className="bg-card rounded-[3rem] shadow-[0_20px_50px_rgba(8,112,184,0.08)] border border-border overflow-hidden">
-              <div className="p-10 text-center">
+          <div className="space-y-6 lg:col-span-2">
+            <Card className="overflow-hidden">
+              <div className="p-8 text-center">
                 {scanning ? (
                   /* Live Camera Feed */
-                  <div className="mb-8 overflow-hidden rounded-[2rem] border border-border">
+                  <div className="mb-6 overflow-hidden rounded-md border border-border">
                     <BarcodeScanner
                       onScanSuccess={handleScanSuccess}
-                      onScanFailure={(err) => {
+                      onScanFailure={() => {
                         setError('Camera initialization failed. Please verify browser permissions.');
                         setScanning(false);
                       }}
@@ -183,239 +187,213 @@ export default function BarcodeScannerPage() {
                   </div>
                 ) : (
                   /* Start Scanning Prompt Layout */
-                  <div className="py-8">
-                    <div className="w-28 h-28 bg-muted/80 text-muted-foreground rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 border border-border shadow-inner">
-                      <Scan className="h-12 w-12" />
+                  <div className="py-6">
+                    <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <Scan className="h-9 w-9" />
                     </div>
-                    <h2 className="text-2xl font-black text-foreground uppercase tracking-tight">
-                      Scanner Offline
-                    </h2>
-                    <p className="text-muted-foreground text-sm font-semibold mt-2 mb-8 max-w-xs mx-auto">
+                    <h2 className="text-lg font-semibold text-foreground">Scanner Offline</h2>
+                    <p className="mx-auto mb-6 mt-2 max-w-xs text-sm text-muted-foreground">
                       Initiate the device camera to read product optical barcodes.
                     </p>
                   </div>
                 )}
-                
-                <div className="flex gap-4">
-                  <button
+
+                <div className="flex gap-3">
+                  <Button
+                    className="flex-1 gap-2"
+                    variant={scanning ? 'outline' : 'default'}
                     onClick={() => {
                       setScanning(!scanning);
                       setError(null);
                       setProduct(null);
                     }}
-                    className={cn(
-                      "flex-1 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl active:scale-95",
-                      scanning 
-                        ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 hover:bg-rose-100/50 shadow-none' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 dark:shadow-none'
-                    )}
                   >
                     {scanning ? 'Stop Scanning' : 'Open Camera'}
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setShowManualInput(!showManualInput);
                       setError(null);
                       setProduct(null);
                       setScanning(false);
                     }}
-                    className="px-6 py-5 bg-muted border border-border rounded-2xl text-muted-foreground font-black text-sm uppercase tracking-widest hover:bg-slate-100 transition-colors active:scale-95"
                   >
                     Manual Override
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Manual Override Input */}
                 {showManualInput && (
-                  <form onSubmit={handleManualSearch} className="mt-8 pt-8 border-t border-border flex items-center space-x-3 animate-in slide-in-from-top-3 duration-300">
+                  <form onSubmit={handleManualSearch} className="mt-6 flex items-center gap-3 border-t border-border pt-6">
                     <div className="relative flex-1">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <input
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
                         type="text"
                         value={manualCode}
                         onChange={(e) => setManualCode(e.target.value)}
                         placeholder="Enter 13-digit barcode..."
-                        className="w-full pl-12 pr-4 py-4 bg-muted border-none rounded-xl focus:ring-2 focus:ring-blue-600/15 text-sm font-semibold outline-none text-foreground"
+                        className="pl-9"
                         required
                         autoFocus
                       />
                     </div>
-                    <button type="submit" className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
-                      Search
-                    </button>
+                    <Button type="submit">Search</Button>
                   </form>
                 )}
               </div>
 
               {/* Status Alert Panels */}
               {loading && (
-                <div className="bg-blue-50/50 dark:bg-blue-950/20 px-8 py-6 border-t border-border text-center space-y-2">
-                  <div className="h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">Searching inventory database...</p>
+                <div className="flex items-center justify-center gap-2 border-t border-border bg-info/5 px-8 py-5 text-sm text-info">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Searching inventory database...
                 </div>
               )}
 
               {error && (
-                <div className="bg-rose-50/50 dark:bg-rose-950/20 px-8 py-6 border-t border-border flex items-center space-x-4">
-                  <div className="p-3 bg-rose-50 dark:bg-rose-500/10 rounded-xl text-rose-500">
+                <div className="flex items-center gap-4 border-t border-border bg-destructive/5 px-8 py-5">
+                  <div className="rounded-md bg-destructive/10 p-2.5 text-destructive">
                     <AlertCircle className="h-5 w-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider">Search Failed</h4>
-                    <p className="text-xs font-semibold text-muted-foreground mt-0.5">{error}</p>
+                    <h4 className="text-sm font-semibold text-destructive">Search Failed</h4>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{error}</p>
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
 
             {/* Product Card Details */}
             {product && (
-              <div className="bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-400">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="px-3 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-500/20">
-                      {typeof product.categoryId === 'object' ? product.categoryId.name : 'Supermarket Product'}
-                    </span>
-                    <h3 className="text-xl font-black text-foreground mt-2 tracking-tight">
-                      {product.name}
-                    </h3>
+              <Card>
+                <CardContent className="space-y-5 p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <Badge variant="info">
+                        {typeof product.categoryId === 'object' ? product.categoryId.name : 'Supermarket Product'}
+                      </Badge>
+                      <h3 className="mt-2 text-lg font-semibold text-foreground">{product.name}</h3>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Selling Price</p>
+                      <p className="mt-1 text-xl font-semibold text-primary">{formatCurrency(product.sellingPrice)}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Selling Price</p>
-                    <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
-                      {formatCurrency(product.sellingPrice)}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-border">
-                  <div className="bg-muted/40 p-4 rounded-2xl">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">SKU Code</p>
-                    <p className="text-xs font-black text-foreground mt-1 uppercase tracking-tight">{product.sku}</p>
+                  <div className="grid grid-cols-2 gap-3 border-t border-border pt-5 md:grid-cols-4">
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">SKU Code</p>
+                      <p className="mt-1 text-xs font-semibold uppercase text-foreground">{product.sku}</p>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Barcode</p>
+                      <p className="mt-1 text-xs font-semibold text-foreground">{product.barcode}</p>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Stock Level</p>
+                      <p className={cn('mt-1 text-xs font-semibold', product.stockQuantity <= product.minStockLevel ? 'text-warning' : 'text-foreground')}>
+                        {product.stockQuantity} {product.unit || 'units'}
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">Margin (%)</p>
+                      <p className="mt-1 text-xs font-semibold text-success">
+                        {product.buyingPrice > 0
+                          ? `+${Math.round(((product.sellingPrice - product.buyingPrice) / product.buyingPrice) * 100)}%`
+                          : 'N/A'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-muted/40 p-4 rounded-2xl">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Barcode</p>
-                    <p className="text-xs font-black text-foreground mt-1 tracking-tight">{product.barcode}</p>
-                  </div>
-                  <div className="bg-muted/40 p-4 rounded-2xl">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stock Level</p>
-                    <p className={cn(
-                      "text-xs font-black mt-1",
-                      product.stockQuantity <= product.minStockLevel ? 'text-amber-500' : 'text-foreground'
-                    )}>
-                      {product.stockQuantity} {product.unit || 'units'}
-                    </p>
-                  </div>
-                  <div className="bg-muted/40 p-4 rounded-2xl">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Margin (%)</p>
-                    <p className="text-xs font-black text-emerald-500 mt-1">
-                      {product.buyingPrice > 0
-                        ? `+${Math.round(((product.sellingPrice - product.buyingPrice) / product.buyingPrice) * 100)}%`
-                        : 'N/A'}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="pt-6 border-t border-border flex gap-4">
-                  <button
-                    onClick={handleAddToCart}
-                    className={cn(
-                      "flex-1 py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center space-x-2 transition-all active:scale-95 shadow-md",
-                      addedToCart 
-                        ? 'bg-emerald-500 text-white shadow-emerald-100' 
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-100 dark:shadow-none'
-                    )}
-                  >
-                    {addedToCart ? (
-                      <>
-                        <Check className="h-5 w-5" />
-                        <span>Added to Cart</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart className="h-5 w-5" />
-                        <span>Add to POS Cart</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setProduct(null);
-                      setScanning(true);
-                    }}
-                    className="px-6 py-4 bg-muted text-muted-foreground font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-muted transition-colors active:scale-95"
-                  >
-                    Scan Next
-                  </button>
-                </div>
-              </div>
+                  <div className="flex gap-3 border-t border-border pt-5">
+                    <Button
+                      className={cn('flex-1 gap-2', addedToCart && 'bg-success text-success-foreground hover:bg-success')}
+                      onClick={handleAddToCart}
+                    >
+                      {addedToCart ? (
+                        <>
+                          <Check className="h-4 w-4" />
+                          Added to Cart
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart className="h-4 w-4" />
+                          Add to POS Cart
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setProduct(null);
+                        setScanning(true);
+                      }}
+                    >
+                      Scan Next
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
 
           {/* Session History Sidebar (Right Column) */}
-          <div className="space-y-6">
-            <div className="bg-card rounded-[2rem] border border-border p-8 shadow-sm flex flex-col h-full min-h-[400px]">
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-slate-400" />
-                  <h3 className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em]">Session History</h3>
-                </div>
-                {scanHistory.length > 0 && (
-                  <button 
-                    onClick={clearHistory}
-                    className="text-[10px] font-black text-rose-500 uppercase tracking-wider hover:underline"
-                  >
-                    Clear Log
-                  </button>
-                )}
-              </div>
-
-              <div className="space-y-4 flex-1 overflow-y-auto max-h-[450px] pr-2 custom-scrollbar">
-                {scanHistory.length > 0 ? (
-                  scanHistory.map((item, idx) => (
-                    <div 
-                      key={idx} 
-                      className={cn(
-                        "p-4 rounded-xl border flex items-center justify-between transition-colors",
-                        item.name === 'Product Not Found'
-                          ? 'bg-rose-50/20 dark:bg-rose-500/5 border-rose-100/50 dark:border-rose-950/20'
-                          : 'bg-muted/20 border-border hover:bg-muted/50'
-                      )}
-                    >
-                      <div className="flex-1 pr-2">
-                        <p className={cn(
-                          "text-xs font-bold truncate leading-snug",
-                          item.name === 'Product Not Found' ? 'text-rose-500' : 'text-foreground'
-                        )}>
-                          {item.name}
-                        </p>
-                        <p className="text-[9px] font-bold text-slate-400 mt-1 tracking-wider">CODE: {item.barcode}</p>
-                      </div>
-                      <div className="flex flex-col items-end space-y-1">
-                        <span className="text-[8px] font-black text-muted-foreground bg-card border border-border px-2 py-0.5 rounded uppercase">
-                          {item.time}
-                        </span>
-                        {item.name !== 'Product Not Found' && (
-                          <button
-                            onClick={() => lookupBarcode(item.barcode)}
-                            className="p-1 hover:bg-blue-100/50 dark:hover:bg-blue-900/30 rounded text-blue-600"
-                            title="Re-open product details"
-                          >
-                            <Eye className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-20 border border-dashed border-border rounded-2xl flex flex-col items-center justify-center">
-                    <HelpCircle className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">No Recent Scans</p>
+          <div>
+            <Card className="flex h-full min-h-[400px] flex-col">
+              <CardContent className="flex flex-1 flex-col p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Session History</h3>
                   </div>
-                )}
-              </div>
-            </div>
+                  {scanHistory.length > 0 && (
+                    <button onClick={clearHistory} className="text-xs font-medium text-destructive hover:underline">
+                      Clear Log
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-[450px] flex-1 space-y-3 overflow-y-auto">
+                  {scanHistory.length > 0 ? (
+                    scanHistory.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={cn(
+                          'flex items-center justify-between rounded-md border p-3',
+                          item.name === 'Product Not Found' ? 'border-destructive/20 bg-destructive/5' : 'border-border hover:bg-accent'
+                        )}
+                      >
+                        <div className="flex-1 pr-2">
+                          <p className={cn('truncate text-xs font-medium', item.name === 'Product Not Found' ? 'text-destructive' : 'text-foreground')}>
+                            {item.name}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">Code: {item.barcode}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground">{item.time}</span>
+                          {item.name !== 'Product Not Found' && (
+                            <button
+                              onClick={() => lookupBarcode(item.barcode)}
+                              className="rounded p-1 text-primary hover:bg-primary/10"
+                              title="Re-open product details"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border py-16">
+                      <HelpCircle className="mb-3 h-9 w-9 text-muted-foreground/40" />
+                      <p className="text-xs font-medium text-muted-foreground">No Recent Scans</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>

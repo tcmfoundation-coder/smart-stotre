@@ -2,10 +2,22 @@
 
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { ArrowLeftRight, Search, Receipt, Calendar, User, Package, DollarSign, Loader2, X } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowLeftRight, Search, Receipt, Calendar, User, Package, DollarSign, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -114,27 +126,25 @@ export default function ReturnsPage() {
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Returns & Refunds" userRole="cashier" />
 
-      <main className="py-6">
-        <div className="mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search returns by number, sale, or customer..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <Button className="bg-primary text-primary-foreground" onClick={() => setIsNewReturnOpen(true)}>
-              <ArrowLeftRight className="h-4 w-4 mr-2" />
-              New Return
-            </Button>
+      <main className="p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search returns by number, sale, or customer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-11 pl-9"
+            />
           </div>
+          <Button className="w-full gap-2 sm:w-auto" onClick={() => setIsNewReturnOpen(true)}>
+            <ArrowLeftRight className="h-4 w-4" />
+            New Return
+          </Button>
         </div>
 
         {isLoading ? (
@@ -142,42 +152,35 @@ export default function ReturnsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
-          <div className="text-center py-16">
-            <p className="text-red-500 mb-4">Failed to load returns</p>
-            <Button onClick={() => refetch()}>Retry</Button>
-          </div>
+          <ErrorState description="Failed to load returns" onRetry={() => refetch()} />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Returns List */}
-            <div className="lg:col-span-2 space-y-4">
-              {(returns ?? []).map((returnItem, index) => (
-                <motion.div
-                  key={returnItem.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
+            <div className="space-y-4 lg:col-span-2">
+              {(returns ?? []).length === 0 ? (
+                <EmptyState icon={ArrowLeftRight} title="No returns found" description="Processed returns will appear here" />
+              ) : (
+                (returns ?? []).map((returnItem) => (
                   <Card
-                    className={`cursor-pointer transition-all hover:shadow-lg ${
+                    key={returnItem.id}
+                    className={`cursor-pointer transition-shadow hover:shadow-md ${
                       selectedReturn?.id === returnItem.id ? 'ring-2 ring-primary' : ''
                     }`}
                     onClick={() => setSelectedReturn(returnItem)}
                   >
                     <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
+                      <div className="mb-4 flex items-start justify-between">
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="mb-2 flex items-center gap-2">
                             <Receipt className="h-4 w-4 text-primary" />
-                            <span className="font-bold text-foreground">{returnItem.returnNumber}</span>
+                            <span className="font-semibold text-foreground">{returnItem.returnNumber}</span>
                           </div>
                           <p className="text-sm text-muted-foreground">Sale: {returnItem.saleNumber}</p>
                         </div>
-                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                          COMPLETED
-                        </span>
+                        <Badge variant="success">Completed</Badge>
                       </div>
 
-                      <div className="space-y-2 mb-4">
+                      <div className="mb-4 space-y-2">
                         <div className="flex items-center gap-2 text-sm">
                           <User className="h-4 w-4 text-muted-foreground" />
                           <span className="text-foreground">{returnItem.customerName || 'Walk-in Customer'}</span>
@@ -188,7 +191,7 @@ export default function ReturnsPage() {
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <DollarSign className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-foreground font-bold">{formatCurrency(returnItem.totalRefund)}</span>
+                          <span className="font-semibold text-foreground">{formatCurrency(returnItem.totalRefund)}</span>
                         </div>
                       </div>
 
@@ -201,14 +204,7 @@ export default function ReturnsPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
-              ))}
-
-              {(returns ?? []).length === 0 && (
-                <div className="text-center py-16">
-                  <ArrowLeftRight className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No returns found</p>
-                </div>
+                ))
               )}
             </div>
 
@@ -217,35 +213,35 @@ export default function ReturnsPage() {
               {selectedReturn ? (
                 <Card>
                   <CardContent className="p-6">
-                    <h3 className="text-lg font-bold text-foreground mb-4">Return Details</h3>
+                    <h3 className="mb-4 text-base font-semibold text-foreground">Return Details</h3>
 
                     <div className="space-y-4">
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Return Number</p>
+                        <p className="mb-1 text-xs text-muted-foreground">Return Number</p>
                         <p className="font-semibold text-foreground">{selectedReturn.returnNumber}</p>
                       </div>
 
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Original Sale</p>
+                        <p className="mb-1 text-xs text-muted-foreground">Original Sale</p>
                         <p className="font-semibold text-foreground">{selectedReturn.saleNumber}</p>
                       </div>
 
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Customer</p>
+                        <p className="mb-1 text-xs text-muted-foreground">Customer</p>
                         <p className="font-semibold text-foreground">{selectedReturn.customerName || 'Walk-in Customer'}</p>
                       </div>
 
                       <div>
-                        <p className="text-xs text-muted-foreground mb-2">Items Returned</p>
+                        <p className="mb-2 text-xs text-muted-foreground">Items Returned</p>
                         <div className="space-y-2">
                           {selectedReturn.items.map((item, idx) => (
-                            <div key={idx} className="bg-secondary/50 rounded-lg p-3">
-                              <p className="font-medium text-foreground text-sm">{item.productName}</p>
-                              <div className="flex items-center justify-between mt-1">
+                            <div key={idx} className="rounded-md border border-border p-3">
+                              <p className="text-sm font-medium text-foreground">{item.productName}</p>
+                              <div className="mt-1 flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
                                 <span className="text-xs text-muted-foreground">{item.reason}</span>
                               </div>
-                              <div className="flex items-center justify-between mt-1">
+                              <div className="mt-1 flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground">
                                   {item.restocked ? 'Restocked' : 'Not restocked'}
                                 </span>
@@ -256,26 +252,21 @@ export default function ReturnsPage() {
                         </div>
                       </div>
 
-                      <div className="pt-4 border-t border-border">
-                        <div className="flex items-center justify-between mb-2">
+                      <div className="border-t border-border pt-4">
+                        <div className="mb-2 flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Total Refund</span>
-                          <span className="text-lg font-bold text-foreground">{formatCurrency(selectedReturn.totalRefund)}</span>
+                          <span className="text-lg font-semibold text-foreground">{formatCurrency(selectedReturn.totalRefund)}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Refund Method</span>
-                          <span className="font-medium text-foreground capitalize">{selectedReturn.refundMethod}</span>
+                          <span className="font-medium capitalize text-foreground">{selectedReturn.refundMethod}</span>
                         </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ) : (
-                <Card>
-                  <CardContent className="p-6 text-center">
-                    <ArrowLeftRight className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Select a return to view details</p>
-                  </CardContent>
-                </Card>
+                <EmptyState icon={ArrowLeftRight} title="No return selected" description="Select a return to view details" />
               )}
             </div>
           </div>
@@ -283,140 +274,133 @@ export default function ReturnsPage() {
       </main>
 
       {/* New Return flow */}
-      {isNewReturnOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-3xl shadow-2xl border border-border max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-foreground uppercase">New Return</h3>
-              <button onClick={closeNewReturn} className="p-2 hover:bg-secondary rounded-lg transition-colors">
-                <X className="h-5 w-5 text-muted-foreground" />
-              </button>
+      <Dialog open={isNewReturnOpen} onOpenChange={(open) => !open && closeNewReturn()}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Return</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Enter sale number (e.g. SALE-1234567890)"
+                value={saleNumberInput}
+                onChange={(e) => setSaleNumberInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+              />
+              <Button onClick={handleLookup} disabled={lookupLoading || !saleNumberInput.trim()} isLoading={lookupLoading}>
+                {!lookupLoading && 'Look Up'}
+              </Button>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter sale number (e.g. SALE-1234567890)"
-                  value={saleNumberInput}
-                  onChange={(e) => setSaleNumberInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
-                  className="flex-1 px-4 py-3 bg-secondary/50 border-none rounded-xl focus:ring-2 focus:ring-ring/10 focus:bg-background transition-all text-foreground font-semibold outline-none"
-                />
-                <Button onClick={handleLookup} disabled={lookupLoading || !saleNumberInput.trim()}>
-                  {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Look Up'}
-                </Button>
-              </div>
-
-              {lookupResult && (
-                <>
-                  <div className="bg-secondary/30 rounded-xl p-4 text-sm">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-muted-foreground">Customer</span>
-                      <span className="font-semibold text-foreground">{lookupResult.customerName || 'Walk-in Customer'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Refundable remaining on this sale</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(lookupResult.totalRefundable)}</span>
-                    </div>
+            {lookupResult && (
+              <>
+                <div className="rounded-md border border-border p-4 text-sm">
+                  <div className="mb-1 flex justify-between">
+                    <span className="text-muted-foreground">Customer</span>
+                    <span className="font-semibold text-foreground">{lookupResult.customerName || 'Walk-in Customer'}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Refundable remaining on this sale</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(lookupResult.totalRefundable)}</span>
+                  </div>
+                </div>
 
-                  {draftLines.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">
-                      Every item on this sale has already been fully returned.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {draftLines.map((line) => (
-                        <div key={line.productId} className="border border-border rounded-xl p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-semibold text-foreground text-sm">{line.productName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatCurrency(line.unitRefundPrice)}/unit · up to {line.quantityReturnable} returnable
-                              </p>
-                            </div>
-                            <input
-                              type="number"
-                              min={0}
-                              max={line.quantityReturnable}
-                              value={line.quantity}
-                              onChange={(e) => {
-                                const raw = parseInt(e.target.value, 10) || 0;
-                                const qty = Math.max(0, Math.min(raw, line.quantityReturnable));
-                                updateLine(line.productId, { quantity: qty });
-                              }}
-                              className="w-20 px-3 py-2 bg-secondary/50 border-none rounded-lg text-center font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/10"
-                            />
+                {draftLines.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    Every item on this sale has already been fully returned.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {draftLines.map((line) => (
+                      <div key={line.productId} className="space-y-3 rounded-md border border-border p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{line.productName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatCurrency(line.unitRefundPrice)}/unit · up to {line.quantityReturnable} returnable
+                            </p>
                           </div>
-                          {line.quantity > 0 && (
-                            <>
-                              <input
-                                type="text"
-                                placeholder="Reason (e.g. Damaged, Wrong item)"
-                                value={line.reason}
-                                onChange={(e) => updateLine(line.productId, { reason: e.target.value })}
-                                className="w-full px-3 py-2 bg-secondary/50 border-none rounded-lg text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/10"
-                              />
-                              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <input
-                                  type="checkbox"
-                                  checked={line.restock}
-                                  onChange={(e) => updateLine(line.productId, { restock: e.target.checked })}
-                                  className="rounded border-border"
-                                />
-                                Return to sellable stock
-                              </label>
-                            </>
-                          )}
+                          <Input
+                            type="number"
+                            min={0}
+                            max={line.quantityReturnable}
+                            value={line.quantity}
+                            onChange={(e) => {
+                              const raw = parseInt(e.target.value, 10) || 0;
+                              const qty = Math.max(0, Math.min(raw, line.quantityReturnable));
+                              updateLine(line.productId, { quantity: qty });
+                            }}
+                            className="w-20 text-center"
+                          />
                         </div>
-                      ))}
+                        {line.quantity > 0 && (
+                          <>
+                            <Input
+                              type="text"
+                              placeholder="Reason (e.g. Damaged, Wrong item)"
+                              value={line.reason}
+                              onChange={(e) => updateLine(line.productId, { reason: e.target.value })}
+                            />
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                checked={line.restock}
+                                onChange={(e) => updateLine(line.productId, { restock: e.target.checked })}
+                                className="h-4 w-4 rounded border-border accent-primary"
+                              />
+                              Return to sellable stock
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {draftLines.length > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="refund-method">Refund Method</Label>
+                      <Select value={refundMethod} onValueChange={(v) => setRefundMethod(v as typeof refundMethod)}>
+                        <SelectTrigger id="refund-method">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="card">Card</SelectItem>
+                          <SelectItem value="transfer">Transfer</SelectItem>
+                          <SelectItem value="paystack">Paystack</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  )}
 
-                  {draftLines.length > 0 && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1">
-                          Refund Method
-                        </label>
-                        <select
-                          value={refundMethod}
-                          onChange={(e) => setRefundMethod(e.target.value as typeof refundMethod)}
-                          className="w-full px-4 py-3 bg-secondary/50 border-none rounded-xl text-foreground font-semibold outline-none focus:ring-2 focus:ring-ring/10"
-                        >
-                          <option value="cash">Cash</option>
-                          <option value="card">Card</option>
-                          <option value="transfer">Transfer</option>
-                          <option value="paystack">Paystack</option>
-                        </select>
-                      </div>
+                    <div className="flex items-center justify-between border-t border-border pt-4">
+                      <span className="text-sm text-muted-foreground">Total Refund</span>
+                      <span className="text-lg font-semibold text-foreground">{formatCurrency(draftTotal)}</span>
+                    </div>
 
-                      <div className="flex items-center justify-between pt-4 border-t border-border">
-                        <span className="text-sm text-muted-foreground">Total Refund</span>
-                        <span className="text-xl font-bold text-foreground">{formatCurrency(draftTotal)}</span>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <Button variant="outline" className="flex-1" onClick={closeNewReturn}>
-                          Cancel
-                        </Button>
-                        <Button
-                          className="flex-1"
-                          onClick={handleSubmit}
-                          disabled={processReturn.isPending || activeLines.length === 0}
-                        >
-                          {processReturn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Process Return'}
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
+                    <div className="flex gap-3">
+                      <Button variant="outline" className="flex-1" onClick={closeNewReturn}>
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={handleSubmit}
+                        disabled={processReturn.isPending || activeLines.length === 0}
+                        isLoading={processReturn.isPending}
+                      >
+                        {!processReturn.isPending && 'Process Return'}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
