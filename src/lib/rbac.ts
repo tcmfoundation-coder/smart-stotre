@@ -245,7 +245,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       '/dashboard/products',
       '/dashboard/customers',
       '/dashboard/returns',
-      '/dashboard/receipt-history',
+      '/dashboard/receipts',
       '/dashboard/shift-summary',
       '/dashboard/notifications',
       '/dashboard/profile',
