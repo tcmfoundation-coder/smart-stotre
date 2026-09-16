@@ -1,9 +1,8 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { ErrorState } from '@/components/ui/error-state';
 
 interface Props {
   children: ReactNode;
@@ -43,18 +42,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <Card className="border-destructive/50">
-          <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-            <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              Something went wrong
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4 max-w-md">
-              {this.state.error?.message || 'An unexpected error occurred'}
-            </p>
-            <Button onClick={this.handleRetry} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
+          <CardContent className="p-2">
+            <ErrorState
+              description={this.state.error?.message || 'An unexpected error occurred'}
+              onRetry={this.handleRetry}
+            />
           </CardContent>
         </Card>
       );

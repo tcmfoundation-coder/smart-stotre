@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Menu, X, ChevronRight } from 'lucide-react';
+import { Menu, X, ChevronsLeft } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
 import { getNavigationByRole } from '@/config/navigation';
+import type { NavItem as NavItemType } from '@/config/navigation';
 import { UserRole } from '@/lib/rbac';
 
 interface DashboardSidebarProps {
@@ -28,65 +29,25 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
   }, []);
 
   const navigationGroups = getNavigationByRole(userRole);
+  const collapsed = isCollapsed && isLargeScreen;
 
-  const NavItem = ({ item }: { item: any }) => {
+  const NavItem = ({ item }: { item: NavItemType }) => {
     const isActive = pathname === item.href;
     return (
       <Link
         href={item.href}
         onClick={() => setIsOpen(false)}
         className={cn(
-          "group relative flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-300 mb-1",
+          'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
           isActive
-            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-            : "text-muted-foreground hover:bg-accent hover:text-primary",
-          isCollapsed && isLargeScreen && "justify-center px-3"
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          collapsed && 'justify-center px-2'
         )}
-        title={isCollapsed && isLargeScreen ? item.name : undefined}
+        title={collapsed ? item.name : undefined}
       >
-        <motion.div
-          whileHover={{ scale: 1.2, rotate: 5 }}
-          transition={{ duration: 0.2 }}
-          className={cn(isCollapsed && isLargeScreen ? "mr-0" : "mr-3")}
-        >
-          <item.icon className={cn(
-            "h-5 w-5 transition-transform duration-300",
-            isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"
-          )} />
-        </motion.div>
-        <motion.span 
-          className="flex-1 tracking-tight"
-          animate={{ 
-            opacity: isCollapsed && isLargeScreen ? 0 : 1,
-            width: isCollapsed && isLargeScreen ? 0 : 'auto'
-          }}
-          transition={{ duration: 0.3 }}
-          whileHover={{ x: isCollapsed && isLargeScreen ? 0 : 5 }}
-        >
-          {item.name}
-        </motion.span>
-        {isActive && !isCollapsed && (
-          <motion.div
-            layoutId="active-pill"
-            className="absolute left-0 w-1 h-6 bg-primary-foreground rounded-full ml-1"
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          />
-        )}
-        {!isCollapsed && (
-          <motion.div
-            className={cn(
-              "h-4 w-4 opacity-0 transition-all duration-300 transform translate-x-2",
-              isActive && "hidden"
-            )}
-            whileHover={{ 
-              opacity: 0.4, 
-              translateX: 0,
-              scale: 1.2
-            }}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </motion.div>
-        )}
+        <item.icon className={cn('h-4.5 w-4.5 shrink-0', !collapsed && 'mr-3')} />
+        {!collapsed && <span className="truncate">{item.name}</span>}
       </Link>
     );
   };
@@ -96,186 +57,98 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
       {/* Mobile Trigger */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-card border border-border rounded-xl shadow-xl active:scale-95 transition-transform"
+        className="fixed top-4 left-4 z-50 rounded-md border border-border bg-card p-2.5 shadow-sm lg:hidden"
+        aria-label={isOpen ? 'Close menu' : 'Open menu'}
       >
-        {isOpen ? <X className="h-6 w-6 text-muted-foreground" /> : <Menu className="h-6 w-6 text-muted-foreground" />}
+        {isOpen ? <X className="h-5 w-5 text-foreground" /> : <Menu className="h-5 w-5 text-foreground" />}
       </button>
 
       {/* Sidebar Overlay */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 z-40 bg-background/40 backdrop-blur-sm lg:hidden"
-          />
-        )}
-      </AnimatePresence>
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-40 bg-background/60 lg:hidden"
+        />
+      )}
 
       {/* Main Sidebar Container */}
-      <motion.aside
-        initial={{ x: -300, opacity: 0 }}
-        animate={{ 
-          x: isOpen ? 0 : (isLargeScreen ? 0 : -300), 
-          opacity: 1,
-          width: isCollapsed && isLargeScreen ? 80 : 288
-        }}
-        transition={{ duration: 0.4 }}
+      <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 bg-card border-r border-border lg:translate-x-0 overflow-hidden",
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          'fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-card transition-[width,transform] duration-200',
+          collapsed ? 'w-20' : 'w-72',
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
-        <div className="flex flex-col h-full p-6">
-          {/* Brand Identity */}
-          <motion.div 
-            className="flex items-center justify-between px-2 mb-10"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-          >
-            <div className="flex items-center">
-              <motion.div 
-                className="h-12 w-12 mr-3 flex-shrink-0"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <img src="/logo.svg" alt="SmartMart Logo" className="h-full w-full" />
-              </motion.div>
-              <motion.div
-                animate={{ 
-                  opacity: isCollapsed ? 0 : 1,
-                  width: isCollapsed ? 0 : 'auto'
-                }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                <h1 className="text-xl font-black text-foreground tracking-tighter uppercase leading-none whitespace-nowrap">SmartMart</h1>
-                <p className="text-[10px] font-black text-primary tracking-[0.3em] uppercase mt-0.5">Enterprise</p>
-              </motion.div>
+        <div className="flex h-full flex-col p-4">
+          {/* Brand */}
+          <div className="mb-6 flex items-center justify-between px-2">
+            <div className="flex min-w-0 items-center">
+              <Image src="/logo.svg" alt="" width={32} height={32} className="mr-2.5 h-8 w-8 shrink-0" />
+              {!collapsed && (
+                <span className="truncate text-lg font-semibold leading-none text-foreground">SmartMart</span>
+              )}
             </div>
-            
-            {/* Collapse Toggle */}
-            {isLargeScreen && (
-              <motion.button
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="p-2 rounded-lg hover:bg-accent transition-colors"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <ChevronRight 
-                  className={cn(
-                    "h-5 w-5 text-muted-foreground transition-transform duration-300",
-                    isCollapsed && "rotate-180"
-                  )}
-                />
-              </motion.button>
-            )}
-          </motion.div>
 
-          {/* Navigation Engine */}
-          <div className="flex-1 overflow-y-auto pr-2 -mr-2 custom-scrollbar space-y-6">
-            {navigationGroups.map((group: any, groupIndex: number) => (
-              <motion.div
-                key={group.title}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: groupIndex * 0.1 }}
+            {isLargeScreen && !collapsed && (
+              <button
+                onClick={() => setIsCollapsed(true)}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="Collapse sidebar"
               >
-                <motion.h3 
-                  className="px-4 mb-2 text-xs font-black text-muted-foreground uppercase tracking-widest overflow-hidden"
-                  animate={{ 
-                    opacity: isCollapsed && isLargeScreen ? 0 : 1,
-                    width: isCollapsed && isLargeScreen ? 0 : 'auto'
-                  }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {group.title}
-                </motion.h3>
-                <motion.div 
-                  className="space-y-1"
-                  initial="hidden"
-                  animate="visible"
-                  variants={{
-                    hidden: { opacity: 0 },
-                    visible: {
-                      opacity: 1,
-                      transition: {
-                        staggerChildren: 0.05
-                      }
-                    }
-                  }}
-                >
-                  {group.items.map((item: any, index: number) => (
-                    <motion.div
-                      key={item.name}
-                      variants={{
-                        hidden: { opacity: 0, x: -20 },
-                        visible: { opacity: 1, x: 0 }
-                      }}
-                      transition={{ duration: 0.3, delay: index * 0.03 }}
-                    >
-                      <NavItem item={item} />
-                    </motion.div>
-                  ))}
-                </motion.div>
-              </motion.div>
-            ))}
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
-          {/* User Control Node */}
-          <motion.div 
-            className="mt-6 pt-6 border-t border-border"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.5 }}
-          >
-            <motion.div 
-              className={cn(
-                "flex items-center p-3 bg-secondary/50 rounded-xl border border-transparent hover:border-border transition-all cursor-pointer group",
-                isCollapsed && isLargeScreen && "justify-center"
-              )}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+          {isLargeScreen && collapsed && (
+            <button
+              onClick={() => setIsCollapsed(false)}
+              className="mb-4 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Expand sidebar"
             >
-              <div className="relative flex-shrink-0">
-                <motion.div 
-                  className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-primary-700 flex items-center justify-center text-primary-foreground font-black text-lg shadow-lg shadow-primary/20"
-                  whileHover={{ rotate: 360, scale: 1.1 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  {(userName || userRole).charAt(0).toUpperCase()}
-                </motion.div>
-                <motion.div 
-                  className="absolute -bottom-1 -right-1 h-4 w-4 bg-success border-2 border-card rounded-full"
-                  animate={{ 
-                    scale: [1, 1.2, 1],
-                    opacity: [1, 0.7, 1]
-                  }}
-                  transition={{ 
-                    duration: 2, 
-                    repeat: Infinity,
-                    ease: "easeInOut" 
-                  }}
-                />
+              <ChevronsLeft className="h-4 w-4 rotate-180" />
+            </button>
+          )}
+
+          {/* Navigation */}
+          <nav className="custom-scrollbar flex-1 space-y-5 overflow-y-auto pr-1">
+            {navigationGroups.map((group) => (
+              <div key={group.title}>
+                {!collapsed && (
+                  <h3 className="mb-1.5 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+                    {group.title}
+                  </h3>
+                )}
+                <div className="space-y-0.5">
+                  {group.items.map((item) => (
+                    <NavItem key={item.name} item={item} />
+                  ))}
+                </div>
               </div>
-              <motion.div 
-                className="flex-1 min-w-0 ml-3 overflow-hidden"
-                animate={{ 
-                  opacity: isCollapsed && isLargeScreen ? 0 : 1,
-                  width: isCollapsed && isLargeScreen ? 0 : 'auto'
-                }}
-                transition={{ duration: 0.3 }}
-              >
-                <p className="text-sm font-black text-foreground truncate uppercase tracking-tight">{userName || 'Administrator'}</p>
-                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mt-0.5">{userRole}</p>
-              </motion.div>
-            </motion.div>
-          </motion.div>
+            ))}
+          </nav>
+
+          {/* User identity */}
+          <div className="mt-4 border-t border-border pt-4">
+            <div
+              className={cn(
+                'flex items-center rounded-md p-2',
+                collapsed && 'justify-center'
+              )}
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                {(userName || userRole).charAt(0).toUpperCase()}
+              </div>
+              {!collapsed && (
+                <div className="ml-3 min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{userName || 'Administrator'}</p>
+                  <p className="truncate text-xs capitalize text-muted-foreground">{userRole}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </motion.aside>
+      </aside>
     </>
   );
 }

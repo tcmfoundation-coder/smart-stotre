@@ -11,7 +11,7 @@ interface KPICardWrapperProps {
   change?: string;
   changeType?: 'positive' | 'negative';
   icon: LucideIcon;
-  iconColor: string;
+  variant?: 'primary' | 'success' | 'warning' | 'destructive' | 'info' | 'neutral';
   trend?: number;
   isLoading?: boolean;
   error?: string;
@@ -23,16 +23,16 @@ export function KPICardWrapper({
   change,
   changeType,
   icon,
-  iconColor,
+  variant,
   trend,
   isLoading,
   error,
 }: KPICardWrapperProps) {
   if (isLoading) {
     return (
-      <div className="bg-card rounded-xl border border-border p-6">
-        <Skeleton className="h-4 w-24 mb-2" />
-        <Skeleton className="h-8 w-32 mb-2" />
+      <div className="rounded-lg border border-border bg-card p-6">
+        <Skeleton className="mb-2 h-4 w-24" />
+        <Skeleton className="mb-2 h-8 w-32" />
         <Skeleton className="h-3 w-20" />
       </div>
     );
@@ -41,7 +41,7 @@ export function KPICardWrapper({
   if (error) {
     return (
       <ErrorBoundary>
-        <div className="bg-card rounded-xl border border-destructive/50 p-6">
+        <div className="rounded-lg border border-destructive/50 bg-card p-6">
           <p className="text-sm text-destructive">Failed to load</p>
         </div>
       </ErrorBoundary>
@@ -56,7 +56,7 @@ export function KPICardWrapper({
         change={change}
         changeType={changeType}
         icon={icon}
-        iconColor={iconColor}
+        variant={variant}
         trend={trend}
       />
     </ErrorBoundary>

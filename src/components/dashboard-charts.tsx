@@ -14,7 +14,6 @@ import {
   Area,
   AreaChart
 } from 'recharts';
-import { motion } from 'framer-motion';
 import { Button } from './ui/button';
 import { TrendingUp, BarChart3 } from 'lucide-react';
 
@@ -44,10 +43,10 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-card border border-border rounded-xl p-4 shadow-xl">
-          <p className="text-sm font-semibold text-muted-foreground mb-2">{label}</p>
+        <div className="bg-card border border-border rounded-md p-4 shadow-md">
+          <p className="text-sm font-medium text-muted-foreground mb-2">{label}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className={`text-sm font-bold ${getEntryClassName(entry)}`}>
+            <p key={index} className={`text-sm font-semibold ${getEntryClassName(entry)}`}>
               {entry.name}: {entry.value}
             </p>
           ))}
@@ -58,17 +57,12 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
   };
 
   return (
-    <motion.div
-      className="space-y-6"
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.4 }}
-    >
+    <div className="space-y-6">
       {/* Revenue Chart */}
-      <div className="bg-card rounded-2xl border border-border shadow-lg p-6 hover:shadow-2xl transition-shadow duration-300">
+      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-chart-2/10 rounded-xl">
+            <div className="p-2 bg-chart-2/10 rounded-md">
               <TrendingUp className="h-5 w-5 text-chart-2" />
             </div>
             <div>
@@ -124,10 +118,10 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
       </div>
 
       {/* Sales Chart */}
-      <div className="bg-card rounded-2xl border border-border shadow-lg p-6 hover:shadow-2xl transition-shadow duration-300">
+      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-chart-1/10 rounded-xl">
+            <div className="p-2 bg-chart-1/10 rounded-md">
               <BarChart3 className="h-5 w-5 text-chart-1" />
             </div>
             <div>
@@ -178,7 +172,7 @@ export function DashboardCharts({ salesData, timeFilter, onTimeFilterChange }: D
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

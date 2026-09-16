@@ -1,6 +1,5 @@
 import { LucideIcon } from 'lucide-react';
 import { Button } from './button';
-import { motion } from 'framer-motion';
 
 interface EmptyStateProps {
   icon?: LucideIcon;
@@ -20,61 +19,28 @@ export function EmptyState({
   variant = 'default'
 }: EmptyStateProps) {
   const variantStyles = {
-    default: 'text-muted-foreground/30',
-    error: 'text-destructive/30',
-    success: 'text-success/30'
+    default: 'text-muted-foreground/40',
+    error: 'text-destructive/40',
+    success: 'text-success/40'
   };
 
   return (
-    <motion.div
-      className="empty-state"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
+    <div className="empty-state">
       {Icon && (
-        <motion.div
-          className={`empty-state-icon ${variantStyles[variant]}`}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-        >
+        <div className={`empty-state-icon ${variantStyles[variant]}`}>
           <Icon className="h-full w-full" />
-        </motion.div>
+        </div>
       )}
-      
-      <motion.h3
-        className="empty-state-title"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-      >
-        {title}
-      </motion.h3>
-      
-      {description && (
-        <motion.p
-          className="empty-state-description"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-        >
-          {description}
-        </motion.p>
-      )}
-      
+
+      <h3 className="empty-state-title">{title}</h3>
+
+      {description && <p className="empty-state-description">{description}</p>}
+
       {actionLabel && onAction && (
-        <motion.div
-          className="mt-6"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Button onClick={onAction} variant="primary">
-            {actionLabel}
-          </Button>
-        </motion.div>
+        <div className="mt-6">
+          <Button onClick={onAction}>{actionLabel}</Button>
+        </div>
       )}
-    </motion.div>
+    </div>
   );
 }

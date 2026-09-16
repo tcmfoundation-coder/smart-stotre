@@ -27,17 +27,20 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary) / <alpha-value>)",
           foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
-          50: '#f0f7ff',
-          100: '#e0effe',
-          200: '#bae0fd',
-          300: '#7cc9fb',
-          400: '#36adf7',
-          500: '#0c91eb',
-          600: '#0073ca',
-          700: '#015ba3',
-          800: '#064e86',
-          900: '#0a416f',
-          950: '#072a4a',
+          // Tint/shade ramp at the same hue/saturation as --primary (217 91%)
+          // so gradients and badge tints stay on-brand instead of drifting
+          // to a different blue.
+          50: 'hsl(217 91% 97%)',
+          100: 'hsl(217 91% 94%)',
+          200: 'hsl(217 91% 88%)',
+          300: 'hsl(217 91% 78%)',
+          400: 'hsl(217 91% 65%)',
+          500: 'hsl(217 91% 50%)',
+          600: 'hsl(217 91% 42%)',
+          700: 'hsl(217 91% 35%)',
+          800: 'hsl(217 91% 28%)',
+          900: 'hsl(217 91% 22%)',
+          950: 'hsl(217 91% 14%)',
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
@@ -101,8 +104,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['var(--font-sans)'],
+        mono: ['var(--font-mono)'],
       },
       keyframes: {
         "accordion-down": {
