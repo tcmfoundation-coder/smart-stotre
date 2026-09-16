@@ -39,8 +39,11 @@ export default function ShiftSummaryPage() {
 
   if (currentLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-screen bg-background">
+        <DashboardHeader title="Shift Summary" userRole="cashier" />
+        <main className="flex h-64 items-center justify-center p-6 lg:p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </main>
       </div>
     );
   }
