@@ -17,20 +17,20 @@ export default function ProfilePage() {
   const initial = name.charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-screen transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Profile" userRole={role} />
 
-      <main className="py-6">
-        <div className="max-w-2xl mx-auto space-y-6">
+      <main className="p-6 lg:p-8">
+        <div className="mx-auto max-w-2xl space-y-6">
           <Card>
             <CardContent className="p-8">
               <div className="flex items-center gap-5">
-                <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-gradient-to-br from-primary to-primary-700 flex items-center justify-center text-primary-foreground text-2xl font-bold shadow-lg shadow-primary/20">
+                <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
                   {initial}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-foreground">{name}</h2>
-                  <span className="inline-flex items-center mt-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                  <h2 className="text-lg font-semibold text-foreground">{name}</h2>
+                  <span className="mt-1.5 inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium capitalize text-primary">
                     {role}
                   </span>
                 </div>
@@ -39,8 +39,8 @@ export default function ProfilePage() {
           </Card>
 
           <Card>
-            <CardContent className="p-8 space-y-5">
-              <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Account Details</h3>
+            <CardContent className="space-y-5 p-8">
+              <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Account Details</h3>
 
               <div className="flex items-center gap-3 text-sm">
                 <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
