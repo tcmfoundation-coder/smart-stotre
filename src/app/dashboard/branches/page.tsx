@@ -75,17 +75,17 @@ export default function BranchesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader title="Branches" userRole="admin" />
+      <DashboardHeader title="Node Management" userRole="admin" />
 
       <main className="p-6 lg:p-8">
         <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Branch Network</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Manage your store branches and their settings.</p>
+            <h2 className="text-lg font-semibold text-foreground">Regional Network</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Orchestrate multiple storefronts and supply nodes.</p>
           </div>
           <Button className="w-full gap-2 sm:w-auto" onClick={handleCreate}>
             <Plus className="h-4 w-4" />
-            Add Branch
+            Deploy New Node
           </Button>
         </div>
 
@@ -99,9 +99,9 @@ export default function BranchesPage() {
           ) : branches.length === 0 ? (
             <EmptyState
               icon={Building2}
-              title="No branches found"
-              description="Add your first branch to get started"
-              actionLabel="Add Branch"
+              title="Isolated Environment"
+              description="No operational nodes detected in your regional network."
+              actionLabel="Initialize First Node"
               onAction={handleCreate}
             />
           ) : (
@@ -131,7 +131,7 @@ export default function BranchesPage() {
 
                     <div className="mb-4">
                       <h3 className="font-semibold text-foreground">{branch.name}</h3>
-                      <Badge variant="secondary" className="mt-1.5">{branch.code}</Badge>
+                      <Badge variant="secondary" className="mt-1.5">Identifier: {branch.code}</Badge>
                     </div>
 
                     <div className="space-y-2.5">
@@ -153,7 +153,7 @@ export default function BranchesPage() {
 
                     <div className="mt-6 grid grid-cols-2 gap-3 border-t border-border pt-4">
                       <div className="rounded-md bg-muted/50 p-3 text-center">
-                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Tax Rate</p>
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal Rate</p>
                         <p className="text-sm font-semibold text-foreground">{branch.settings?.taxRate || 0}%</p>
                       </div>
                       <div className="rounded-md bg-muted/50 p-3 text-center">
@@ -164,10 +164,10 @@ export default function BranchesPage() {
 
                     <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
                       <Badge variant={branch.isActive ? 'success' : 'secondary'}>
-                        {branch.isActive ? 'Active' : 'Inactive'}
+                        {branch.isActive ? 'Operational' : 'Offline'}
                       </Badge>
                       <Button variant="link" size="sm" className="h-auto p-0" onClick={() => handleEdit(branch)}>
-                        Manage Branch
+                        Configure Node
                       </Button>
                     </div>
                   </CardContent>
