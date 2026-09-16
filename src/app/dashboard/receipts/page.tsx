@@ -42,7 +42,7 @@ export default async function ReceiptsPage() {
                     </div>
                     <div>
                       <p className="text-xs font-medium text-muted-foreground">{sale.saleNumber}</p>
-                      <h3 className="font-semibold text-foreground">{sale.customerName || 'Walk-in Customer'}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">{sale.customerName || 'Walk-in Customer'}</h3>
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5" />

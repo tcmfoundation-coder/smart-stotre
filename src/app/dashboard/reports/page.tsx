@@ -3,16 +3,31 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { FileText, Search, Download, Calendar, TrendingUp, DollarSign, Package, Users, Filter, Loader2, X, ChevronDown, Eye } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, Search, Download, Calendar, TrendingUp, DollarSign, Package, Users, Loader2, X, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useReports, useGenerateReport, useDownloadReport, useDeleteReport, generateReportCSV } from '@/hooks/useReports';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { ErrorState } from '@/components/ui/error-state';
 import { CardSkeleton } from '@/components/loading/CardSkeleton';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+
+const STATUS_BADGE: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
+  completed: { label: 'Completed', variant: 'success' },
+  pending: { label: 'Generating...', variant: 'warning' },
+  failed: { label: 'Failed', variant: 'destructive' },
+};
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -24,7 +39,7 @@ export default function ReportsPage() {
   const [showCustomDateDialog, setShowCustomDateDialog] = useState(false);
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  
+
   const { data: reports, isLoading, error, refetch } = useReports({ type: reportType });
   const generateReport = useGenerateReport();
   const downloadReport = useDownloadReport();
@@ -106,88 +121,68 @@ export default function ReportsPage() {
     toast.success('Custom date range applied');
   };
 
-  const filteredReports = reports?.filter(report => 
+  const filteredReports = reports?.filter(report =>
     report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     report.generatedBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
     report.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      completed: { label: 'Completed', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-      pending: { label: 'Generating...', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-      failed: { label: 'Failed', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
-    };
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.completed;
-    
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.className}`} role="status" aria-label={`Report status: ${config.label}`}>
-        {config.label}
-      </span>
-    );
-  };
-
   return (
-    <div className="min-h-screen transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Reports" userRole="admin" />
-      
-      <main className="py-6" role="main" aria-label="Reports center">
+
+      <main className="p-6 lg:p-8" role="main" aria-label="Reports center">
         {/* Filters */}
-        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-            <div className="relative">
-              <label htmlFor="date-range-select" className="sr-only">Select date range</label>
-              <select
-                id="date-range-select"
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="px-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                aria-label="Date range filter"
-              >
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="quarter">This Quarter</option>
-                <option value="year">This Year</option>
-                <option value="custom">Custom Range</option>
-              </select>
+        <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <div>
+              <Label htmlFor="date-range-select" className="sr-only">Select date range</Label>
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger id="date-range-select" className="h-11 w-full sm:w-44" aria-label="Date range filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
+              className="h-11 w-full gap-2 sm:w-auto"
               onClick={() => setShowCustomDateDialog(true)}
               aria-label="Open custom date range picker"
             >
-              <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
+              <Calendar className="h-4 w-4" aria-hidden="true" />
               Custom Range
             </Button>
           </div>
-          <Button 
-            className="bg-primary text-primary-foreground w-full sm:w-auto"
-            onClick={handleExportAll}
-            aria-label="Export all reports"
-          >
-            <Download className="h-4 w-4 mr-2" aria-hidden="true" />
+          <Button className="h-11 w-full gap-2 sm:w-auto" onClick={handleExportAll} aria-label="Export all reports">
+            <Download className="h-4 w-4" aria-hidden="true" />
             Export All
           </Button>
         </div>
 
         {/* Search */}
         <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <input
+          <div className="relative sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
               type="text"
               placeholder="Search reports by name, type, or generated by..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="h-11 pl-9 pr-9"
               aria-label="Search reports"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 aria-label="Clear search"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -198,91 +193,95 @@ export default function ReportsPage() {
 
         {/* Report Types */}
         <section aria-label="Report types" className="mb-8">
-          <h2 className="text-lg font-bold text-foreground mb-4">Select Report Type</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {reportTypes.map((type, index) => (
-              <motion.div
+          <h2 className="mb-4 text-base font-semibold text-foreground">Select Report Type</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {reportTypes.map((type) => (
+              <Card
                 key={type.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                className={`cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                  reportType === type.id ? 'ring-2 ring-primary' : ''
+                }`}
+                onClick={() => setReportType(type.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setReportType(type.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={reportType === type.id}
+                aria-label={`Select ${type.name}`}
               >
-                <Card 
-                  className={`cursor-pointer transition-all hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                    reportType === type.id ? 'ring-2 ring-primary' : ''
-                  }`}
-                  onClick={() => setReportType(type.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setReportType(type.id);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={reportType === type.id}
-                  aria-label={`Select ${type.name}`}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center" aria-hidden="true">
-                        <type.icon className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-foreground">{type.name}</h3>
-                      </div>
+                <CardContent className="p-6">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10" aria-hidden="true">
+                      <type.icon className="h-5 w-5 text-primary" />
                     </div>
-                    <p className="text-sm text-muted-foreground">{type.description}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                    <h3 className="text-base font-semibold text-foreground">{type.name}</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{type.description}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </section>
 
         {/* Quick Actions */}
         <section aria-label="Generate reports" className="mb-8">
-          <h2 className="text-lg font-bold text-foreground mb-4">Generate Report</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h2 className="mb-4 text-base font-semibold text-foreground">Generate Report</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Card>
               <CardContent className="p-6">
-                <Button 
-                  className="w-full bg-primary text-primary-foreground"
+                <Button
+                  className="w-full gap-2"
                   onClick={() => handleGenerateReport('sales')}
                   disabled={generateReport.isPending}
+                  isLoading={generateReport.isPending}
                   aria-label="Generate sales report"
                 >
-                  {generateReport.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
-                  <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
-                  Generate Sales Report
+                  {!generateReport.isPending && (
+                    <>
+                      <FileText className="h-4 w-4" aria-hidden="true" />
+                      Generate Sales Report
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-6">
-                <Button 
-                  className="w-full bg-primary text-primary-foreground"
+                <Button
+                  className="w-full gap-2"
                   onClick={() => handleGenerateReport('inventory')}
                   disabled={generateReport.isPending}
+                  isLoading={generateReport.isPending}
                   aria-label="Generate inventory report"
                 >
-                  {generateReport.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
-                  <Package className="h-4 w-4 mr-2" aria-hidden="true" />
-                  Generate Inventory Report
+                  {!generateReport.isPending && (
+                    <>
+                      <Package className="h-4 w-4" aria-hidden="true" />
+                      Generate Inventory Report
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-6">
-                <Button 
-                  className="w-full bg-primary text-primary-foreground"
+                <Button
+                  className="w-full gap-2"
                   onClick={() => handleGenerateReport('customers')}
                   disabled={generateReport.isPending}
+                  isLoading={generateReport.isPending}
                   aria-label="Generate customer report"
                 >
-                  {generateReport.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
-                  <Users className="h-4 w-4 mr-2" aria-hidden="true" />
-                  Generate Customer Report
+                  {!generateReport.isPending && (
+                    <>
+                      <Users className="h-4 w-4" aria-hidden="true" />
+                      Generate Customer Report
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
@@ -299,20 +298,15 @@ export default function ReportsPage() {
                 ))}
               </div>
             ) : error ? (
-              <Card>
-                <CardContent className="p-6 text-center py-12" role="alert">
-                  <p className="text-red-500 mb-4">Unable to load reports.</p>
-                  <Button variant="outline" onClick={() => refetch()}>Retry</Button>
-                </CardContent>
-              </Card>
+              <ErrorState description="Unable to load reports." onRetry={() => refetch()} />
             ) : (
               <Card>
                 <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-foreground">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-foreground">
                       Recent Reports
                       {filteredReports && filteredReports.length > 0 && (
-                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                        <span className="ml-2 text-sm font-normal text-muted-foreground">
                           ({filteredReports.length} {filteredReports.length === 1 ? 'report' : 'reports'})
                         </span>
                       )}
@@ -320,66 +314,70 @@ export default function ReportsPage() {
                   </div>
                   {filteredReports && filteredReports.length > 0 ? (
                     <div className="space-y-3" role="list" aria-label="Report list">
-                      {filteredReports.map((report, index) => (
-                        <motion.div
-                          key={report._id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-secondary/50 rounded-lg gap-4"
-                          role="listitem"
-                        >
-                          <div className="flex-1 w-full">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
-                              <span className="font-medium text-foreground">{report.name}</span>
-                              {getStatusBadge(report.status)}
+                      {filteredReports.map((report) => {
+                        const status = STATUS_BADGE[report.status] ?? STATUS_BADGE.completed;
+                        return (
+                          <div
+                            key={report._id}
+                            className="flex flex-col items-start justify-between gap-4 rounded-md border border-border p-4 sm:flex-row sm:items-center"
+                            role="listitem"
+                          >
+                            <div className="w-full flex-1">
+                              <div className="mb-1 flex flex-wrap items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
+                                <span className="font-medium text-foreground">{report.name}</span>
+                                <Badge variant={status.variant} role="status" aria-label={`Report status: ${status.label}`}>
+                                  {status.label}
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>Generated by {report.generatedBy}</span>
+                                <span aria-hidden="true">•</span>
+                                <span>{new Date(report.generatedAt).toLocaleString()}</span>
+                                <span aria-hidden="true">•</span>
+                                <span className="capitalize">{report.type}</span>
+                              </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span>Generated by {report.generatedBy}</span>
-                              <span aria-hidden="true">•</span>
-                              <span>{new Date(report.generatedAt).toLocaleString()}</span>
-                              <span aria-hidden="true">•</span>
-                              <span className="capitalize">{report.type}</span>
+                            <div className="flex w-full gap-2 sm:w-auto">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1"
+                                onClick={() => handleDownload(report)}
+                                disabled={report.status !== 'completed' || downloadReport.isPending}
+                                aria-label={`Download ${report.name}`}
+                              >
+                                {downloadReport.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+                                Download
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1"
+                                onClick={() => router.push(`/dashboard/reports/${report._id}`)}
+                                aria-label={`View ${report.name}`}
+                              >
+                                <Eye className="h-4 w-4" aria-hidden="true" />
+                                View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(report._id)}
+                                aria-label={`Delete ${report.name}`}
+                              >
+                                Delete
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex gap-2 w-full sm:w-auto">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleDownload(report)}
-                              disabled={report.status !== 'completed' || downloadReport.isPending}
-                              aria-label={`Download ${report.name}`}
-                            >
-                              {downloadReport.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4 mr-1" aria-hidden="true" />}
-                              Download
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/dashboard/reports/${report._id}`)}
-                              aria-label={`View ${report.name}`}
-                            >
-                              <Eye className="h-4 w-4 mr-1" aria-hidden="true" />
-                              View
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                              onClick={() => handleDelete(report._id)}
-                              aria-label={`Delete ${report.name}`}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground" role="status" aria-live="polite">
+                    <div className="py-8 text-center text-muted-foreground" role="status" aria-live="polite">
                       {searchQuery ? (
-                        <p>No reports found matching "{searchQuery}". Try a different search term.</p>
+                        <p>No reports found matching &quot;{searchQuery}&quot;. Try a different search term.</p>
                       ) : (
                         <p>No reports found. Generate your first report above.</p>
                       )}
@@ -405,13 +403,13 @@ export default function ReportsPage() {
             <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={confirmDelete}
               disabled={deleteReport.isPending}
+              isLoading={deleteReport.isPending}
             >
-              {deleteReport.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
-              Delete
+              {!deleteReport.isPending && 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -425,28 +423,22 @@ export default function ReportsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label htmlFor="start-date" className="block text-sm font-medium text-foreground mb-2">
-                Start Date
-              </label>
-              <input
+              <Label htmlFor="start-date" className="mb-2 block">Start Date</Label>
+              <Input
                 id="start-date"
                 type="date"
                 value={customStartDate}
                 onChange={(e) => setCustomStartDate(e.target.value)}
-                className="w-full px-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 aria-label="Start date"
               />
             </div>
             <div>
-              <label htmlFor="end-date" className="block text-sm font-medium text-foreground mb-2">
-                End Date
-              </label>
-              <input
+              <Label htmlFor="end-date" className="mb-2 block">End Date</Label>
+              <Input
                 id="end-date"
                 type="date"
                 value={customEndDate}
                 onChange={(e) => setCustomEndDate(e.target.value)}
-                className="w-full px-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 aria-label="End date"
               />
             </div>

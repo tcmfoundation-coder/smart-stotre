@@ -141,7 +141,7 @@ export default function NotificationsPage() {
                       </div>
                       <div className="flex-1">
                         <div className="mb-1.5 flex items-center gap-2">
-                          <h3 className="font-semibold text-foreground">{notification.title}</h3>
+                          <h3 className="text-sm font-semibold text-foreground">{notification.title}</h3>
                           <Badge variant={PRIORITY_BADGE[notification.priority] ?? 'secondary'} className="capitalize">
                             {notification.priority}
                           </Badge>

@@ -107,7 +107,7 @@ export default function CategoriesPage() {
                           {categoryIcons[category.name] || categoryIcons.default}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground">{category.name}</h3>
+                          <h3 className="text-sm font-semibold text-foreground">{category.name}</h3>
                           <p className="text-xs text-muted-foreground">{category.description}</p>
                         </div>
                       </div>

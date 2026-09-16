@@ -130,7 +130,7 @@ export default function BranchesPage() {
                     </div>
 
                     <div className="mb-4">
-                      <h3 className="font-semibold text-foreground">{branch.name}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">{branch.name}</h3>
                       <Badge variant="secondary" className="mt-1.5">Identifier: {branch.code}</Badge>
                     </div>
 

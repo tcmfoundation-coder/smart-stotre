@@ -144,7 +144,7 @@ export default function ProductsPage() {
                     <CardContent className="p-6">
                       <div className="mb-4 flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="mb-1 font-semibold text-foreground">{product.name}</h3>
+                          <h3 className="mb-1 text-sm font-semibold text-foreground">{product.name}</h3>
                           <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
                           <p className="text-xs text-muted-foreground">{product.barcode}</p>
                         </div>

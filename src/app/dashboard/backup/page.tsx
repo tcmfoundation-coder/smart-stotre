@@ -21,7 +21,7 @@ export default function BackupPage() {
                 <Database className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">Export Full Backup</h3>
+                <h3 className="text-base font-semibold text-foreground">Export Full Backup</h3>
                 <p className="text-sm text-muted-foreground">
                   Downloads a JSON snapshot of every collection in the live database, generated on demand.
                 </p>
@@ -43,7 +43,7 @@ export default function BackupPage() {
           <CardContent className="p-6">
             <div className="mb-4 flex items-center gap-3">
               <ShieldAlert className="h-5 w-5 text-warning" />
-              <h3 className="font-semibold text-foreground">Restoring a Backup</h3>
+              <h3 className="text-base font-semibold text-foreground">Restoring a Backup</h3>
             </div>
             <p className="mb-3 text-sm text-muted-foreground">
               This page intentionally does not offer a self-service &quot;restore&quot; action. Overwriting the
@@ -63,7 +63,7 @@ export default function BackupPage() {
           <CardContent className="p-6">
             <div className="mb-4 flex items-center gap-3">
               <CloudCog className="h-5 w-5 text-info" />
-              <h3 className="font-semibold text-foreground">Recommended Production Setup</h3>
+              <h3 className="text-base font-semibold text-foreground">Recommended Production Setup</h3>
             </div>
             <div className="space-y-3 text-sm text-muted-foreground">
               <p>
