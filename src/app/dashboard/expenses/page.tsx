@@ -8,6 +8,27 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ExpenseForm, EXPENSE_CATEGORY_LABELS, type ExpenseRecord } from '@/components/dialogs/ExpenseForm';
+import { CardSkeleton } from '@/components/loading/CardSkeleton';
+import { ErrorState } from '@/components/ui/error-state';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 
 const categoryLabels = EXPENSE_CATEGORY_LABELS;
 
@@ -15,7 +36,7 @@ export default function ExpensesPage() {
   const { data: session } = useSession();
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -31,7 +52,7 @@ export default function ExpensesPage() {
       setError(false);
       const data = await getExpenses({
         search: search || undefined,
-        category: category || undefined,
+        category: category && category !== 'all' ? category : undefined,
       });
       setExpenses(data);
     } catch (err) {
@@ -50,7 +71,7 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadExpenses(searchQuery || undefined, categoryFilter || undefined);
+      loadExpenses(searchQuery || undefined, categoryFilter);
     }, 300);
 
     return () => clearTimeout(timer);
@@ -76,7 +97,7 @@ export default function ExpensesPage() {
     try {
       await deleteExpense(expense._id);
       toast.success('Expense deleted successfully');
-      await loadExpenses(searchQuery || undefined, categoryFilter || undefined);
+      await loadExpenses(searchQuery || undefined, categoryFilter);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete expense');
     } finally {
@@ -87,183 +108,164 @@ export default function ExpensesPage() {
   const totalExpenses = expenses.reduce((sum: number, e) => sum + e.amount, 0);
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Expense Tracking" userRole="admin" />
-      
-      <main className="p-8">
+
+      <main className="p-6 lg:p-8">
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Monthly Burn</p>
-                <h3 className="text-3xl font-black text-foreground">{formatCurrency(totalExpenses)}</h3>
-                <p className="text-sm font-semibold text-rose-600 dark:text-rose-400 mt-2">Total outgoings</p>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Monthly Burn</p>
+                <h3 className="text-3xl font-semibold text-foreground">{formatCurrency(totalExpenses)}</h3>
+                <p className="mt-2 text-sm font-medium text-destructive">Total outgoings</p>
               </div>
-              <div className="p-4 bg-rose-50 dark:bg-rose-500/10 rounded-2xl">
-                <TrendingDown className="h-8 w-8 text-rose-600" />
+              <div className="rounded-md bg-destructive/10 p-3 text-destructive">
+                <TrendingDown className="h-5 w-5" />
               </div>
             </div>
           </div>
-          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Expense Count</p>
-                <h3 className="text-3xl font-black text-foreground">{expenses.length}</h3>
-                <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-2">Line items</p>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Expense Count</p>
+                <h3 className="text-3xl font-semibold text-foreground">{expenses.length}</h3>
+                <p className="mt-2 text-sm font-medium text-primary">Line items</p>
               </div>
-              <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl">
-                <PieChart className="h-8 w-8 text-blue-600" />
+              <div className="rounded-md bg-primary/10 p-3 text-primary">
+                <PieChart className="h-5 w-5" />
               </div>
             </div>
           </div>
-          <div className="group bg-card rounded-[2rem] p-8 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Avg. Transaction</p>
-                <h3 className="text-3xl font-black text-foreground">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Avg. Transaction</p>
+                <h3 className="text-3xl font-semibold text-foreground">
                   {formatCurrency(expenses.length > 0 ? totalExpenses / expenses.length : 0)}
                 </h3>
-                <p className="text-sm font-semibold text-orange-600 dark:text-orange-400 mt-2">Per item cost</p>
+                <p className="mt-2 text-sm font-medium text-warning">Per item cost</p>
               </div>
-              <div className="p-4 bg-orange-50 dark:bg-orange-500/10 rounded-2xl">
-                <Wallet className="h-8 w-8 text-orange-600" />
+              <div className="rounded-md bg-warning/10 p-3 text-warning">
+                <Wallet className="h-5 w-5" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Actions Bar */}
-        <div className="flex flex-col xl:flex-row items-center justify-between gap-6 mb-10">
-          <div className="flex items-center space-x-4 w-full xl:w-auto">
-            <div className="relative flex-1 xl:w-80 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-              <input
+        <div className="mb-6 flex flex-col items-center justify-between gap-4 xl:flex-row">
+          <div className="flex w-full items-center gap-3 xl:w-auto">
+            <div className="relative flex-1 xl:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 type="text"
                 placeholder="Search expenses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-card border border-border rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
+                className="h-11 pl-9 pr-9"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
             </div>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-6 py-4 bg-card border border-border rounded-2xl text-muted-foreground font-bold hover:bg-muted transition-all shadow-sm outline-none focus:ring-2 focus:ring-blue-600/10 appearance-none"
-            >
-              <option value="">All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>{categoryLabels[cat as keyof typeof categoryLabels]}</option>
-              ))}
-            </select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-11 w-48">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>{categoryLabels[cat as keyof typeof categoryLabels]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <button
-            onClick={handleCreate}
-            className="w-full xl:w-auto flex items-center justify-center space-x-2 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95"
-          >
-            <Plus className="h-6 w-6" />
-            <span>ADD EXPENSE</span>
-          </button>
+          <Button onClick={handleCreate} className="w-full gap-2 xl:w-auto">
+            <Plus className="h-4 w-4" />
+            Add Expense
+          </Button>
         </div>
 
         {/* Expenses Table */}
-        <div className="bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden">
+        <div className="rounded-lg border border-border bg-card shadow-sm">
           {loading ? (
-            <div className="p-12 text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-              <p className="mt-4 text-sm font-semibold text-slate-400">Loading expenses...</p>
+            <div className="p-12">
+              <CardSkeleton />
             </div>
           ) : error ? (
-            <div className="p-12 text-center">
-              <Wallet className="h-16 w-16 text-red-400 mx-auto mb-4" />
-              <p className="text-lg font-bold text-foreground mb-2">Failed to load expenses</p>
-              <button
-                onClick={() => loadExpenses(searchQuery || undefined, categoryFilter || undefined)}
-                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold"
-              >
-                Retry
-              </button>
-            </div>
+            <ErrorState
+              icon={Wallet}
+              description="Failed to load expenses"
+              onRetry={() => loadExpenses(searchQuery || undefined, categoryFilter)}
+            />
           ) : expenses.length === 0 ? (
-            <div className="p-12 text-center">
-              <Wallet className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-              <p className="text-lg font-bold text-foreground mb-2">No expenses found</p>
-              <p className="text-sm font-semibold text-slate-400">
-                {searchQuery ? 'Try a different search term' : 'Add your first expense to get started'}
-              </p>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title="No expenses found"
+              description={searchQuery ? 'Try a different search term' : 'Add your first expense to get started'}
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border">
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Transaction Detail</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Category</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Amount</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Timestamp</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Reference</th>
-                    <th className="text-right py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {expenses.map((expense) => (
-                  <tr key={expense._id} className="group hover:bg-muted/50 transition-colors">
-                    <td className="py-6 px-8">
-                      <div>
-                        <p className="font-bold text-foreground group-hover:text-blue-600 transition-colors">{expense.title}</p>
-                        {expense.description && (
-                          <p className="text-xs font-medium text-muted-foreground mt-1 line-clamp-1">{expense.description}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-6 px-8">
-                      <span className="px-3 py-1 bg-muted rounded-lg text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                        {categoryLabels[expense.category as keyof typeof categoryLabels] || expense.category}
-                      </span>
-                    </td>
-                    <td className="py-6 px-8">
-                      <span className="text-sm font-black text-rose-600 dark:text-rose-400">-{formatCurrency(expense.amount)}</span>
-                    </td>
-                    <td className="py-6 px-8">
-                      <div className="flex items-center text-xs font-bold text-muted-foreground">
-                        <Calendar className="h-3 w-3 mr-2 opacity-50" />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Transaction</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expenses.map((expense) => (
+                  <TableRow key={expense._id}>
+                    <TableCell>
+                      <p className="font-medium text-foreground">{expense.title}</p>
+                      {expense.description && (
+                        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{expense.description}</p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{categoryLabels[expense.category as keyof typeof categoryLabels] || expense.category}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-medium text-destructive">-{formatCurrency(expense.amount)}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center text-muted-foreground">
+                        <Calendar className="mr-2 h-3 w-3" />
                         {formatDate(expense.date)}
                       </div>
-                    </td>
-                    <td className="py-6 px-8">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">REF: {expense._id.substring(18)}</p>
-                    </td>
-                    <td className="py-6 px-8 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => handleEdit(expense)}
-                          className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl text-blue-600 transition-colors"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">REF: {expense._id.substring(18)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)} className="text-muted-foreground hover:text-primary">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleDelete(expense)}
                           disabled={deletingId === expense._id}
-                          className="p-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl text-rose-500 transition-colors disabled:opacity-50"
+                          className="text-muted-foreground hover:text-destructive"
                         >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-            </div>
+              </TableBody>
+            </Table>
           )}
         </div>
       </main>
@@ -274,7 +276,7 @@ export default function ExpensesPage() {
         mode={formMode}
         expense={editingExpense}
         createdById={session?.user?.id}
-        onSuccess={() => loadExpenses(searchQuery || undefined, categoryFilter || undefined)}
+        onSuccess={() => loadExpenses(searchQuery || undefined, categoryFilter)}
       />
     </div>
   );

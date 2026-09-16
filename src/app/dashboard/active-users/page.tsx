@@ -1,10 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Users, Activity, Clock, Monitor, LogOut, RefreshCw, AlertCircle } from 'lucide-react';
+import { Users, Activity, Clock, Monitor, RefreshCw, AlertCircle } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 
 interface UserActivityData {
   _id: string;
@@ -30,6 +40,12 @@ interface UserActivityData {
     details?: Record<string, any>;
   }>;
 }
+
+const ROLE_VARIANT: Record<string, BadgeProps['variant']> = {
+  admin: 'default',
+  manager: 'info',
+  cashier: 'success',
+};
 
 export default function ActiveUsersPage() {
   const { data: session } = useSession();
@@ -97,15 +113,6 @@ export default function ActiveUsersPage() {
     return `${minutes}m`;
   };
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'admin': return 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20';
-      case 'manager': return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20';
-      case 'cashier': return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20';
-      default: return 'bg-secondary text-secondary-foreground border-border';
-    }
-  };
-
   if (session?.user?.role !== 'admin') {
     return null;
   }
@@ -115,177 +122,135 @@ export default function ActiveUsersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">Active Users</h1>
-          <p className="text-muted-foreground mt-1">Real-time user activity monitoring</p>
+          <h1 className="text-2xl font-semibold text-foreground">Active Users</h1>
+          <p className="mt-1 text-muted-foreground">Real-time user activity monitoring</p>
         </div>
-        <motion.button
-          onClick={fetchActiveUsers}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
+        <Button onClick={fetchActiveUsers} disabled={loading} className="gap-2">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
-        </motion.button>
+        </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-2xl p-6"
-        >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Active Users</p>
-              <p className="text-3xl font-bold text-foreground mt-2">{activeUsers.length}</p>
+              <p className="mt-2 text-3xl font-semibold text-foreground">{activeUsers.length}</p>
             </div>
-            <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center">
-              <Users className="h-6 w-6 text-primary" />
+            <div className="rounded-md bg-primary/10 p-3 text-primary">
+              <Users className="h-5 w-5" />
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card border border-border rounded-2xl p-6"
-        >
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Sessions Today</p>
-              <p className="text-3xl font-bold text-foreground mt-2">{sessionsToday}</p>
+              <p className="mt-2 text-3xl font-semibold text-foreground">{sessionsToday}</p>
             </div>
-            <div className="h-12 w-12 bg-green-500/10 rounded-xl flex items-center justify-center">
-              <Activity className="h-6 w-6 text-green-500" />
+            <div className="rounded-md bg-success/10 p-3 text-success">
+              <Activity className="h-5 w-5" />
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-2xl p-6"
-        >
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Last Refresh</p>
-              <p className="text-lg font-bold text-foreground mt-2">{formatTimeAgo(lastRefresh.toISOString())}</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{formatTimeAgo(lastRefresh.toISOString())}</p>
             </div>
-            <div className="h-12 w-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
-              <Clock className="h-6 w-6 text-blue-500" />
+            <div className="rounded-md bg-info/10 p-3 text-info">
+              <Clock className="h-5 w-5" />
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* Error State */}
       {error && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-xl flex items-center gap-3"
-        >
-          <AlertCircle className="h-5 w-5" />
-          <span>{error}</span>
-        </motion.div>
+        <div className="flex items-center gap-3 rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-destructive">
+          <AlertCircle className="h-4 w-4" />
+          <span className="text-sm font-medium">{error}</span>
+        </div>
       )}
 
       {/* Active Users Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="bg-card border border-border rounded-2xl overflow-hidden"
-      >
-        <div className="p-6 border-b border-border">
+      <div className="rounded-lg border border-border bg-card shadow-sm">
+        <div className="border-b border-border p-6">
           <h2 className="text-lg font-semibold text-foreground">Currently Active Users</h2>
-          <p className="text-sm text-muted-foreground mt-1">Users with activity in the last 5 minutes</p>
+          <p className="mt-1 text-sm text-muted-foreground">Users with activity in the last 5 minutes</p>
         </div>
 
         {loading ? (
-          <div className="p-12 flex items-center justify-center">
-            <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="flex items-center justify-center p-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         ) : activeUsers.length === 0 ? (
-          <div className="p-12 text-center">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No active users found</p>
-          </div>
+          <EmptyState icon={Users} title="No active users found" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">User</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Current Page</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Session Duration</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Last Activity</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Recent Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeUsers.map((user, index) => (
-                  <motion.tr
-                    key={user._id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="border-b border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-700 flex items-center justify-center text-primary-foreground text-sm font-bold">
-                          {user.userName.charAt(0).toUpperCase()}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Current Page</TableHead>
+                <TableHead>Session Duration</TableHead>
+                <TableHead>Last Activity</TableHead>
+                <TableHead>Recent Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {activeUsers.map((user) => (
+                <TableRow key={user._id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                        {user.userName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{user.userName}</p>
+                        <p className="text-xs text-muted-foreground">{user.userEmail}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={ROLE_VARIANT[user.userRole] || 'secondary'} className="capitalize">
+                      {user.userRole}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Monitor className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">{user.currentPage}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">{formatDuration(user.sessionStart)}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{formatTimeAgo(user.lastActivity)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      {user.activities.slice(-3).reverse().map((activity, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{activity.action}</span>
+                          <span className="ml-2 text-muted-foreground/70">{formatTimeAgo(activity.timestamp)}</span>
                         </div>
-                        <div>
-                          <p className="font-semibold text-foreground">{user.userName}</p>
-                          <p className="text-xs text-muted-foreground">{user.userEmail}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getRoleBadgeColor(user.userRole)}`}>
-                        {user.userRole.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Monitor className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground font-medium">{user.currentPage}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground font-medium">{formatDuration(user.sessionStart)}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-muted-foreground">{formatTimeAgo(user.lastActivity)}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        {user.activities.slice(-3).reverse().map((activity, idx) => (
-                          <div key={idx} className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">{activity.action}</span>
-                            <span className="text-muted-foreground/70 ml-2">{formatTimeAgo(activity.timestamp)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }

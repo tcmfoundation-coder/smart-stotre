@@ -2,18 +2,37 @@
 
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getWhatsAppMessages, getWhatsAppMessageStats } from '@/lib/whatsapp';
-import { MessageSquare, CheckCircle, XCircle, Clock, Search, Filter, Download, X } from 'lucide-react';
+import { MessageSquare, CheckCircle, XCircle, Search, Download, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 
-type StatusFilter = '' | 'sent' | 'failed' | 'pending';
+type StatusFilter = 'all' | 'sent' | 'failed' | 'pending';
 
 export default function WhatsAppMessagesPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({ total: 0, sent: 0, failed: 0, successRate: 0 });
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [loading, setLoading] = useState(true);
 
   const loadData = async (search?: string, status?: StatusFilter) => {
@@ -22,7 +41,7 @@ export default function WhatsAppMessagesPage() {
       const [messagesData, statsData] = await Promise.all([
         getWhatsAppMessages({
           search: search || undefined,
-          status: status || undefined,
+          status: status && status !== 'all' ? status : undefined,
         }),
         getWhatsAppMessageStats()
       ]);
@@ -76,198 +95,162 @@ export default function WhatsAppMessagesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="WhatsApp Messages" userRole="manager" />
-      
-      <main className="p-8">
+
+      <main className="p-6 lg:p-8">
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <div className="group bg-card rounded-[2rem] p-6 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Messages</p>
-                <h3 className="text-2xl font-black text-foreground">{stats.total}</h3>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Messages</p>
+                <h3 className="text-2xl font-semibold text-foreground">{stats.total}</h3>
               </div>
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-2xl">
-                <MessageSquare className="h-6 w-6 text-blue-600" />
+              <div className="rounded-md bg-primary/10 p-3 text-primary">
+                <MessageSquare className="h-5 w-5" />
               </div>
             </div>
           </div>
-          
-          <div className="group bg-card rounded-[2rem] p-6 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Successfully Sent</p>
-                <h3 className="text-2xl font-black text-emerald-900 dark:text-emerald-400">{stats.sent}</h3>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Successfully Sent</p>
+                <h3 className="text-2xl font-semibold text-success">{stats.sent}</h3>
               </div>
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl">
-                <CheckCircle className="h-6 w-6 text-emerald-600" />
+              <div className="rounded-md bg-success/10 p-3 text-success">
+                <CheckCircle className="h-5 w-5" />
               </div>
             </div>
           </div>
-          
-          <div className="group bg-card rounded-[2rem] p-6 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Failed</p>
-                <h3 className="text-2xl font-black text-red-900 dark:text-red-400">{stats.failed}</h3>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Failed</p>
+                <h3 className="text-2xl font-semibold text-destructive">{stats.failed}</h3>
               </div>
-              <div className="p-3 bg-red-50 dark:bg-red-500/10 rounded-2xl">
-                <XCircle className="h-6 w-6 text-red-600" />
+              <div className="rounded-md bg-destructive/10 p-3 text-destructive">
+                <XCircle className="h-5 w-5" />
               </div>
             </div>
           </div>
-          
-          <div className="group bg-card rounded-[2rem] p-6 border border-border shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all duration-500">
+
+          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Success Rate</p>
-                <h3 className="text-2xl font-black text-foreground">{stats.successRate}%</h3>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Success Rate</p>
+                <h3 className="text-2xl font-semibold text-foreground">{stats.successRate}%</h3>
               </div>
-              <div className="p-3 bg-purple-50 dark:bg-purple-500/10 rounded-2xl">
-                <CheckCircle className="h-6 w-6 text-purple-600" />
+              <div className="rounded-md bg-info/10 p-3 text-info">
+                <CheckCircle className="h-5 w-5" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Actions Bar */}
-        <div className="flex flex-col xl:flex-row items-center justify-between gap-6 mb-10">
-          <div className="relative flex-1 xl:w-96 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-            <input
+        <div className="mb-6 flex flex-col items-center justify-between gap-4 xl:flex-row">
+          <div className="relative w-full flex-1 xl:w-96">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
               type="text"
               placeholder="Search messages by customer name or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-card border border-border rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-foreground font-semibold outline-none placeholder:text-muted-foreground"
+              className="h-11 pl-9 pr-9"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          <div className="flex gap-4">
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                className="appearance-none flex items-center space-x-2 pl-12 pr-6 py-4 bg-card border border-border rounded-2xl font-bold text-foreground/80 hover:bg-muted transition-all outline-none"
-              >
-                <option value="">All Status</option>
-                <option value="sent">Sent</option>
-                <option value="failed">Failed</option>
-                <option value="pending">Pending</option>
-              </select>
-              <Filter className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-            </div>
-            <button
-              onClick={handleExport}
-              className="flex items-center space-x-2 px-6 py-4 bg-primary text-primary-foreground rounded-2xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5 transition-all active:scale-95"
-            >
-              <Download className="h-5 w-5" />
-              <span>Export</span>
-            </button>
+          <div className="flex gap-3">
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+              <SelectTrigger className="h-11 w-40">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleExport} className="gap-2">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
           </div>
         </div>
 
         {/* Messages Table */}
-        <div className="bg-card rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border overflow-hidden">
+        <div className="rounded-lg border border-border bg-card shadow-sm">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-emerald-600 border-r-transparent"></div>
-              <p className="mt-4 text-sm font-semibold text-slate-400">Loading WhatsApp messages...</p>
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading WhatsApp messages...</p>
             </div>
           ) : messages.length === 0 ? (
-            <div className="p-12 text-center">
-              <MessageSquare className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-              <p className="text-lg font-bold text-foreground mb-2">No messages found</p>
-              <p className="text-sm font-semibold text-slate-400">
-                {searchQuery ? 'Try a different search term' : 'No WhatsApp messages sent yet'}
-              </p>
-            </div>
+            <EmptyState
+              icon={MessageSquare}
+              title="No messages found"
+              description={searchQuery ? 'Try a different search term' : 'No WhatsApp messages sent yet'}
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border">
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Customer</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Phone</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Message</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Amount</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Date</th>
-                    <th className="text-left py-6 px-8 text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {messages.map((message: any) => (
-                    <tr key={message._id} className="group hover:bg-muted/50 transition-colors">
-                      <td className="py-6 px-8">
-                        <div className="flex items-center space-x-4">
-                          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-black shadow-lg shadow-green-200 dark:shadow-none">
-                            {message.customerName.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-foreground group-hover:text-blue-600 transition-colors">{message.customerName}</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">
-                              {message.customerId ? `ID: ${String(message.customerId).substring(18)}` : 'Guest'}
-                            </p>
-                          </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Message</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {messages.map((message: any) => (
+                  <TableRow key={message._id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 font-semibold text-success">
+                          {message.customerName.charAt(0)}
                         </div>
-                      </td>
-                      <td className="py-6 px-8">
-                        <p className="text-sm font-bold text-foreground/80">{message.customerPhone}</p>
-                      </td>
-                      <td className="py-6 px-8 max-w-md">
-                        <p className="text-sm font-medium text-muted-foreground line-clamp-2">
-                          {message.message}
-                        </p>
-                      </td>
-                      <td className="py-6 px-8">
-                        <p className="text-sm font-black text-foreground">
-                          {message.amount ? formatCurrency(message.amount) : '-'}
-                        </p>
-                      </td>
-                      <td className="py-6 px-8">
-                        <p className="text-sm font-bold text-foreground">
-                          {new Date(message.createdAt).toLocaleDateString()}
-                        </p>
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {new Date(message.createdAt).toLocaleTimeString()}
-                        </p>
-                      </td>
-                      <td className="py-6 px-8">
-                        <div className="flex items-center space-x-2">
-                          {message.status === 'sent' && (
-                            <>
-                              <CheckCircle className="h-4 w-4 text-emerald-500" />
-                              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Sent</span>
-                            </>
-                          )}
-                          {message.status === 'failed' && (
-                            <>
-                              <XCircle className="h-4 w-4 text-red-500" />
-                              <span className="text-sm font-bold text-red-600 dark:text-red-400">Failed</span>
-                            </>
-                          )}
-                          {message.status === 'pending' && (
-                            <>
-                              <Clock className="h-4 w-4 text-orange-500" />
-                              <span className="text-sm font-bold text-orange-600 dark:text-orange-400">Pending</span>
-                            </>
-                          )}
+                        <div>
+                          <p className="font-medium text-foreground">{message.customerName}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {message.customerId ? `ID: ${String(message.customerId).substring(18)}` : 'Guest'}
+                          </p>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-foreground">{message.customerPhone}</TableCell>
+                    <TableCell className="max-w-md">
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{message.message}</p>
+                    </TableCell>
+                    <TableCell className="font-medium text-foreground">
+                      {message.amount ? formatCurrency(message.amount) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-foreground">{new Date(message.createdAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(message.createdAt).toLocaleTimeString()}</p>
+                    </TableCell>
+                    <TableCell>
+                      {message.status === 'sent' && <Badge variant="success">Sent</Badge>}
+                      {message.status === 'failed' && <Badge variant="destructive">Failed</Badge>}
+                      {message.status === 'pending' && <Badge variant="warning">Pending</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </div>
       </main>

@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Download,
   Printer,
-  Loader2,
   TrendingUp,
   Package,
   Users,
@@ -17,19 +16,34 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useReport, useDownloadReport, type Report } from '@/hooks/useReports';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const REPORT_TYPE_META = {
-  sales: { label: 'Sales Report', icon: TrendingUp, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' },
-  inventory: { label: 'Inventory Report', icon: Package, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-  customers: { label: 'Customer Report', icon: Users, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-  financial: { label: 'Financial Report', icon: DollarSign, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+  sales: { label: 'Sales Report', icon: TrendingUp, variant: 'success' as const },
+  inventory: { label: 'Inventory Report', icon: Package, variant: 'primary' as const },
+  customers: { label: 'Customer Report', icon: Users, variant: 'info' as const },
+  financial: { label: 'Financial Report', icon: DollarSign, variant: 'warning' as const },
 } as const;
+
+const TYPE_VARIANT_STYLES: Record<string, string> = {
+  success: 'bg-success/10 text-success',
+  primary: 'bg-primary/10 text-primary',
+  info: 'bg-info/10 text-info',
+  warning: 'bg-warning/10 text-warning',
+};
 
 const DATE_RANGE_LABELS: Record<string, string> = {
   today: 'Today',
@@ -80,14 +94,14 @@ function formatMetric(value: number, format: MetricDef['format']): string {
 
 function ReportViewerSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse" aria-label="Loading report">
-      <div className="h-24 bg-card border border-border rounded-2xl" />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="animate-pulse space-y-6" aria-label="Loading report">
+      <div className="h-24 rounded-lg border border-border bg-card" />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 bg-card border border-border rounded-2xl" />
+          <div key={i} className="h-28 rounded-lg border border-border bg-card" />
         ))}
       </div>
-      <div className="h-64 bg-card border border-border rounded-2xl" />
+      <div className="h-64 rounded-lg border border-border bg-card" />
     </div>
   );
 }
@@ -106,13 +120,13 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
   const forbidden = error?.message === 'Forbidden - Insufficient permissions';
 
   return (
-    <div className="min-h-screen transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Report Viewer" userRole="admin" />
 
-      <main className="py-6">
-        <div className="mb-6 flex items-center justify-between flex-wrap gap-3 print:hidden">
-          <Button variant="outline" onClick={() => router.push('/dashboard/reports')}>
-            <ArrowLeft className="h-4 w-4 mr-2" aria-hidden="true" />
+      <main className="p-6 lg:p-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 print:hidden">
+          <Button variant="outline" onClick={() => router.push('/dashboard/reports')} className="gap-2">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to Reports
           </Button>
           {report && report.status === 'completed' && (
@@ -121,16 +135,14 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
                 variant="outline"
                 onClick={handleDownload}
                 disabled={downloadReport.isPending}
+                isLoading={downloadReport.isPending}
+                className="gap-2"
               >
-                {downloadReport.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Download className="h-4 w-4 mr-2" aria-hidden="true" />
-                )}
+                {!downloadReport.isPending && <Download className="h-4 w-4" aria-hidden="true" />}
                 Download CSV
               </Button>
-              <Button className="bg-primary text-primary-foreground" onClick={() => window.print()}>
-                <Printer className="h-4 w-4 mr-2" aria-hidden="true" />
+              <Button onClick={() => window.print()} className="gap-2">
+                <Printer className="h-4 w-4" aria-hidden="true" />
                 Print
               </Button>
             </div>
@@ -142,27 +154,27 @@ export default function ReportViewerPage({ params }: { params: Promise<{ id: str
         ) : error ? (
           <Card>
             <CardContent className="p-12 text-center" role="alert">
-              <AlertTriangle className="h-10 w-10 text-red-500 mx-auto mb-4" aria-hidden="true" />
+              <AlertTriangle className="mx-auto mb-4 h-8 w-8 text-destructive" aria-hidden="true" />
               {notFound ? (
                 <>
-                  <p className="text-lg font-bold text-foreground mb-1">Report not found</p>
-                  <p className="text-muted-foreground mb-6">This report may have been deleted.</p>
+                  <p className="mb-1 text-lg font-semibold text-foreground">Report not found</p>
+                  <p className="mb-6 text-muted-foreground">This report may have been deleted.</p>
                 </>
               ) : forbidden ? (
                 <>
-                  <p className="text-lg font-bold text-foreground mb-1">You don&apos;t have access to this report</p>
-                  <p className="text-muted-foreground mb-6">Your role doesn&apos;t have permission to view this report type.</p>
+                  <p className="mb-1 text-lg font-semibold text-foreground">You don&apos;t have access to this report</p>
+                  <p className="mb-6 text-muted-foreground">Your role doesn&apos;t have permission to view this report type.</p>
                 </>
               ) : (
                 <>
-                  <p className="text-lg font-bold text-foreground mb-1">Unable to load this report</p>
-                  <p className="text-muted-foreground mb-6">Something went wrong while fetching the report data.</p>
+                  <p className="mb-1 text-lg font-semibold text-foreground">Unable to load this report</p>
+                  <p className="mb-6 text-muted-foreground">Something went wrong while fetching the report data.</p>
                 </>
               )}
               <div className="flex items-center justify-center gap-3">
                 {!notFound && !forbidden && (
-                  <Button onClick={() => refetch()}>
-                    <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                  <Button onClick={() => refetch()} className="gap-2">
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
                     Retry
                   </Button>
                 )}
@@ -195,28 +207,28 @@ function ReportViewerContent({ report, onRefetch }: { report: Report; onRefetch:
       {/* Header card */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-start justify-between flex-wrap gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${meta?.bg ?? 'bg-primary/10'}`}>
-                <TypeIcon className={`h-6 w-6 ${meta?.color ?? 'text-primary'}`} aria-hidden="true" />
+              <div className={`flex h-11 w-11 items-center justify-center rounded-md ${TYPE_VARIANT_STYLES[meta?.variant ?? 'primary']}`}>
+                <TypeIcon className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">{report.name}</h1>
+                <h1 className="text-lg font-semibold text-foreground">{report.name}</h1>
                 <p className="text-sm text-muted-foreground">{meta?.label ?? 'Report'}</p>
               </div>
             </div>
             <StatusBadge status={report.status} />
           </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="mt-6 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
             <div>
-              <p className="text-muted-foreground mb-0.5">Period</p>
+              <p className="mb-0.5 text-muted-foreground">Period</p>
               <p className="font-medium text-foreground">
                 {dateRange?.start && dateRange?.end ? (
                   <>
                     {formatDate(dateRange.start)} — {formatDate(dateRange.end)}
                     {dateRangePreset && dateRangePreset !== 'custom' && DATE_RANGE_LABELS[dateRangePreset] && (
-                      <span className="text-muted-foreground font-normal"> ({DATE_RANGE_LABELS[dateRangePreset]})</span>
+                      <span className="font-normal text-muted-foreground"> ({DATE_RANGE_LABELS[dateRangePreset]})</span>
                     )}
                   </>
                 ) : dateRangePreset ? (
@@ -227,11 +239,11 @@ function ReportViewerContent({ report, onRefetch }: { report: Report; onRefetch:
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground mb-0.5">Generated By</p>
+              <p className="mb-0.5 text-muted-foreground">Generated By</p>
               <p className="font-medium text-foreground">{report.generatedBy}</p>
             </div>
             <div>
-              <p className="text-muted-foreground mb-0.5">Generated At</p>
+              <p className="mb-0.5 text-muted-foreground">Generated At</p>
               <p className="font-medium text-foreground">{new Date(report.generatedAt).toLocaleString()}</p>
             </div>
           </div>
@@ -241,11 +253,11 @@ function ReportViewerContent({ report, onRefetch }: { report: Report; onRefetch:
       {report.status === 'pending' && (
         <Card>
           <CardContent className="p-12 text-center">
-            <Clock className="h-10 w-10 text-yellow-500 mx-auto mb-4 animate-pulse" aria-hidden="true" />
-            <p className="text-lg font-bold text-foreground mb-1">This report is still generating</p>
-            <p className="text-muted-foreground mb-6">Check back in a moment.</p>
-            <Button onClick={() => onRefetch()}>
-              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            <Clock className="mx-auto mb-4 h-8 w-8 animate-pulse text-warning" aria-hidden="true" />
+            <p className="mb-1 text-lg font-semibold text-foreground">This report is still generating</p>
+            <p className="mb-6 text-muted-foreground">Check back in a moment.</p>
+            <Button onClick={() => onRefetch()} className="gap-2">
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Refresh
             </Button>
           </CardContent>
@@ -255,8 +267,8 @@ function ReportViewerContent({ report, onRefetch }: { report: Report; onRefetch:
       {report.status === 'failed' && (
         <Card>
           <CardContent className="p-12 text-center">
-            <AlertTriangle className="h-10 w-10 text-red-500 mx-auto mb-4" aria-hidden="true" />
-            <p className="text-lg font-bold text-foreground mb-1">Report generation failed</p>
+            <AlertTriangle className="mx-auto mb-4 h-8 w-8 text-destructive" aria-hidden="true" />
+            <p className="mb-1 text-lg font-semibold text-foreground">Report generation failed</p>
             <p className="text-muted-foreground">Generate a new report from the Reports Center.</p>
           </CardContent>
         </Card>
@@ -273,50 +285,41 @@ function ReportViewerContent({ report, onRefetch }: { report: Report; onRefetch:
           ) : (
             <>
               {/* Summary metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {metrics.map((metric, index) => (
-                  <motion.div
-                    key={metric.key}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Card>
-                      <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground mb-1">{metric.label}</p>
-                        <p className="text-2xl font-bold text-foreground">
-                          {formatMetric(Number(metadata[metric.key]) || 0, metric.format)}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {metrics.map((metric) => (
+                  <Card key={metric.key}>
+                    <CardContent className="p-6">
+                      <p className="mb-1 text-sm text-muted-foreground">{metric.label}</p>
+                      <p className="text-2xl font-semibold text-foreground">
+                        {formatMetric(Number(metadata[metric.key]) || 0, metric.format)}
+                      </p>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
 
               {/* Breakdown table */}
               <Card>
                 <CardContent className="p-6">
-                  <h3 className="text-lg font-bold text-foreground mb-4">Metric Breakdown</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Metric</th>
-                          <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {metrics.map((metric) => (
-                          <tr key={metric.key} className="border-b border-border last:border-0 hover:bg-muted/50">
-                            <td className="py-3 px-4 font-medium text-foreground">{metric.label}</td>
-                            <td className="py-3 px-4 text-foreground">
-                              {formatMetric(Number(metadata[metric.key]) || 0, metric.format)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <h3 className="mb-4 text-lg font-semibold text-foreground">Metric Breakdown</h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Metric</TableHead>
+                        <TableHead>Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metrics.map((metric) => (
+                        <TableRow key={metric.key}>
+                          <TableCell className="font-medium text-foreground">{metric.label}</TableCell>
+                          <TableCell className="text-foreground">
+                            {formatMetric(Number(metadata[metric.key]) || 0, metric.format)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
 
@@ -332,16 +335,17 @@ function ReportViewerContent({ report, onRefetch }: { report: Report; onRefetch:
 }
 
 function StatusBadge({ status }: { status: Report['status'] }) {
-  const config = {
-    completed: { label: 'Completed', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-    pending: { label: 'Generating...', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-    failed: { label: 'Failed', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  }[status];
+  const config: Record<Report['status'], { label: string; variant: BadgeProps['variant'] }> = {
+    completed: { label: 'Completed', variant: 'success' },
+    pending: { label: 'Generating...', variant: 'warning' },
+    failed: { label: 'Failed', variant: 'destructive' },
+  };
+  const { label, variant } = config[status];
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium ${config.className}`} role="status">
-      {config.label}
-    </span>
+    <Badge variant={variant} role="status">
+      {label}
+    </Badge>
   );
 }
 
@@ -356,23 +360,23 @@ function FinancialBreakdownChart({ metadata }: { metadata: Record<string, any> }
   const max = Math.max(revenue, expenses, Math.abs(profit), 1);
 
   const bars = [
-    { label: 'Revenue', value: revenue, className: 'bg-green-500' },
-    { label: 'Expenses', value: expenses, className: 'bg-red-500' },
-    { label: 'Profit', value: profit, className: profit >= 0 ? 'bg-blue-500' : 'bg-red-500' },
+    { label: 'Revenue', value: revenue, className: 'bg-success' },
+    { label: 'Expenses', value: expenses, className: 'bg-destructive' },
+    { label: 'Profit', value: profit, className: profit >= 0 ? 'bg-primary' : 'bg-destructive' },
   ];
 
   return (
     <Card>
       <CardContent className="p-6">
-        <h3 className="text-lg font-bold text-foreground mb-4">Revenue vs. Expenses vs. Profit</h3>
+        <h3 className="mb-4 text-lg font-semibold text-foreground">Revenue vs. Expenses vs. Profit</h3>
         <div className="space-y-4">
           {bars.map((bar) => (
             <div key={bar.label}>
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">{bar.label}</span>
-                <span className="text-sm font-bold text-foreground">{formatCurrency(bar.value)}</span>
+                <span className="text-sm font-semibold text-foreground">{formatCurrency(bar.value)}</span>
               </div>
-              <div className="h-2 bg-secondary rounded-full overflow-hidden">
+              <div className="h-2 overflow-hidden rounded-full bg-secondary">
                 <div
                   className={`h-full rounded-full ${bar.className}`}
                   style={{ width: `${Math.min(100, (Math.abs(bar.value) / max) * 100)}%` }}
