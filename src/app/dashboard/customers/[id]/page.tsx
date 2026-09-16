@@ -2,12 +2,19 @@
 
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getCustomerById, getCustomerPurchaseHistory, updateCustomer, deleteCustomer } from '@/lib/actions/customers';
-import { ArrowLeft, Phone, Mail, MapPin, ShoppingBag, Award, Calendar, TrendingUp, Package, Edit, Save, X } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, ShoppingBag, Award, Calendar, TrendingUp, Edit, Save, X, Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { KPICard } from '@/components/ui/kpi-card';
 
 interface Customer {
   _id: string;
@@ -43,6 +50,13 @@ interface Sale {
     name: string;
   };
 }
+
+const CUSTOMER_TYPE_BADGE: Record<string, 'default' | 'info' | 'success' | 'secondary'> = {
+  vip: 'default',
+  corporate: 'info',
+  registered: 'success',
+  'walk-in': 'secondary',
+};
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -115,12 +129,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background transition-colors duration-300">
+      <div className="min-h-screen bg-background">
         <DashboardHeader title="Customer Details" userRole="manager" />
-        <main className="p-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          </div>
+        <main className="flex h-64 items-center justify-center p-6 lg:p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </main>
       </div>
     );
@@ -128,331 +140,213 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   if (error || !customer) {
     return (
-      <div className="min-h-screen bg-background transition-colors duration-300">
+      <div className="min-h-screen bg-background">
         <DashboardHeader title="Customer Details" userRole="manager" />
-        <main className="p-8">
-          <div className="text-center text-red-600">{error || 'Customer not found'}</div>
+        <main className="p-6 lg:p-8">
+          <div className="text-center text-destructive">{error || 'Customer not found'}</div>
         </main>
       </div>
     );
   }
 
-  const getCustomerTypeColor = (type: string) => {
-    switch (type) {
-      case 'vip':
-        return 'bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400';
-      case 'corporate':
-        return 'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400';
-      case 'registered':
-        return 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Customer Details" userRole="manager" />
-      
-      <main className="p-8">
+
+      <main className="p-6 lg:p-8">
         {/* Back Button */}
-        <Link 
+        <Link
           href="/dashboard/customers"
-          className="inline-flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors mb-8"
+          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-5 w-5" />
-          <span className="font-semibold">Back to Customers</span>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Customers
         </Link>
 
         {/* Customer Header */}
-        <div className="bg-card rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border mb-8">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center space-x-6">
-              <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-3xl shadow-lg shadow-blue-200 dark:shadow-none">
+        <Card className="mb-6">
+          <CardContent className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
                 {customer.name?.charAt(0) || 'C'}
               </div>
               <div>
-                <h1 className="text-3xl font-black text-foreground mb-2">
-                  {customer.name || 'Walk-in Customer'}
-                </h1>
-                <div className="flex items-center space-x-4">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${getCustomerTypeColor(customer.customerType)}`}>
+                <h1 className="text-xl font-semibold text-foreground">{customer.name || 'Walk-in Customer'}</h1>
+                <div className="mt-1.5 flex items-center gap-3">
+                  <Badge variant={CUSTOMER_TYPE_BADGE[customer.customerType] ?? 'secondary'} className="capitalize">
                     {customer.customerType}
-                  </span>
-                  <span className="text-sm font-semibold text-muted-foreground">
-                    ID: {customer.customerId}
-                  </span>
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">ID: {customer.customerId}</span>
                 </div>
               </div>
             </div>
-            <div className="flex space-x-3">
+            <div className="flex w-full gap-2 sm:w-auto">
               {!editing ? (
                 <>
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="flex items-center space-x-2 px-6 py-3 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
-                  >
-                    <Edit className="h-5 w-5" />
-                    <span>Edit</span>
-                  </button>
-                  <button
+                  <Button variant="outline" className="flex-1 gap-2 sm:flex-none" onClick={() => setEditing(true)}>
+                    <Edit className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 text-destructive hover:text-destructive sm:flex-none"
                     onClick={handleDelete}
-                    className="px-6 py-3 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl font-bold hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={handleCancel}
-                    className="flex items-center space-x-2 px-6 py-3 bg-muted text-foreground/80 rounded-xl font-bold hover:bg-muted transition-colors"
-                  >
-                    <X className="h-5 w-5" />
-                    <span>Cancel</span>
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                  >
-                    <Save className="h-5 w-5" />
-                    <span>{saving ? 'Saving...' : 'Save'}</span>
-                  </button>
+                  <Button variant="outline" className="flex-1 gap-2 sm:flex-none" onClick={handleCancel}>
+                    <X className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                  <Button className="flex-1 gap-2 sm:flex-none" onClick={handleSave} disabled={saving} isLoading={saving}>
+                    {!saving && (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save
+                      </>
+                    )}
+                  </Button>
                 </>
               )}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl">
-                <TrendingUp className="h-6 w-6 text-emerald-600" />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Spent</span>
-            </div>
-            <p className="text-2xl font-black text-foreground">
-              {formatCurrency(customer.totalSpent)}
-            </p>
-          </div>
-
-          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-orange-50 dark:bg-orange-500/10 rounded-xl">
-                <Award className="h-6 w-6 text-orange-600" />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Loyalty Points</span>
-            </div>
-            <p className="text-2xl font-black text-foreground">
-              {customer.loyaltyPoints}
-            </p>
-          </div>
-
-          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
-                <ShoppingBag className="h-6 w-6 text-blue-600" />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Purchases</span>
-            </div>
-            <p className="text-2xl font-black text-foreground">
-              {customer.purchaseCount}
-            </p>
-          </div>
-
-          <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-50 dark:bg-purple-500/10 rounded-xl">
-                <Calendar className="h-6 w-6 text-purple-600" />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Purchase</span>
-            </div>
-            <p className="text-lg font-black text-foreground">
-              {customer.lastPurchaseDate 
-                ? new Date(customer.lastPurchaseDate).toLocaleDateString()
-                : 'Never'
-              }
-            </p>
-          </div>
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <KPICard title="Total Spent" value={formatCurrency(customer.totalSpent)} icon={TrendingUp} variant="success" />
+          <KPICard title="Loyalty Points" value={customer.loyaltyPoints} icon={Award} variant="warning" />
+          <KPICard title="Purchases" value={customer.purchaseCount} icon={ShoppingBag} variant="info" />
+          <KPICard
+            title="Last Purchase"
+            value={customer.lastPurchaseDate ? new Date(customer.lastPurchaseDate).toLocaleDateString() : 'Never'}
+            icon={Calendar}
+            variant="neutral"
+          />
         </div>
 
         {/* Contact Information */}
-        <div className="bg-card rounded-2xl p-8 border border-border shadow-sm mb-8">
-          <h2 className="text-xl font-black text-foreground mb-6">Contact Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Name</p>
-              {editing ? (
-                <input
-                  type="text"
-                  value={formData.name || ''}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
-                />
-              ) : (
-                <p className="text-lg font-semibold text-foreground">{customer.name || 'Walk-in Customer'}</p>
-              )}
-            </div>
-
-            <div className="flex items-start space-x-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mt-1">
-                <Phone className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone</p>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="mb-6 text-base font-semibold text-foreground">Contact Information</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="cust-detail-name">Name</Label>
                 {editing ? (
-                  <input
-                    type="tel"
-                    value={formData.phone || ''}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
-                  />
+                  <Input id="cust-detail-name" type="text" value={formData.name || ''} onChange={(e) => handleInputChange('name', e.target.value)} />
                 ) : (
-                  <p className="text-lg font-semibold text-foreground">{customer.phone}</p>
+                  <p className="text-sm font-medium text-foreground">{customer.name || 'Walk-in Customer'}</p>
                 )}
               </div>
+
+              <div className="flex items-start gap-3">
+                <Phone className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="cust-detail-phone">Phone</Label>
+                  {editing ? (
+                    <Input id="cust-detail-phone" type="tel" value={formData.phone || ''} onChange={(e) => handleInputChange('phone', e.target.value)} />
+                  ) : (
+                    <p className="text-sm font-medium text-foreground">{customer.phone}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <Mail className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="cust-detail-email">Email</Label>
+                  {editing ? (
+                    <Input id="cust-detail-email" type="email" value={formData.email || ''} onChange={(e) => handleInputChange('email', e.target.value)} />
+                  ) : (
+                    <p className="text-sm font-medium text-foreground">{customer.email || 'No email provided'}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 md:col-span-2">
+                <MapPin className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="cust-detail-address">Address</Label>
+                  {editing ? (
+                    <Input id="cust-detail-address" type="text" value={formData.address || ''} onChange={(e) => handleInputChange('address', e.target.value)} />
+                  ) : (
+                    <p className="text-sm font-medium text-foreground">{customer.address || 'No address provided'}</p>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-start space-x-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mt-1">
-                <Mail className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email</p>
+            {(editing || customer.notes) && (
+              <div className="mt-6 space-y-2 border-t border-border pt-6">
+                <Label htmlFor="cust-detail-notes">Notes</Label>
                 {editing ? (
-                  <input
-                    type="email"
-                    value={formData.email || ''}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
-                  />
+                  <Textarea id="cust-detail-notes" value={formData.notes || ''} onChange={(e) => handleInputChange('notes', e.target.value)} rows={3} />
                 ) : (
-                  <p className="text-lg font-semibold text-foreground">
-                    {customer.email || 'No email provided'}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{customer.notes}</p>
                 )}
               </div>
-            </div>
-
-            <div className="flex items-start space-x-4 md:col-span-2">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mt-1">
-                <MapPin className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Address</p>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.address || ''}
-                    onChange={(e) => handleInputChange('address', e.target.value)}
-                    className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none"
-                  />
-                ) : (
-                  <p className="text-lg font-semibold text-foreground">
-                    {customer.address || 'No address provided'}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {(editing || customer.notes) && (
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Notes</p>
-              {editing ? (
-                <textarea
-                  value={formData.notes || ''}
-                  onChange={(e) => handleInputChange('notes', e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground font-semibold focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none resize-none"
-                />
-              ) : (
-                <p className="text-foreground/80">{customer.notes}</p>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Purchase History */}
-        <div className="bg-card rounded-2xl p-8 border border-border shadow-sm">
-          <h2 className="text-xl font-black text-foreground mb-6">Purchase History</h2>
-          
-          {purchaseHistory.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-semibold">No purchase history yet</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {purchaseHistory.map((sale) => (
-                <div 
-                  key={sale._id}
-                  className="p-6 bg-muted/50 rounded-xl border border-border hover:border-blue-200 dark:hover:border-blue-500/30 transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        {sale.saleNumber}
-                      </p>
-                      <p className="text-lg font-black text-foreground">
-                        {formatCurrency(sale.total)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-muted-foreground">
-                        {new Date(sale.createdAt).toLocaleDateString()}
-                      </p>
-                      <span className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        sale.paymentStatus === 'paid' 
-                          ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400'
-                      }`}>
-                        {sale.paymentStatus}
-                      </span>
-                    </div>
-                  </div>
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="mb-6 text-base font-semibold text-foreground">Purchase History</h2>
 
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Payment Method</p>
-                      <p className="font-semibold text-foreground/80 capitalize">
-                        {sale.paymentMethod}
-                      </p>
+            {purchaseHistory.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <ShoppingBag className="mx-auto mb-4 h-10 w-10 opacity-50" />
+                <p className="text-sm">No purchase history yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {purchaseHistory.map((sale) => (
+                  <div key={sale._id} className="rounded-md border border-border p-5">
+                    <div className="mb-3 flex items-start justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">{sale.saleNumber}</p>
+                        <p className="mt-0.5 text-base font-semibold text-foreground">{formatCurrency(sale.total)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">{new Date(sale.createdAt).toLocaleDateString()}</p>
+                        <Badge variant={sale.paymentStatus === 'paid' ? 'success' : 'warning'} className="mt-1 capitalize">
+                          {sale.paymentStatus}
+                        </Badge>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cashier</p>
-                      <p className="font-semibold text-foreground/80">
-                        {sale.cashierId?.name || 'N/A'}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Items ({sale.items.length})</p>
-                    <div className="flex flex-wrap gap-2">
-                      {sale.items.slice(0, 3).map((item, index) => (
-                        <span 
-                          key={index}
-                          className="px-3 py-1 bg-card rounded-lg text-xs font-semibold text-foreground/80"
-                        >
-                          {item.productName} x{item.quantity}
-                        </span>
-                      ))}
-                      {sale.items.length > 3 && (
-                        <span className="px-3 py-1 bg-muted rounded-lg text-xs font-semibold text-muted-foreground">
-                          +{sale.items.length - 3} more
-                        </span>
-                      )}
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Payment Method</p>
+                        <p className="font-medium capitalize text-foreground">{sale.paymentMethod}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Cashier</p>
+                        <p className="font-medium text-foreground">{sale.cashierId?.name || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border-t border-border pt-4">
+                      <p className="mb-2 text-xs text-muted-foreground">Items ({sale.items.length})</p>
+                      <div className="flex flex-wrap gap-2">
+                        {sale.items.slice(0, 3).map((item, index) => (
+                          <Badge key={index} variant="secondary">
+                            {item.productName} x{item.quantity}
+                          </Badge>
+                        ))}
+                        {sale.items.length > 3 && <Badge variant="outline">+{sale.items.length - 3} more</Badge>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
