@@ -69,24 +69,24 @@ export function ProfileMenu({ role }: ProfileMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring group"
+          className="flex items-center gap-2.5 rounded-md p-1.5 pr-3 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Account menu"
         >
-          <div className="h-9 w-9 flex-shrink-0 rounded-xl bg-gradient-to-br from-primary to-primary-700 flex items-center justify-center text-primary-foreground text-sm font-bold shadow-lg shadow-primary/20">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
             {initial}
           </div>
-          <div className="hidden md:block text-left">
-            <p className="text-xs font-bold text-foreground leading-none max-w-[9rem] truncate">{name}</p>
-            <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase tracking-tighter">{role}</p>
+          <div className="hidden text-left md:block">
+            <p className="max-w-[9rem] truncate text-sm font-medium leading-none text-foreground">{name}</p>
+            <p className="mt-1 truncate text-xs capitalize text-muted-foreground">{role}</p>
           </div>
         </button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-64">
         <div className="px-3 py-2.5">
-          <p className="text-sm font-bold text-foreground truncate">{name}</p>
-          {email && <p className="text-xs text-muted-foreground truncate mt-0.5">{email}</p>}
-          <span className="inline-flex items-center mt-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+          <p className="truncate text-sm font-medium text-foreground">{name}</p>
+          {email && <p className="mt-0.5 truncate text-xs text-muted-foreground">{email}</p>}
+          <span className="mt-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium capitalize text-primary">
             {role}
           </span>
         </div>
