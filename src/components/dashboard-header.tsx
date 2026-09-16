@@ -63,27 +63,33 @@ export function DashboardHeader({ title, userRole }: DashboardHeaderProps) {
         <h1 className="truncate text-xl font-semibold text-foreground sm:text-2xl">{title}</h1>
 
         {/* Right: search, quick create, notifications, identity */}
-        <div className="flex shrink-0 items-center gap-2">
-          <form onSubmit={handleSearch} className="relative hidden md:block">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <form onSubmit={handleSearch} className="relative hidden lg:block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search products, barcode, or customers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 w-56 rounded-md border border-input bg-input-background pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 lg:w-72"
+              className="h-10 w-48 rounded-md border border-input bg-input-background pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 xl:w-72"
             />
           </form>
 
+          {/* Every list page already has its own search field; this is just
+              a shortcut into POS search. It stays icon-only from sm up to lg
+              (where the full text input takes over) so it never overlaps
+              with the persistent sidebar's breakpoint and starves the title. */}
           <button
             onClick={() => router.push('/dashboard/pos')}
-            className="rounded-md p-2.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
+            className="hidden rounded-md p-2.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:block lg:hidden"
             aria-label="Search"
           >
             <Search className="h-5 w-5" />
           </button>
 
-          <QuickCreateMenu role={resolvedRole} />
+          <div className="hidden sm:block">
+            <QuickCreateMenu role={resolvedRole} />
+          </div>
 
           <Link
             href="/dashboard/notifications"
