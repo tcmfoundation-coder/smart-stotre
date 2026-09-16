@@ -13,13 +13,14 @@ import { UserRole } from '@/lib/rbac';
 interface DashboardSidebarProps {
   userRole: UserRole;
   userName?: string;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
 }
 
-export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) {
+export function DashboardSidebar({ userRole, userName, collapsed: isCollapsed, onCollapsedChange }: DashboardSidebarProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(true);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 1024);
@@ -27,6 +28,17 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
     window.addEventListener('resize', checkScreenSize);
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
+
+  // Lock background scroll while the mobile drawer is open, so the page
+  // behind the overlay can't be scrolled while the menu is up.
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen]);
 
   const navigationGroups = getNavigationByRole(userRole);
   const collapsed = isCollapsed && isLargeScreen;
@@ -91,7 +103,7 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
 
             {isLargeScreen && !collapsed && (
               <button
-                onClick={() => setIsCollapsed(true)}
+                onClick={() => onCollapsedChange(true)}
                 className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 aria-label="Collapse sidebar"
               >
@@ -102,7 +114,7 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
 
           {isLargeScreen && collapsed && (
             <button
-              onClick={() => setIsCollapsed(false)}
+              onClick={() => onCollapsedChange(false)}
               className="mb-4 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="Expand sidebar"
             >

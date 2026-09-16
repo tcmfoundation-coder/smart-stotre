@@ -232,7 +232,7 @@ export default function WhatsAppMessagesPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-foreground">{message.customerPhone}</TableCell>
-                    <TableCell className="max-w-md">
+                    <TableCell className="max-w-md whitespace-normal">
                       <p className="line-clamp-2 text-sm text-muted-foreground">{message.message}</p>
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
