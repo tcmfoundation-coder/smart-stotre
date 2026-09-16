@@ -2,10 +2,20 @@
 
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { Package, Search, Plus, Edit, Trash2, Filter, ArrowUpDown, Eye, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Package, Search, Plus, Edit, Trash2, Eye, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { formatCurrency } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useProducts, useDeleteProduct, type Product } from '@/hooks/useProducts';
@@ -47,95 +57,101 @@ export default function ProductsPage() {
     router.push(`/dashboard/inventory/${id}`);
   };
 
-  const getStockStatus = (product: Product) => {
-    if (product.stockQuantity === 0) return { label: 'Out of Stock', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
-    if (product.stockQuantity <= (product.minStockLevel ?? 10)) return { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' };
-    return { label: 'In Stock', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
+  const getStockStatus = (product: Product): { label: string; variant: 'destructive' | 'warning' | 'success' } => {
+    if (product.stockQuantity === 0) return { label: 'Out of Stock', variant: 'destructive' };
+    if (product.stockQuantity <= (product.minStockLevel ?? 10)) return { label: 'Low Stock', variant: 'warning' };
+    return { label: 'In Stock', variant: 'success' };
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       <DashboardHeader title="Product Catalog" userRole="admin" />
-      
-      <main className="py-6">
+
+      <main className="p-6 lg:p-8">
         {/* Header Actions */}
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
+        <div className="mb-6 flex flex-col items-stretch justify-between gap-4 xl:flex-row xl:items-center">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center xl:w-auto">
+            <div className="relative sm:w-64 xl:w-96">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 type="text"
                 placeholder="Search products by name, SKU, or barcode..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                className="h-11 pl-9 pr-9"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="all">All Categories</option>
-              {categories?.map((cat) => (
-                <option key={cat._id} value={cat._id}>{cat.name}</option>
-              ))}
-            </select>
-            <select
-              value={stockFilter}
-              onChange={(e) => setStockFilter(e.target.value)}
-              className="px-4 py-2 bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="all">All Stock Levels</option>
-              <option value="in-stock">In Stock</option>
-              <option value="low-stock">Low Stock</option>
-              <option value="out-of-stock">Out of Stock</option>
-            </select>
+            <div className="flex gap-3">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-11 flex-1 sm:w-48">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories?.map((cat) => (
+                    <SelectItem key={cat._id} value={cat._id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={stockFilter} onValueChange={setStockFilter}>
+                <SelectTrigger className="h-11 flex-1 sm:w-44">
+                  <SelectValue placeholder="All Stock Levels" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stock Levels</SelectItem>
+                  <SelectItem value="in-stock">In Stock</SelectItem>
+                  <SelectItem value="low-stock">Low Stock</SelectItem>
+                  <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Button className="bg-primary text-primary-foreground" onClick={handleAddProduct}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button className="w-full gap-2 xl:w-auto" onClick={handleAddProduct}>
+            <Plus className="h-4 w-4" />
             Add Product
           </Button>
         </div>
 
         <ErrorBoundary>
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <CardSkeleton key={i} />
               ))}
             </div>
           ) : error ? (
-            <div className="text-center py-12">
-              <Package className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <p className="text-red-500">Failed to load products</p>
-              <Button onClick={() => refetch()} className="mt-4">Retry</Button>
-            </div>
+            <ErrorState description="Failed to load products" onRetry={() => refetch()} />
+          ) : !products || products.length === 0 ? (
+            <EmptyState
+              icon={Package}
+              title="No products found"
+              description={searchQuery ? 'Try a different search term' : 'Add your first product to get started'}
+            />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {products?.map((product, index: number) => {
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {products.map((product) => {
                 const stockStatus = getStockStatus(product);
                 return (
-                <motion.div
-                  key={product._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Card className="hover:shadow-lg transition-shadow">
+                  <Card key={product._id}>
                     <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
+                      <div className="mb-4 flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="font-bold text-foreground mb-1">{product.name}</h3>
+                          <h3 className="mb-1 font-semibold text-foreground">{product.name}</h3>
                           <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
                           <p className="text-xs text-muted-foreground">{product.barcode}</p>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${stockStatus.color}`}>
-                          {stockStatus.label}
-                        </span>
+                        <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
                       </div>
-                      
-                      <div className="space-y-2 mb-4">
+
+                      <div className="mb-4 space-y-2">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Category</span>
                           <span className="font-medium text-foreground">
@@ -148,7 +164,7 @@ export default function ProductsPage() {
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Price</span>
-                          <span className="font-bold text-foreground">{formatCurrency(product.sellingPrice)}</span>
+                          <span className="font-semibold text-foreground">{formatCurrency(product.sellingPrice)}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Cost</span>
@@ -157,28 +173,28 @@ export default function ProductsPage() {
                       </div>
 
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="flex-1"
                           onClick={() => handleViewProduct(product._id)}
                         >
-                          <Eye className="h-4 w-4 mr-1" />
+                          <Eye className="mr-1 h-4 w-4" />
                           View
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="flex-1"
                           onClick={() => handleEditProduct(product._id)}
                         >
-                          <Edit className="h-4 w-4 mr-1" />
+                          <Edit className="mr-1 h-4 w-4" />
                           Edit
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-red-600 hover:text-red-700"
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive"
                           onClick={() => handleDelete(product._id)}
                           disabled={deleteProduct.isPending}
                         >
@@ -187,19 +203,11 @@ export default function ProductsPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
-              );
+                );
               })}
             </div>
           )}
         </ErrorBoundary>
-
-        {!isLoading && !error && (!products || products.length === 0) && (
-          <div className="text-center py-12">
-            <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No products found matching your search</p>
-          </div>
-        )}
       </main>
     </div>
   );
