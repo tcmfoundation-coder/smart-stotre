@@ -19,6 +19,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, cn } from '@/lib/utils';
+import { useLocalCart } from '@/hooks/useLocalCart';
+import { useHidBarcodeScanner } from '@/hooks/useHidBarcodeScanner';
 
 // Import BarcodeScanner dynamically to prevent Next.js SSR document/window reference errors
 const BarcodeScanner = dynamic(() => import('@/components/barcode-scanner'), {
@@ -38,15 +40,6 @@ interface ProductDetail {
   categoryId?: { name: string } | string;
 }
 
-interface CartItem {
-  productId: string;
-  name: string;
-  sku: string;
-  price: number;
-  quantity: number;
-  total: number;
-}
-
 export default function BarcodeScannerPage() {
   const [scanning, setScanning] = useState(false);
   const [scanHistory, setScanHistory] = useState<{ barcode: string; name: string; time: string }[]>([]);
@@ -56,6 +49,7 @@ export default function BarcodeScannerPage() {
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const { addToCart } = useLocalCart();
 
   // Load scan history from sessionStorage on mount
   useEffect(() => {
@@ -127,39 +121,16 @@ export default function BarcodeScannerPage() {
     }
   };
 
+  // External USB/Bluetooth barcode scanner (HID keyboard-wedge input) - the
+  // same rapid-keystroke buffer POS uses, feeding the same lookup as the
+  // camera and manual-entry paths below.
+  useHidBarcodeScanner(lookupBarcode, true);
+
   const handleAddToCart = () => {
     if (!product) return;
-
-    try {
-      const currentCartRaw = localStorage.getItem('smartmart-cart');
-      let cart: CartItem[] = [];
-
-      if (currentCartRaw) {
-        cart = JSON.parse(currentCartRaw);
-      }
-
-      const existingItemIndex = cart.findIndex((item) => item.productId === product._id);
-
-      if (existingItemIndex > -1) {
-        cart[existingItemIndex].quantity += 1;
-        cart[existingItemIndex].total = cart[existingItemIndex].quantity * cart[existingItemIndex].price;
-      } else {
-        cart.push({
-          productId: product._id,
-          name: product.name,
-          sku: product.sku,
-          price: product.sellingPrice,
-          quantity: 1,
-          total: product.sellingPrice,
-        });
-      }
-
-      localStorage.setItem('smartmart-cart', JSON.stringify(cart));
-      setAddedToCart(true);
-      setTimeout(() => setAddedToCart(false), 2000);
-    } catch (err) {
-      console.error('Error adding to cart:', err);
-    }
+    addToCart(product);
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2000);
   };
 
   return (
