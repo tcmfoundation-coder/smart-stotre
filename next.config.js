@@ -57,8 +57,16 @@ const nextConfig = {
             value: 'origin-when-cross-origin'
           },
           {
+            // camera=(self) allows the app's own pages to use
+            // getUserMedia() for barcode scanning - the previous camera=()
+            // disabled it for the entire origin, so the browser rejected
+            // every getUserMedia() call at the policy level before it could
+            // ever show a permission prompt (no prompt, no camera, no error
+            // the page could even distinguish from a user denial).
+            // microphone/geolocation stay locked down - genuinely unused
+            // anywhere in this app.
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()'
+            value: 'camera=(self), microphone=(), geolocation=()'
           }
         ]
       }
