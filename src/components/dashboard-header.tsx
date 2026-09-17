@@ -8,6 +8,7 @@ import { useSession } from 'next-auth/react';
 import { ProfileMenu } from './profile-menu';
 import { QuickCreateMenu } from './quick-create-menu';
 import type { UserRole } from '@/lib/rbac';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface DashboardHeaderProps {
   title: string;
@@ -18,31 +19,18 @@ export function DashboardHeader({ title, userRole }: DashboardHeaderProps) {
   const { data: session } = useSession();
   const resolvedRole = ((session?.user?.role as string | undefined) || userRole || 'cashier') as UserRole;
   const [searchQuery, setSearchQuery] = useState('');
-  const [unreadCount, setUnreadCount] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const router = useRouter();
+  // Mounted on every dashboard page, so this is also what keeps polling for
+  // new notifications (in-app toast + native browser notification) while
+  // the cashier/admin is anywhere in the app, not just on the notification
+  // center page itself.
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
-
-    const fetchUnreadCount = async () => {
-      try {
-        const response = await fetch('/api/notifications/unread-count');
-        const data = await response.json();
-        if (data.success) setUnreadCount(data.count);
-      } catch (error) {
-        console.error('Error fetching unread count:', error);
-      }
-    };
-
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      clearInterval(interval);
-    };
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
