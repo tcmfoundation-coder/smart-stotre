@@ -35,7 +35,7 @@ sessions) needs, as distinct from the database connection.
 |---|---|
 | `NEXTAUTH_URL` | See above. |
 | `NEXTAUTH_SECRET` | See above. |
-| `ALLOWED_ORIGINS` | Comma-separated list of origins allowed for CORS (e.g. `https://your-domain.com`). Optional — the app has a default — but should be set explicitly in production rather than left on its development default. |
+| `ALLOWED_ORIGINS` | Comma-separated list of origins allowed for CORS (e.g. `https://your-domain.com`). Optional — the app has a default — but should be set explicitly in production rather than left on its development default. Also fed into `next.config.js`'s Server Actions `allowedOrigins` (see the comment there) — set this to your production domain, and to any dev tunnel/proxy domain (Codespaces, Gitpod) you access the app through, or every "use server" call (all detail-page data loads and saves) will be rejected as a CSRF mismatch even though the page itself loads. |
 
 ### Required for 2FA
 
