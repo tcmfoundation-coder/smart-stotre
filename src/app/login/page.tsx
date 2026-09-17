@@ -1,19 +1,101 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Eye, EyeOff, AlertCircle, ShieldCheck, Zap, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AuthSuccess } from '@/components/auth/AuthSuccess';
 
 const FEATURES = [
   { icon: BarChart3, label: 'Real-time sales & inventory across every branch' },
   { icon: Zap, label: 'AI-assisted demand and restock predictions' },
   { icon: ShieldCheck, label: 'Role-based access with audit-logged activity' },
 ];
+
+// next-auth/react's signIn() serializes its options with URLSearchParams,
+// which does NOT omit a key whose value is `undefined` - it stringifies it
+// to the literal text "undefined" (see node_modules/next-auth/react.js:
+// `body: new URLSearchParams({ ...signInParams, csrfToken, callbackUrl })`).
+// A prior version of this file passed `totpCode: needsTotp ? totpCode :
+// undefined`, so on the very first submit (before needsTotp is ever true)
+// the server received credentials.totpCode === "undefined" - a truthy,
+// non-empty string - so authorize()'s `if (!totpCode) throw
+// TwoFactorRequiredError()` never fired. It went straight to verifying
+// "undefined" as a real TOTP/recovery code, which fails, throwing
+// InvalidTotpError on the very first attempt. The client then showed
+// "Invalid two-factor code" without ever having set needsTotp, so the code
+// input never rendered - a 2FA-enabled account could never log in at all.
+// The fix is to omit the key entirely (not pass it as `undefined`) until
+// there is a real code to send.
+export function buildSignInCredentials(
+  email: string,
+  password: string,
+  needsTotp: boolean,
+  totpCode: string
+): { email: string; password: string; totpCode?: string } {
+  return {
+    email,
+    password,
+    ...(needsTotp ? { totpCode } : {}),
+  };
+}
+
+// The User model has a single `name` field, not separate first/last names -
+// this is a display-only transform, not a schema change.
+export function getDisplayFirstName(name: string | null | undefined): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return 'there';
+  return trimmed.split(/\s+/)[0];
+}
+
+// Text only - never a different redirect destination. There's no existing
+// role-specific dashboard route to preserve (everyone lands on /dashboard
+// today), so the destination stays exactly as it already was; this only
+// varies the supporting copy, using the role the session already carries.
+export function getRoleAwareMessage(role: string | null | undefined): string {
+  if (role === 'admin') return "You're being redirected to your dashboard for managing your business.";
+  if (role === 'cashier') return "You're being redirected to your checkout workspace.";
+  return "You're being redirected to your dashboard.";
+}
+
+interface SignInResultLike {
+  error?: string | null;
+  code?: string | null;
+}
+
+interface SessionLike {
+  user?: {
+    id?: string;
+    name?: string | null;
+    role?: string | null;
+  };
+}
+
+// The gate for the success animation. It must never fire merely because
+// signIn() resolved without throwing - a CredentialsSignin error surfaces
+// as a resolved result with `error`/`code` set, not a rejection, so that
+// alone has to be checked. More importantly, this independently re-reads
+// the actual session (via next-auth's own getSession(), a real request to
+// its session endpoint) rather than trusting the signIn() response shape,
+// and only returns a user when that session genuinely has an id - i.e. the
+// server actually established a session, not just "the client thinks it
+// did". Returns null for every other case, including a plausible-looking
+// but empty session.
+export function resolveAuthenticatedUser(
+  signInResult: SignInResultLike | null | undefined,
+  session: SessionLike | null | undefined
+): { name: string; role: string | null } | null {
+  if (!signInResult || signInResult.error || signInResult.code) return null;
+  if (!session?.user?.id) return null;
+  return {
+    name: getDisplayFirstName(session.user.name),
+    role: session.user.role ?? null,
+  };
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,6 +107,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successUser, setSuccessUser] = useState<{ name: string; role: string | null } | null>(null);
 
   const resetToCredentials = () => {
     setNeedsTotp(false);
@@ -40,9 +123,7 @@ export default function LoginPage() {
 
     try {
       const result = await signIn('credentials', {
-        email,
-        password,
-        totpCode: needsTotp ? totpCode : undefined,
+        ...buildSignInCredentials(email, password, needsTotp, totpCode),
         redirect: false,
       });
 
@@ -57,8 +138,21 @@ export default function LoginPage() {
       } else if (result?.error) {
         setError('Invalid email or password');
       } else {
-        router.push('/dashboard');
-        router.refresh();
+        // signIn() resolving without error/code means the server already
+        // set the session cookie in that same response - but the success
+        // screen still confirms it independently via getSession() rather
+        // than trusting that shape alone (see resolveAuthenticatedUser).
+        const session = await getSession();
+        const authenticatedUser = resolveAuthenticatedUser(result, session);
+        if (authenticatedUser) {
+          setSuccessUser(authenticatedUser);
+        } else {
+          // The session mechanism didn't confirm a real session despite
+          // signIn() reporting success - don't fake a celebration for it,
+          // just proceed with the existing plain redirect.
+          router.push('/dashboard');
+          router.refresh();
+        }
       }
     } catch {
       setError('An error occurred. Please try again.');
@@ -66,6 +160,19 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (successUser) {
+    return (
+      <AuthSuccess
+        name={successUser.name}
+        message={getRoleAwareMessage(successUser.role)}
+        onDone={() => {
+          router.push('/dashboard');
+          router.refresh();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
