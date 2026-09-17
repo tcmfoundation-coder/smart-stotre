@@ -15,6 +15,34 @@ const FEATURES = [
   { icon: ShieldCheck, label: 'Role-based access with audit-logged activity' },
 ];
 
+// next-auth/react's signIn() serializes its options with URLSearchParams,
+// which does NOT omit a key whose value is `undefined` - it stringifies it
+// to the literal text "undefined" (see node_modules/next-auth/react.js:
+// `body: new URLSearchParams({ ...signInParams, csrfToken, callbackUrl })`).
+// A prior version of this file passed `totpCode: needsTotp ? totpCode :
+// undefined`, so on the very first submit (before needsTotp is ever true)
+// the server received credentials.totpCode === "undefined" - a truthy,
+// non-empty string - so authorize()'s `if (!totpCode) throw
+// TwoFactorRequiredError()` never fired. It went straight to verifying
+// "undefined" as a real TOTP/recovery code, which fails, throwing
+// InvalidTotpError on the very first attempt. The client then showed
+// "Invalid two-factor code" without ever having set needsTotp, so the code
+// input never rendered - a 2FA-enabled account could never log in at all.
+// The fix is to omit the key entirely (not pass it as `undefined`) until
+// there is a real code to send.
+export function buildSignInCredentials(
+  email: string,
+  password: string,
+  needsTotp: boolean,
+  totpCode: string
+): { email: string; password: string; totpCode?: string } {
+  return {
+    email,
+    password,
+    ...(needsTotp ? { totpCode } : {}),
+  };
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -40,9 +68,7 @@ export default function LoginPage() {
 
     try {
       const result = await signIn('credentials', {
-        email,
-        password,
-        totpCode: needsTotp ? totpCode : undefined,
+        ...buildSignInCredentials(email, password, needsTotp, totpCode),
         redirect: false,
       });
 
