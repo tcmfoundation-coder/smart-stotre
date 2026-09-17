@@ -16,6 +16,9 @@ class TwoFactorRequiredError extends CredentialsSignin {
 class InvalidTotpError extends CredentialsSignin {
   code = "totp_invalid"
 }
+class RateLimitedError extends CredentialsSignin {
+  code = "rate_limited"
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -41,7 +44,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!rateLimitResult.allowed) {
           console.error('Rate limit exceeded for email:', email)
-          throw new Error('Too many login attempts. Please try again later.')
+          // A plain Error here would be flattened by Auth.js into a generic
+          // "Configuration" redirect with no `code` param (only
+          // CredentialsSignin subclasses survive as a client-readable
+          // result.code) - the login page would show "Invalid email or
+          // password" for what is actually a rate limit, misleading the
+          // user into retrying the exact thing that's blocked.
+          throw new RateLimitedError()
         }
 
         try {

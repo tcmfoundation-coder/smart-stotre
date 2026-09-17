@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, CheckCircle, Tag, Clock, Loader2 } from 'lucide-react';
+import { Bell, BellOff, BellRing, Check, CheckCheck, Trash2, AlertTriangle, Info, AlertCircle, CheckCircle, Tag, Clock, Loader2 } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface Notification {
   _id: string;
@@ -39,9 +40,15 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const { permission, browserNotificationsEnabled, setBrowserNotificationsEnabled, requestPermission } =
+    useNotifications();
 
   useEffect(() => {
     fetchNotifications();
+    // Keep the list current while this page stays open, matching the same
+    // polling cadence the bell icon already used.
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchNotifications = async () => {
@@ -104,6 +111,53 @@ export default function NotificationsPage() {
       <DashboardHeader title="Notifications" userRole="admin" />
 
       <main className="p-6 lg:p-8">
+        {/* Browser notification permission control */}
+        <Card className="mb-6 max-w-4xl">
+          <CardContent className="flex flex-col items-start justify-between gap-4 p-5 sm:flex-row sm:items-center">
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md',
+                  permission === 'granted' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {permission === 'granted' ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-foreground">Browser Notifications</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {permission === 'unsupported' &&
+                    "This browser doesn't support notifications. You'll still see new alerts here and in the bell icon."}
+                  {permission === 'default' &&
+                    'Get a browser notification when something new happens, even when you have another tab focused.'}
+                  {permission === 'denied' &&
+                    'Blocked. Allow notifications for this site in your browser settings to enable them.'}
+                  {permission === 'granted' &&
+                    (browserNotificationsEnabled
+                      ? 'Enabled - new alerts will also show as a browser notification.'
+                      : 'Permission granted, but turned off in-app.')}
+                </p>
+              </div>
+            </div>
+            {permission === 'default' && (
+              <Button type="button" size="sm" onClick={() => requestPermission()} className="flex-shrink-0">
+                Enable
+              </Button>
+            )}
+            {permission === 'granted' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setBrowserNotificationsEnabled(!browserNotificationsEnabled)}
+                className="flex-shrink-0"
+              >
+                {browserNotificationsEnabled ? 'Turn off' : 'Turn on'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Actions Bar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">

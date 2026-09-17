@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     const filters = {
       isRead: searchParams.get('isRead') === 'true' ? true : searchParams.get('isRead') === 'false' ? false : undefined,
       category: searchParams.get('category') || undefined,
+      since: searchParams.get('since') || undefined,
     };
 
     const notifications = await getNotifications(filters);

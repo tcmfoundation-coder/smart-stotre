@@ -60,6 +60,8 @@ function buildVisibilityFilter(requester: NotificationRequester): any {
 export async function getNotifications(filters?: {
   isRead?: boolean;
   category?: string;
+  /** ISO timestamp - only notifications created after this (for polling "what's new"). */
+  since?: string;
 }) {
   const requester = await requireRequester();
   await connectDB();
@@ -72,6 +74,13 @@ export async function getNotifications(filters?: {
 
   if (filters?.category) {
     query.category = filters.category;
+  }
+
+  if (filters?.since) {
+    const since = new Date(filters.since);
+    if (!Number.isNaN(since.getTime())) {
+      query.createdAt = { $gt: since };
+    }
   }
 
   const notifications = await Notification.find(query)

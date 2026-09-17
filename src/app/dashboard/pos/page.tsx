@@ -24,26 +24,17 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { useLocalCart, type CartItem } from '@/hooks/useLocalCart';
+import { useHidBarcodeScanner } from '@/hooks/useHidBarcodeScanner';
 
 // Dynamically import BarcodeScanner to avoid SSR issues
 const BarcodeScanner = dynamic(() => import('@/components/barcode-scanner'), { ssr: false });
-
-interface CartItem {
-  productId: string;
-  name: string;
-  sku: string;
-  price: number;
-  quantity: number;
-  total: number;
-}
-
-const CART_KEY = 'smartmart-cart';
 
 export default function POSPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cart, addToCart: addToCartRaw, updateQuantity, removeFromCart, clearCart } = useLocalCart();
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -97,26 +88,6 @@ export default function POSPage() {
     }
   };
 
-  // ── localStorage sync ──────────────────────────────────────────────────────
-  // Load cart from localStorage on mount (picks up items added via barcode page)
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(CART_KEY);
-      if (saved) setCart(JSON.parse(saved));
-    } catch (e) {
-      console.error('Error reading cart from localStorage:', e);
-    }
-  }, []);
-
-  // Persist cart to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(CART_KEY, JSON.stringify(cart));
-    } catch (e) {
-      console.error('Error saving cart to localStorage:', e);
-    }
-  }, [cart]);
-
   // ── Customer lookup ────────────────────────────────────────────────────────
   const lookupCustomer = async (phone: string) => {
     if (phone.length < 10) return;
@@ -165,56 +136,14 @@ export default function POSPage() {
 
   // ── Cart operations ────────────────────────────────────────────────────────
   const addToCart = useCallback((product: any) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product._id);
-      if (existing) {
-        return prev.map((item) =>
-          item.productId === product._id
-            ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
-            : item
-        );
-      }
-      return [
-        ...prev,
-        {
-          productId: product._id,
-          name: product.name,
-          sku: product.sku,
-          price: product.sellingPrice,
-          quantity: 1,
-          total: product.sellingPrice,
-        },
-      ];
-    });
-    toast.success(`"${product.name}" added to cart`);
+    const outcome = addToCartRaw(product);
+    toast.success(outcome === 'incremented' ? `"${product.name}" quantity increased` : `"${product.name}" added to cart`);
     setSearchQuery('');
     setSearchResults([]);
-  }, []);
+  }, [addToCartRaw]);
 
-  const updateQuantity = (productId: string, delta: number) => {
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.productId === productId) {
-          const newQty = Math.max(1, item.quantity + delta);
-          return { ...item, quantity: newQty, total: newQty * item.price };
-        }
-        return item;
-      })
-    );
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.productId !== productId));
-  };
-
-  const clearCart = () => {
-    setCart([]);
-    localStorage.removeItem(CART_KEY);
-  };
-
-  // ── Barcode scanner handler ────────────────────────────────────────────────
-  const handleBarcodeScan = async (barcode: string) => {
-    setScannerOpen(false);
+  // ── Barcode lookup (shared by the external HID scanner and the camera) ────
+  const lookupAndAddBarcode = useCallback(async (barcode: string) => {
     try {
       const res = await fetch(`/api/pos/barcode/${barcode}`);
       const data = await res.json();
@@ -226,7 +155,18 @@ export default function POSPage() {
     } catch {
       toast.error('Failed to look up scanned barcode.');
     }
+  }, [addToCart]);
+
+  const handleBarcodeScan = async (barcode: string) => {
+    setScannerOpen(false);
+    await lookupAndAddBarcode(barcode);
   };
+
+  // ── External USB/Bluetooth barcode scanner (HID keyboard-wedge input) ─────
+  // Takes priority over the camera in practice: it works the moment a
+  // scanner is plugged in and used, with no dialog/permission step, so a
+  // cashier with hardware connected never needs the camera at all.
+  useHidBarcodeScanner(lookupAndAddBarcode, true);
 
   // ── Checkout ───────────────────────────────────────────────────────────────
   const handleCheckout = async () => {

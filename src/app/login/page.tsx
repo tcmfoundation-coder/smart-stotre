@@ -21,9 +21,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [needsTotp, setNeedsTotp] = useState(false);
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const resetToCredentials = () => {
+    setNeedsTotp(false);
+    setUseRecoveryCode(false);
+    setTotpCode('');
+    setError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +50,10 @@ export default function LoginPage() {
         setNeedsTotp(true);
         setError('');
       } else if (result?.code === 'totp_invalid') {
-        setError('Invalid two-factor code. You can also use a recovery code.');
+        setError(useRecoveryCode ? 'Invalid recovery code.' : 'Invalid two-factor code.');
+        setTotpCode('');
+      } else if (result?.code === 'rate_limited') {
+        setError('Too many attempts. Please wait a few minutes and try again.');
       } else if (result?.error) {
         setError('Invalid email or password');
       } else {
@@ -159,24 +170,54 @@ export default function LoginPage() {
 
             {needsTotp && (
               <div className="space-y-1.5">
-                <Label htmlFor="totpCode">Two-factor code</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="totpCode">{useRecoveryCode ? 'Recovery code' : 'Authenticator code'}</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseRecoveryCode(!useRecoveryCode);
+                      setTotpCode('');
+                      setError('');
+                    }}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    {useRecoveryCode ? 'Use authenticator code instead' : 'Use a recovery code instead'}
+                  </button>
+                </div>
                 <Input
                   id="totpCode"
                   type="text"
-                  inputMode="text"
+                  inputMode={useRecoveryCode ? 'text' : 'numeric'}
+                  autoComplete="one-time-code"
                   autoFocus
                   value={totpCode}
                   onChange={(e) => setTotpCode(e.target.value)}
                   required
-                  placeholder="6-digit code or recovery code"
+                  maxLength={useRecoveryCode ? 11 : 6}
+                  placeholder={useRecoveryCode ? 'XXXXX-XXXXX' : '6-digit code'}
                   className="text-center tracking-[0.2em]"
                 />
+                <p className="text-xs text-muted-foreground">
+                  {useRecoveryCode
+                    ? 'Enter one of the recovery codes you saved when you set up two-factor authentication. Each one can only be used once.'
+                    : 'Enter the 6-digit code from your authenticator app.'}
+                </p>
               </div>
             )}
 
             <Button type="submit" size="lg" className="w-full" isLoading={loading}>
               {loading ? 'Signing in...' : needsTotp ? 'Verify & sign in' : 'Sign in'}
             </Button>
+
+            {needsTotp && (
+              <button
+                type="button"
+                onClick={resetToCredentials}
+                className="w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              >
+                &larr; Use a different account
+              </button>
+            )}
           </form>
         </div>
       </div>
